@@ -1919,3 +1919,36 @@ html:not(.dark) [data-suggestion-box] select {
     line-height: 1.25;
   }
 }
+
+/* Keep subject-submission states readable above the shared portal theme. */
+[data-subject-workflow-status] {
+  background-color: #fff2bd !important;
+  color: #18385d !important;
+  border-color: #c59b32 !important;
+}
+[data-subject-workflow-heading] {
+  background-color: #164c7e !important;
+  color: #ffffff !important;
+}
+.dark [data-subject-workflow-status],
+.dark [data-subject-workflow-heading] {
+  background-color: #123d67 !important;
+  color: #fff0b3 !important;
+  border-color: #9dbfda !important;
+}
+
+[data-certificate-workflow-status] {
+  background-color: #fff2bd !important;
+  color: #18385d !important;
+  border-color: #c59b32 !important;
+}
+.dark [data-certificate-workflow-status],
+.dark [data-certificate-workflow-step] {
+  background-color: #123d67 !important;
+  color: #fff0b3 !important;
+  border-color: #9dbfda !important;
+}
+.dark [data-certificate-workflow-step][aria-pressed="true"] {
+  background-color: #1c507a !important;
+  border-color: #f3ce61 !important;
+}
