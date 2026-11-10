@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Clock3, Eye, EyeOff, FileCheck2, GraduationCap, Printer, RefreshCw, Save, Search, Send, ShieldCheck, UserRoundCheck, Users } from 'lucide-react';
 import { academicRecordsAPI } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
-import { printOfficialReportCard } from '@/utils/officialReportCardPrint';
+import { printOfficialReportCard, teacherDisplayName } from '@/utils/officialReportCardPrint';
 import { canonicalClassLabel, compareClassLabels } from '@/utils/classLabels';
 
 type SubjectContribution = {
@@ -669,7 +669,7 @@ export default function TeacherWholeSchoolReportCards() {
                               <b className="text-kcs-blue-950 dark:text-white">{subject.courseName}</b>
                               <small className="block text-gray-500">{subject.courseCode}</small>
                             </td>
-                            <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{subject.teacherName}</td>
+                            <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{teacherDisplayName(subject.teacherName)}</td>
                             <td className="px-4 py-3 font-bold">{subject.percentage === null ? 'Pending' : `${subject.percentage}% · ${subject.letterGrade}`}</td>
                             <td className="px-4 py-3">{hidden ? <span className="font-bold text-amber-700 dark:text-amber-300">Excluded from average</span> : subject.percentage === null ? <span className="text-amber-600">Teacher submission required</span> : <span className="text-emerald-600">Submitted</span>}</td>
                             <td className="px-4 py-3">
@@ -812,7 +812,7 @@ export default function TeacherWholeSchoolReportCards() {
                       <span>
                         <b className="block text-kcs-blue-950 dark:text-white">{subject.courseName}</b>
                         <small className="text-gray-500">
-                          {subject.courseCode} · {subject.teacherName}
+                          {subject.courseCode} · {teacherDisplayName(subject.teacherName)}
                         </small>
                       </span>
                     </label>
