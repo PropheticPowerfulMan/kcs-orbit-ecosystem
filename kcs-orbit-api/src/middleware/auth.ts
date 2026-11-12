@@ -1,5 +1,6 @@
 import { AppSlug } from "@prisma/client";
 import { NextFunction, Request, Response } from "express";
+import { studentUserAccess } from '../services/student-access';
 import { verifyToken } from "../utils/jwt";
 
 declare global {
@@ -28,7 +29,7 @@ function getIntegrationKeyByApp(): Record<AppSlug, string | undefined> {
   };
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
 
   if (!header || !header.startsWith("Bearer ")) {
@@ -38,6 +39,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
     const token = header.replace("Bearer ", "");
     const payload = verifyToken(token);
+    if (payload.role === 'STUDENT' && !await studentUserAccess(payload.userId,payload.organizationId)) return res.status(403).json({message:'Student account is inactive or archived'});
     req.user = payload;
     next();
   } catch {

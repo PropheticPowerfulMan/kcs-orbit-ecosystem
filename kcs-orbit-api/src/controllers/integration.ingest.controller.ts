@@ -663,8 +663,13 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
   });
 
   const targetStudentId = existingLink?.nexusEntityId || matchingStudent?.id;
+  const student = await prisma.$transaction(async tx => {
+  if (targetStudentId) await tx.$queryRaw(Prisma.sql`SELECT id FROM "Student" WHERE id = ${targetStudentId} FOR UPDATE`);
+  const currentPlacement = targetStudentId ? await tx.student.findUnique({where:{id:targetStudentId},select:{status:true,className:true,classId:true}}) : null;
+  const terminalPlacement = currentPlacement && ['GRADUATED','ARCHIVED','DISMISSED','EXPELLED','DELETED'].includes(String(currentPlacement.status ?? '').trim().toUpperCase()) ? currentPlacement : null;
+
   const student = targetStudentId
-    ? await prisma.student.update({
+    ? await tx.student.update({
       where: { id: targetStudentId },
       data: {
         firstName,
@@ -675,17 +680,17 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
         email,
         phone,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        status,
+        status: terminalPlacement?.status ?? status,
         mustChangePassword: mustChangePassword ?? false,
-        className,
-        classId,
+        className: terminalPlacement ? terminalPlacement.className : className,
+        classId: terminalPlacement ? terminalPlacement.classId : classId,
         parentId,
         organizationId,
         photoData,
         photoSource
       }
     })
-    : await prisma.student.create({
+    : await tx.student.create({
       data: {
         firstName,
         middleName,
@@ -705,6 +710,9 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
         photoSource
       }
     });
+
+  return student;
+  }, {maxWait:10000,timeout:15000});
 
   await upsertExternalLink({
     organizationId,

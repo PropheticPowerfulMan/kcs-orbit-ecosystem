@@ -9,6 +9,13 @@ type ReportSubject = {
   course: { name: string; code: string; credits?: number; teacherName?: string }
 }
 
+// Presentation only. The teacher's saved course title remains unchanged.
+export const courseDisplayName = (value?: string | null) => {
+  const title = (value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr')
+  return title.replace(/(^|[\s'’/-])(\p{L}+)/gu, (_match, separator: string, word: string, offset: number) =>
+    separator + (offset > 0 && ['and', 'et'].includes(word) ? word : word[0].toLocaleUpperCase('fr') + word.slice(1)))
+}
+
 export const teacherDisplayName = (value?: string | null) => {
   const name = (value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr')
   return name.replace(/(^|[\s'’-])(\p{L})/gu, (_match, separator: string, letter: string) => separator + letter.toLocaleUpperCase('fr'))
@@ -116,7 +123,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
     return value == null ? '—' : `${value.toFixed(2)}%`
   }
   const subjects = (card.subjects ?? []).map((subject) => `
-    <tr><td><b>${escapeHtml(subject.course.name)}</b></td>
+    <tr><td><b>${escapeHtml(courseDisplayName(subject.course.name))}</b></td>
     <td class="number">${escapeHtml(teacherDisplayName(subject.course.teacherName || '—'))}</td>${annual ? quarterTerms.map((sourceTerm) => `<td class="number">${termValue(subject, sourceTerm)}</td>`).join('') : ''}<td class="number">${subject.percentage.toFixed(2)}%</td>
     <td class="grade">${escapeHtml(subject.letterGrade)}</td></tr>`).join('')
   const attendance = card.attendanceSummary

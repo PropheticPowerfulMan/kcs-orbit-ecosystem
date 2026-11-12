@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Clock3, Eye, EyeOff, FileCheck2, GraduationCap, Printer, RefreshCw, Save, Search, Send, ShieldCheck, UserRoundCheck, Users } from 'lucide-react';
 import { academicRecordsAPI } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
-import { printOfficialReportCard, teacherDisplayName } from '@/utils/officialReportCardPrint';
+import { printOfficialReportCard, teacherDisplayName, courseDisplayName } from '@/utils/officialReportCardPrint';
 import { canonicalClassLabel, compareClassLabels } from '@/utils/classLabels';
 
 type SubjectContribution = {
@@ -221,7 +221,8 @@ export default function TeacherWholeSchoolReportCards() {
     setError('');
   }, [selected?.id, term]);
 
-  const locked = periodReadOnly || Boolean(selected?.reportCard && ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(selected.reportCard.publicationStatus));
+  const locked = periodReadOnly;
+  const finalized = Boolean(selected?.reportCard && ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(selected.reportCard.publicationStatus));
   const awaitingReview = selected?.reportCard?.publicationStatus === 'READY_FOR_REVIEW';
   const visibleSubjects = useMemo(() => selected?.subjects.filter((subject) => !hiddenCourseIds.includes(subject.courseId)) ?? [], [hiddenCourseIds, selected]);
   const visibleSubmittedCount = visibleSubjects.filter((subject) => subject.percentage !== null).length;
@@ -666,7 +667,7 @@ export default function TeacherWholeSchoolReportCards() {
                         return (
                           <tr key={subject.courseId} className={hidden ? 'bg-amber-50/70 opacity-75 dark:bg-amber-950/20' : ''}>
                             <td className="px-4 py-3">
-                              <b className="text-kcs-blue-950 dark:text-white">{subject.courseName}</b>
+                              <b className="text-kcs-blue-950 dark:text-white">{courseDisplayName(subject.courseName)}</b>
                               <small className="block text-gray-500">{subject.courseCode}</small>
                             </td>
                             <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{teacherDisplayName(subject.teacherName)}</td>
@@ -732,15 +733,16 @@ export default function TeacherWholeSchoolReportCards() {
                     <input disabled={!selected.isHomeroomStudent || locked} className={`${field} disabled:cursor-not-allowed disabled:opacity-60`} maxLength={500} value={conduct} onChange={(event) => setConduct(event.target.value)} placeholder="Conduct, responsibility, collaboration, punctuality..." />
                   </label>
                   {selected.isHomeroomStudent && !allVisibleSubmitted && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">Submission remains locked: {visibleSubjects.length - visibleSubmittedCount} visible subject teacher(s) still need to submit final grades.</p>}
+                  {selected.isHomeroomStudent && finalized && <p className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-kcs-blue-900 dark:border-sky-700 dark:bg-kcs-blue-900 dark:text-sky-100">{language === 'fr' ? 'Une nouvelle soumission remplace ce bulletin et le remet en attente de validation par la Super Administration.' : 'A new submission replaces this report card and returns it to Super Administration for approval.'}</p>}
                   {selected.isHomeroomStudent && (
                     <div className="mt-4 flex flex-wrap justify-end gap-2">
-                      <button type="button" aria-busy={savingAction === 'draft'} disabled={saving || locked} onClick={() => void updateReport(false)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-800 bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-kcs-blue-800 disabled:opacity-40 dark:border-kcs-gold-300 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300">
+                      <button type="button" aria-busy={savingAction === 'draft'} disabled={saving || locked || finalized} onClick={() => void updateReport(false)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-800 bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-kcs-blue-800 disabled:opacity-40 dark:border-kcs-gold-300 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300">
                         {savingAction === 'draft' ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
                         {savingAction === 'draft' ? 'Saving draft…' : 'Save draft'}
                       </button>
                       <button type="button" aria-busy={savingAction === 'submit'} disabled={saving || locked || !allVisibleSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">
                         {savingAction === 'submit' ? <RefreshCw size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-                        {savingAction === 'submit' ? 'Submitting…' : awaitingReview ? 'Replace submission to Super Administration' : 'Submit to Super Administration'}
+                        {savingAction === 'submit' ? 'Submitting…' : (awaitingReview || finalized) ? (language === 'fr' ? 'Remplacer la soumission à la Super Administration' : 'Replace submission to Super Administration') : 'Submit to Super Administration'}
                       </button>
                     </div>
                   )}
@@ -810,7 +812,7 @@ export default function TeacherWholeSchoolReportCards() {
                     <label key={subject.courseId} className="flex cursor-pointer items-start gap-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-950">
                       <input type="checkbox" checked={visibilityCourseIds.includes(subject.courseId)} onChange={() => toggleSelected(subject.courseId, visibilityCourseIds, setVisibilityCourseIds)} className="mt-1" />
                       <span>
-                        <b className="block text-kcs-blue-950 dark:text-white">{subject.courseName}</b>
+                        <b className="block text-kcs-blue-950 dark:text-white">{courseDisplayName(subject.courseName)}</b>
                         <small className="text-gray-500">
                           {subject.courseCode} · {teacherDisplayName(subject.teacherName)}
                         </small>

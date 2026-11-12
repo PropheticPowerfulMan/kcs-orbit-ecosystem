@@ -364,3 +364,29 @@ def document_verification_view(_request, token):
         'full_name': payload.get('full_name'),
         'issued_at': payload.get('issued_at'),
     })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def archive_student_access_view(request):
+    from django.db import transaction
+    from apps.students.models import Student
+    if not settings.KCS_NEXUS_AUTH_KEY or request.headers.get('x-api-key', '') != settings.KCS_NEXUS_AUTH_KEY:
+        return Response({'detail': 'Unauthorized graduation request.'}, status=401)
+    identifiers = request.data.get('identifiers')
+    if not isinstance(identifiers, list) or not identifiers or len(identifiers) > 5 or any(not isinstance(i, str) or not i.strip() or len(i) > 254 for i in identifiers):
+        return Response({'detail': 'Invalid student identifiers.'}, status=400)
+    query = Q()
+    for identifier in identifiers:
+        query |= Q(access_code__iexact=identifier) | Q(username__iexact=identifier) | Q(kcs_card_id__iexact=identifier) | Q(email__iexact=identifier) | Q(student_profile__student_id__iexact=identifier)
+    with transaction.atomic():
+        users = list(User.objects.select_for_update().filter(role=User.ROLE_STUDENT).filter(query)[:2])
+        if len(users) > 1:
+            return Response({'detail': 'Ambiguous student identity; no account changed.'}, status=409)
+        if not users:
+            return Response({'archived': 0, 'sourceAccountAbsent': True})
+        user = users[0]
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+        Student.objects.filter(user=user).update(is_active=False)
+    return Response({'archived': 1})

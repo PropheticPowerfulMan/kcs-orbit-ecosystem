@@ -7,7 +7,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Download, Edit3, FileCheck2, FilterX, History, Loader2, Printer, RefreshCw, Search, Send, ShieldCheck, Upload, X } from 'lucide-react'
 import { academicRecordsAPI } from '@/services/api'
 import { printOfficialTranscript } from '@/utils/officialTranscriptPrint'
-import { printOfficialReportCard, type PrintableReportCard } from '@/utils/officialReportCardPrint'
+import { courseDisplayName, type PrintableReportCard } from '@/utils/officialReportCardPrint'
 import { SCHOOL_LEVELS, normalizeSchoolLevel } from '@/constants/schoolLevels'
 import { compareClassLabels } from '@/utils/classLabels'
 import ReportCardDeliveryDialog from './ReportCardDeliveryDialog'
@@ -406,11 +406,21 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
     window.setTimeout(() => setTranscriptPrinting(false), 900)
   }
 
-  const printReportCard = (card: Card) => {
+  const printReportCard = async (card: Card) => {
     if (reportPrintingId) return
+    const preview = window.open('', '_blank')
+    if (!preview) { setNotice(tr('Autorisez les fenêtres contextuelles pour ouvrir le bulletin.', 'Allow pop-ups to open the report card.')); return }
+    preview.document.body.textContent = tr('Préparation du bulletin officiel…', 'Preparing the official report card…')
     setReportPrintingId(card.id)
-    printOfficialReportCard(card, setNotice)
-    window.setTimeout(() => setReportPrintingId(''), 900)
+    try {
+      const response = await academicRecordsAPI.reportCardPdf(card.id, language)
+      const url = URL.createObjectURL(response.data)
+      preview.location.replace(url)
+      window.setTimeout(() => URL.revokeObjectURL(url), 300_000)
+    } catch {
+      preview.close()
+      setNotice(tr('Impossible de préparer le PDF officiel. Réessayez.', 'Unable to prepare the official PDF. Try again.'))
+    } finally { setReportPrintingId('') }
   }
 
   const downloadLegacyTemplate = async (format: 'csv' | 'xlsx') => {

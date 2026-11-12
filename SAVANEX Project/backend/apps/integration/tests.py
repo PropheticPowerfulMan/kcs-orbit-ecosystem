@@ -243,3 +243,55 @@ class EcosystemEmployeeIntegrationTests(TestCase):
         sync_teacher.assert_called_once_with(teacher)
         deliver.assert_called_once()
         self.assertEqual(response.data['notificationDelivery'], [])
+
+
+@override_settings(KCS_NEXUS_AUTH_KEY='synthetic-graduation-key')
+class GraduationAccessTests(TestCase):
+    def setUp(self):
+        from datetime import date
+        from apps.students.models import Student
+        from rest_framework_simplejwt.tokens import RefreshToken
+        self.client = APIClient()
+        self.student = User.objects.create_user(username='graduation-student', email='graduate@example.invalid', password='Synthetic.control!123', role=User.ROLE_STUDENT)
+        self.parent = User.objects.create_user(username='graduation-parent', password='Synthetic.parent!123', role=User.ROLE_PARENT)
+        self.profile = Student.objects.create(user=self.student, student_id='QA-GRAD-1', date_of_birth=date(2008, 1, 1), gender='F')
+        self.refresh = RefreshToken.for_user(self.student)
+        self.access = self.refresh.access_token
+
+    def test_untrusted_request_cannot_revoke_access(self):
+        response = self.client.post('/api/integration/students/archive-access/', {'identifiers': [self.student.username]}, format='json')
+        self.assertEqual(response.status_code, 401)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.is_active)
+
+    def test_graduation_revokes_credentials_access_and_refresh_without_deleting_records(self):
+        from apps.users.authentication import authenticate_user_identifier
+        from rest_framework.exceptions import AuthenticationFailed
+        from rest_framework_simplejwt.authentication import JWTAuthentication
+        from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+        from apps.students.models import Student
+        self.assertIsNotNone(authenticate_user_identifier(self.student.username, 'Synthetic.control!123'))
+        response = self.client.post('/api/integration/students/archive-access/', {'identifiers': [self.student.email]}, format='json', HTTP_X_API_KEY='synthetic-graduation-key')
+        self.assertEqual(response.status_code, 200)
+        self.student.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.assertFalse(self.student.is_active)
+        self.assertFalse(self.profile.is_active)
+        self.assertTrue(Student.objects.filter(pk=self.profile.pk).exists())
+        self.assertIsNone(authenticate_user_identifier(self.student.username, 'Synthetic.control!123'))
+        with self.assertRaises(AuthenticationFailed):
+            JWTAuthentication().get_user(self.access)
+        with self.assertRaises(AuthenticationFailed):
+            TokenRefreshSerializer(data={'refresh': str(self.refresh)}).is_valid(raise_exception=True)
+        self.parent.refresh_from_db()
+        self.assertTrue(self.parent.is_active)
+        self.assertIsNotNone(authenticate_user_identifier(self.parent.username, 'Synthetic.parent!123'))
+        repeat = self.client.post('/api/integration/students/archive-access/', {'identifiers': [self.student.email]}, format='json', HTTP_X_API_KEY='synthetic-graduation-key')
+        self.assertEqual(repeat.status_code, 200)
+
+    def test_canonical_student_number_revokes_a_legacy_source_identity(self):
+        response = self.client.post('/api/integration/students/archive-access/', {'identifiers': [self.profile.student_id, 'NEXUS-GENERATED-CODE']}, format='json', HTTP_X_API_KEY='synthetic-graduation-key')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['archived'], 1)
+        self.student.refresh_from_db()
+        self.assertFalse(self.student.is_active)

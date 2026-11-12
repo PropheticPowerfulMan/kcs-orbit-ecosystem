@@ -1,3 +1,4 @@
+import { gradebookScorePercentage as parseScore, gradebookWeightedAverage, zeroWeightScoredAssessments, proposeScoredCategoryWeights } from '@/utils/gradebookCalculations'
 import GradebookWeightScopeDialog from './GradebookWeightScopeDialog'
 import { useAcademicPeriodAccess, isAcademicPeriodReadOnly, isFutureGradebookPeriod } from '@/hooks/useAcademicPeriodAccess'
 import { createPortal } from 'react-dom'
@@ -168,14 +169,7 @@ const toneForScore = (score: number | null) => {
   return 'bg-kcs-blue-50 text-kcs-blue-700 ring-kcs-blue-100 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200 dark:ring-kcs-blue-800'
 }
 
-const parseScore = (value: string, maxPoints: number) => {
-  const normalized = value.trim().toUpperCase()
-  if (!normalized || normalized === 'E' || normalized === 'I') return null
-  if (normalized === 'U' || normalized === 'M') return 0
-  const numeric = Number(normalized)
-  if (!Number.isFinite(numeric)) return null
-  return Math.max(0, Math.min(100, (numeric / Math.max(maxPoints, 1)) * 100))
-}
+
 
 const formatPercent = (value: number | null) => value === null ? 'I' : `${Math.round(value)}%`
 
@@ -251,6 +245,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const pendingAutosave = useRef<(() => Promise<boolean>) | null>(null)
   const pausedAutosaves = useRef(new Set<string>())
   const [weightScopeOpen, setWeightScopeOpen] = useState(false)
+  const [weightFixOpen, setWeightFixOpen] = useState(false)
+  const [weightFixSaving, setWeightFixSaving] = useState(false)
   const [autosaveEnabled, setAutosaveEnabled] = useState(false)
   const [autosaveRetryAt, setAutosaveRetryAt] = useState(0)
   const [onlineRevision, setOnlineRevision] = useState(0)
@@ -399,6 +395,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [loadedScope, setLoadedScope] = useState('')
   const [addingAssignment, setAddingAssignment] = useState(false)
   const cycleKey = `${selectedCourseId}::${academicYear}`
+  useEffect(() => { setWeightFixOpen(false) }, [selectedCourseId, academicYear, term])
   weightScopeRef.current = cycleKey
   const browserStorageKey = `kcs-live-gradebook-${cycleKey}`
   const periodPreferenceKey = `kcs:nexus:gradebook:period:${userId}:${cycleKey}`
@@ -597,17 +594,24 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     return values.reduce((sum, value) => sum + value, 0) / values.length
   }
 
-  const getWeightedAverage = (studentId: string) => {
-    let weighted = 0
-    let activeWeight = 0
-    displayCategories.forEach((category) => {
-      const average = getCategoryAverage(studentId, category.id)
-      if (average !== null) {
-        weighted += average * category.weight
-        activeWeight += category.weight
-      }
-    })
-    return activeWeight ? weighted / activeWeight : null
+  const getWeightedAverage = (studentId: string) => gradebookWeightedAverage(studentId, visibleAssignments, displayCategories, scores)
+  const excludedAssessments = zeroWeightScoredAssessments(visibleAssignments, displayCategories, scores, enrolledCourseStudents.map(student => student.id))
+  const proposedWeights = proposeScoredCategoryWeights(categories, excludedAssessments.map(task => task.category), defaultCategories)
+  const applyWeightCorrection = async () => {
+    if (periodReadOnly || weightFixSaving || loadedScope !== cycleKey) return
+    const scope = cycleKey
+    setWeightFixSaving(true)
+    try {
+      if (!await saveSpreadsheet(true)) return
+      await persistCourseWeights(selectedCourseId, academicYear, proposedWeights)
+      if (activeScope.current !== scope) return
+      setCategories(proposedWeights)
+      setWeightFixOpen(false)
+      window.dispatchEvent(new Event('kcs-gradebook-weights-changed'))
+      onAction(tr('Pondération confirmée et enregistrée pour ce cours. Les notes et les intitulés des travaux sont conservés.', 'Weighting confirmed and saved for this course. Scores and assessment titles are preserved.'))
+    } catch (error: any) {
+      onAction(error?.response?.data?.message || tr('La nouvelle pondération n’a pas pu être confirmée. Réessayez.', 'The new weighting could not be confirmed. Try again.'), true)
+    } finally { setWeightFixSaving(false) }
   }
 
   const analyzeStudent = (student: GradebookStudent) => {
@@ -860,6 +864,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     if (categories.reduce((sum, category) => sum + category.weight, 0) !== 100) return onAction('Category weights must total exactly 100% before final grades can be submitted.', true)
     const gradedRows = submissionAnalytics.filter(item => item.average !== null)
     const ungradedRows = submissionAnalytics.filter(item => item.average === null)
+    if (!gradedRows.length && excludedAssessments.length) { setWeightFixOpen(true); return }
     if (!gradedRows.length) return onAction(tr('Saisissez au moins une note numérique avant de soumettre ce cours.', 'Enter at least one numeric grade before submitting this course.'), true)
     if (!periodVerified) { setConfirmedPeriod(false); setPeriodConfirmation('submission'); return }
     setPeriodConfirmation(null)
@@ -998,6 +1003,21 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
 
   return (
     <div data-kcs-gradebook="true" className="gradebook-mobile-surface space-y-6">
+      {excludedAssessments.length > 0 && !periodReadOnly && <section role="status" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+        <b>{tr('Des notes sont exclues par une pondération de 0 %.', 'Some scores are excluded by a 0% category weight.')}</b>
+        <p className="mt-1">{excludedAssessments.map(task => task.title).join(', ')} · {tr('Ces notes restent enregistrées. Confirmez une pondération si elles doivent contribuer au résultat officiel.', 'These scores remain saved. Confirm a weighting if they should count toward the official result.')}</p>
+        <button type="button" onClick={() => setWeightFixOpen(true)} className="mt-3 rounded-xl bg-kcs-blue-700 px-4 py-2 font-bold text-white">{tr('Examiner la pondération de ce cours', 'Review this course weighting')}</button>
+      </section>}
+      {weightFixOpen && createPortal(<div className="fixed inset-0 z-[10040] flex items-center justify-center bg-kcs-blue-950/80 p-4" role="dialog" aria-modal="true" aria-label={tr('Confirmer la pondération du cours', 'Confirm course weighting')} data-gradebook-overlay>
+        <section className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-sky-200 bg-white p-5 shadow-2xl dark:border-sky-700 dark:bg-kcs-blue-950 dark:text-white sm:p-7">
+          <h3 className="text-xl font-black">{tr('Faire compter les évaluations notées', 'Include scored assessments in the result')}</h3>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{selectedCourse?.name} · {academicYear} · {term}</p>
+          <p className="mt-3 text-sm">{tr('La proposition donne un poids aux catégories notées qui étaient à 0 %, en conservant les proportions des catégories déjà pondérées. Vérifiez les valeurs avant de confirmer pour ce cours.', 'The proposal gives weight to scored categories currently at 0%, preserving the proportions of categories already weighted. Review the values before confirming them for this course.')}</p>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">{proposedWeights.map(category => <div key={category.id} className="rounded-xl bg-sky-50 p-3 text-sm dark:bg-kcs-blue-900"><b>{category.name}</b><p>{categories.find(item => item.id === category.id)?.weight ?? 0}% → <strong>{category.weight}%</strong></p></div>)}</div>
+          <p className="mt-3 text-xs text-gray-500 dark:text-gray-300">{tr('Vous pouvez aussi conserver la règle actuelle et modifier manuellement Category weighting. Les notes restent disponibles dans les deux cas.', 'You can also retain the current rule and edit Category weighting manually. Your scores remain available in either case.')}</p>
+          <div className="mt-5 flex flex-wrap justify-end gap-3"><button type="button" disabled={weightFixSaving} onClick={() => { setWeightFixOpen(false); setWeightPanelOpen(true) }} className="rounded-xl border border-sky-300 px-4 py-2 text-sm font-bold dark:border-sky-700">{tr('Ajuster manuellement', 'Adjust manually')}</button><button type="button" disabled={weightFixSaving} onClick={() => void applyWeightCorrection()} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{weightFixSaving ? tr('Enregistrement…', 'Saving…') : tr('Confirmer pour ce cours', 'Confirm for this course')}</button><button type="button" disabled={weightFixSaving} onClick={() => setWeightFixOpen(false)} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold dark:border-kcs-blue-700">{tr('Fermer', 'Close')}</button></div>
+        </section>
+      </div>, document.body)}
       {weightScopeOpen && <GradebookWeightScopeDialog key={cycleKey} courses={courses} currentCourseId={selectedCourseId} academicYear={academicYear} term={term} categories={categories} onApply={applyWeightsToCourses} onClose={() => setWeightScopeOpen(false)}/>}
       {periodReadOnly && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{periodNotice}</p>}
       <section className="rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>

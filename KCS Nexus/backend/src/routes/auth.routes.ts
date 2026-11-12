@@ -1,3 +1,4 @@
+import { assertAccountAccess, inactiveStudentStatus } from '../services/accountAccess.service.js'
 import { Router } from 'express'
 import type { User as PrismaUser } from '@prisma/client'
 import bcrypt from 'bcryptjs'
@@ -209,7 +210,7 @@ async function ensureAccountNotLocked(user: PrismaUser) {
   if (!user.loginLockedUntil) return
   if (user.loginLockedUntil > new Date()) {
     const remainingMinutes = Math.max(1, Math.ceil((user.loginLockedUntil.getTime() - Date.now()) / 60_000))
-    throw new ApiError(423, `Compte temporairement verrouillé. Réessayez dans ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}. / Account temporarily locked. Try again in ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}.`)
+    throw new ApiError(423, `Compte temporairement verrouillÃ©. RÃ©essayez dans ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}. / Account temporarily locked. Try again in ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}.`)
   }
   await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginLockedUntil: null } })
 }
@@ -491,9 +492,11 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
       const federationGracePeriodMs = 30 * 60 * 1000
       const identityWasJustVerified = isFederated && Date.now() - user.updatedAt.getTime() < federationGracePeriodMs
       if (identityWasJustVerified) return user
-      if (isFederated && requiresDirectoryIdentity) throw new ApiError(410, 'Cette identité a été supprimée ou désactivée dans l’écosystème.')
+      if (isFederated && requiresDirectoryIdentity) throw new ApiError(410, 'Cette identitÃ© a Ã©tÃ© supprimÃ©e ou dÃ©sactivÃ©e dans lâ€™Ã©cosystÃ¨me.')
       return user
     }
+
+    if (user.role === 'STUDENT' && inactiveStudentStatus(entity.status)) throw new ApiError(403, 'This student account is archived or inactive in Orbit.')
 
     const canonicalEmail = typeof entity.email === 'string' && entity.email.trim()
       ? entity.email.trim().toLowerCase()
@@ -682,7 +685,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   }
 
   const user = await findLocalUserByIdentifier(identifier)
-  if (user) await ensureAccountNotLocked(user)
+  if (user) { await assertAccountAccess(user.id); await ensureAccountNotLocked(user) }
   const isFederatedUser = Boolean(user?.permissions?.some((permission) => permission.startsWith('ecosystem:')))
   if (user?.passwordHash && !isFederatedUser) {
     const isValid = await bcrypt.compare(payload.password, user.passwordHash)
@@ -693,8 +696,10 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
           throw new ApiError(428, payload.twoFactorCode ? 'Invalid two-factor authentication code' : 'Two-factor authentication code required')
         }
       }
-      const effectiveUser = await resolveEffectiveLoginUser(user)
-      await recordSuccessfulLogin(effectiveUser)
+      const loginUser = await resolveEffectiveLoginUser(user)
+      const effectiveUser = loginUser.role === 'STUDENT' ? await refreshCanonicalIdentity(loginUser) : loginUser
+      await assertAccountAccess(effectiveUser.id)
+  await recordSuccessfulLogin(effectiveUser)
       const token = signAccessToken(effectiveUser)
       const refreshToken = signRefreshToken(effectiveUser)
 
@@ -727,7 +732,9 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
 
-  const effectiveUser = await resolveEffectiveLoginUser(resolvedUser)
+  const loginUser = await resolveEffectiveLoginUser(resolvedUser)
+  const effectiveUser = loginUser.role === 'STUDENT' ? await refreshCanonicalIdentity(loginUser) : loginUser
+  await assertAccountAccess(effectiveUser.id)
   await recordSuccessfulLogin(effectiveUser)
 
   if (effectiveUser.role === 'PARENT' && effectiveUser.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
@@ -743,7 +750,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     },
   })
 
-  return success(res, { user: await buildSafeUserWithAccess(effectiveUser, false), token, refreshToken }, 'Connexion réussie')
+  return success(res, { user: await buildSafeUserWithAccess(effectiveUser, false), token, refreshToken }, 'Connexion rÃ©ussie')
 }))
 
 authRouter.post('/google', asyncHandler(async (req, res) => {
@@ -782,6 +789,7 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
     await prisma.refreshToken.deleteMany({ where: { userId: synchronizedUser.id } })
     throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
   }
+  await assertAccountAccess(synchronizedUser.id)
   const token = signAccessToken(synchronizedUser)
   if (storedToken.token === refreshToken) {
     await prisma.refreshToken.update({ where: { id: storedToken.id }, data: { token: hashRefreshToken(refreshToken) } })

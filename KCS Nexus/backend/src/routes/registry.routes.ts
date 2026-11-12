@@ -689,6 +689,27 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     }
   }
 
+  const accountKeys = [identifier, entity.id, entity.displayId, entity.email, entity.accessCode, ...(entity.externalIds?.map((link: any) => link.externalId) ?? [])]
+    .filter((value): value is string => Boolean(value))
+  let user = await prisma.user.findFirst({
+    where: {
+      role: entityType === 'parent' ? 'PARENT' : entityType === 'student' ? 'STUDENT' : 'TEACHER',
+      OR: accountKeys.flatMap((key) => [
+        { id: key },
+        { email: { equals: key, mode: 'insensitive' as const } },
+        { accessCode: key },
+        { orbitUserId: key },
+      ]),
+    },
+  })
+  if (!user && entityType === 'student') {
+    const profile = await prisma.studentProfile.findFirst({
+      where: { OR: [{ id: identifier }, { studentNumber: identifier }, ...(entity?.studentNumber ? [{ studentNumber: entity.studentNumber }] : [])] },
+      include: { user: true },
+    })
+    user = profile?.user ?? null
+  }
+
   const linkedSavanexExternalId = entity.externalIds?.find((link: any) => String(link.appSlug).toUpperCase() === 'SAVANEX')?.externalId
   const savanexExternalId = entityType === 'student'
     ? (entity.studentNumber || identifier)
@@ -714,6 +735,20 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     })
     const resetData = await resetResponse.json().catch(() => ({})) as Record<string, unknown>
     if (resetResponse.ok) {
+      if (user) {
+        if (typeof resetData.temporaryPassword !== 'string' || !resetData.temporaryPassword) {
+          throw new ApiError(502, 'The institutional reset succeeded but Nexus could not synchronize the new credential. Retry the reset before using it.')
+        }
+        const accessCode = typeof resetData.accessCode === 'string' && resetData.accessCode.trim() ? resetData.accessCode.trim().toUpperCase() : user.accessCode
+        const owner = await prisma.user.findUnique({ where: { accessCode }, select: { id: true } })
+        if (owner && owner.id !== user.id) throw new ApiError(409, 'The institutional access code belongs to another Nexus account. Reconcile the identity before resetting it again.')
+        const passwordHash = await bcrypt.hash(resetData.temporaryPassword, 10)
+        await prisma.$transaction([
+          prisma.user.update({ where: { id: user.id }, data: { passwordHash, accessCode, failedLoginAttempts: 0, loginLockedUntil: null, lastFailedLoginAt: null } }),
+          prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+          prisma.auditLog.create({ data: { actorId: user.id, action: 'auth.institutional_reset_synchronized', targetType: 'User', targetId: user.id, metadata: { provider: 'SAVANEX', entityType, sessionsRevoked: true } } }),
+        ])
+      }
       const upstreamDelivery = Array.isArray(resetData.delivery) ? resetData.delivery as Array<Record<string, unknown>> : []
       const emailDelivery = upstreamDelivery.find((item) => item.channel === 'email')
       const emailSent = emailDelivery?.status === 'sent'
@@ -731,31 +766,11 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     }
   }
 
-  const accountKeys = [identifier, entity.id, entity.displayId, entity.email, entity.accessCode, ...(entity.externalIds?.map((link: any) => link.externalId) ?? [])]
-    .filter((value): value is string => Boolean(value))
-  let user = await prisma.user.findFirst({
-    where: {
-      role: entityType === 'parent' ? 'PARENT' : entityType === 'student' ? 'STUDENT' : 'TEACHER',
-      OR: accountKeys.flatMap((key) => [
-        { id: key },
-        { email: { equals: key, mode: 'insensitive' as const } },
-        { accessCode: key },
-        { orbitUserId: key },
-      ]),
-    },
-  })
-  if (!user && entityType === 'student') {
-    const profile = await prisma.studentProfile.findFirst({
-      where: { OR: [{ id: identifier }, { studentNumber: identifier }, ...(entity?.studentNumber ? [{ studentNumber: entity.studentNumber }] : [])] },
-      include: { user: true },
-    })
-    user = profile?.user ?? null
-  }
   if (!user) throw new ApiError(404, 'Compte de connexion introuvable dans KCS Nexus.')
 
   const temporaryPassword = generateTemporaryPassword()
   await prisma.$transaction([
-    prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(temporaryPassword, 10) } }),
+    prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(temporaryPassword, 10), failedLoginAttempts: 0, loginLockedUntil: null, lastFailedLoginAt: null } }),
     prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
   ])
 

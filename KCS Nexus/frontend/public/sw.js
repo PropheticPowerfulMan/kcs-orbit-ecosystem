@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-shell-attendance-history-20261110-v13'
+const CACHE_NAME = 'kcs-nexus-shell-report-sections-20261112-v14'
 const SHELL = ['./', './manifest.webmanifest', './icons/nexus-192.png', './icons/nexus-512.png', './icons/nexus-apple-180.png']
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
