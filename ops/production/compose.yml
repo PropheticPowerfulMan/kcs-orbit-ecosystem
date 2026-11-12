@@ -110,9 +110,24 @@ services:
     env_file: /etc/kcs-orbit/nexus-api.env
     environment:
       SAVANEX_API_URL: http://savanex-api:8000
-    volumes: [nexus_uploads:/app/uploads]
-    depends_on: { nexus_db: { condition: service_healthy }, orbit_api: { condition: service_started } }
+      REPORT_PDF_RENDERER_SOCKET: /run/kcs-report/renderer.sock
+    volumes: [nexus_uploads:/app/uploads, nexus_report_socket:/run/kcs-report:ro]
+    depends_on: { nexus_db: { condition: service_healthy }, orbit_api: { condition: service_started }, nexus_report_renderer: { condition: service_healthy } }
     healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
+
+  nexus_report_renderer:
+    image: kcs/nexus-report-renderer:${NEXUS_REPORT_RENDERER_RELEASE:-${NEXUS_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}}
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 160
+    mem_limit: 512m
+    shm_size: 64m
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    volumes: [nexus_report_socket:/run/kcs-report]
 
   nexus_web:
     <<: *service-defaults
@@ -247,6 +262,7 @@ volumes:
   sentinel_db_data:
   redis_data:
   nexus_uploads:
+  nexus_report_socket:
   edupay_receipts:
   savanex_media:
   savanex_static:

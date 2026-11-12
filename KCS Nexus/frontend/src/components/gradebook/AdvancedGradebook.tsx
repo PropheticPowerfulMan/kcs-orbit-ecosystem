@@ -1370,22 +1370,22 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         </div>
         </section>
         </div>, document.body)}
-      {periodConfirmation && createPortal(<div className="fixed inset-0 z-[10020] flex items-center justify-center bg-kcs-blue-950/80 p-4" role="dialog" data-gradebook-overlay aria-modal="true" aria-label={tr('Confirmer la période scolaire', 'Confirm academic period')}>
-        <section className="max-h-[92dvh] w-full max-w-xl overflow-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-950">
+      {periodConfirmation && createPortal(<div className="fixed inset-0 z-[10020] flex items-center justify-center bg-kcs-blue-950/80 p-3 backdrop-blur-sm sm:p-6" role="dialog" data-gradebook-overlay aria-modal="true" aria-label={tr('Confirmer la période scolaire', 'Confirm academic period')}>
+        <section className="max-h-[92dvh] w-full max-w-2xl overflow-auto rounded-3xl border border-sky-200 bg-white p-5 text-kcs-blue-950 shadow-2xl dark:border-sky-800 dark:bg-kcs-blue-950 dark:text-white sm:p-8">
+        <div className="mb-4 flex items-center gap-3"><div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100"><CheckCircle2 size={26}/></div><div><p className="text-[11px] font-black uppercase tracking-[.18em] text-sky-700 dark:text-sky-300">{tr('Vérification avant enregistrement', 'Check before saving')}</p><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{tr('Le bon cours. La bonne année. Le bon Quarter.', 'The right course. The right year. The right Quarter.')}</p></div></div>
         <h3 className="text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Vérifiez la période avant de continuer', 'Check the academic period before continuing')}</h3>
-        <div className="my-5 rounded-2xl bg-sky-50 p-4 dark:bg-sky-950 dark:text-white">
-        <p className="font-bold">{selectedCourse?.name}</p>
-        <p>{academicYear}</p>
-        <p className="mt-2 text-lg font-black">{term}</p>
+        <div className="my-5 overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-950 dark:text-white sm:p-5">
+        <p className="text-[10px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-300">{tr('Cours concerné', 'Selected course')}</p><p className="mt-1 break-words text-lg font-bold">{selectedCourse?.name}</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-[.8fr_1.2fr]"><div className="rounded-xl bg-white p-3 shadow-sm dark:bg-kcs-blue-900"><span className="block text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-sky-200">{tr('Année scolaire', 'Academic year')}</span><b className="mt-1 block text-lg">{academicYear}</b></div><div className="rounded-xl bg-sky-800 p-3 text-white shadow-sm dark:bg-sky-700"><span className="block text-[10px] font-black uppercase tracking-wider text-sky-100">{tr('Période de destination', 'Destination period')}</span><b className="mt-1 block text-lg">{term}</b></div></div>
         <p className="mt-2 text-sm">{periodConfirmation === 'task' ? draft.title + ' · ' + draft.date : tr('Soumission des résultats disponibles du cours', 'Submit available course results')}</p>
         </div>{periodConfirmation === 'submission' && <p className="mb-4 rounded-xl bg-sky-50 p-3 text-sm text-sky-900 dark:bg-sky-950 dark:text-sky-100">{tr('Les cellules vides sont exclues du calcul. Les élèves sans aucune note ne sont pas resoumis et leurs anciennes soumissions sont conservées.', 'Blank cells are excluded from calculations. Learners without any grades are not resubmitted and their earlier submissions are preserved.')} {submissionAnalytics.filter(item => item.average !== null).length} / {submissionAnalytics.length}</p>}{periodConfirmation === 'task' && dateSuggestedTerm && dateSuggestedTerm !== term && <div className="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
         <p>{tr('La date saisie correspond au calendrier officiel de', 'The entered date belongs to the official calendar period')} <b>{dateSuggestedTerm}</b>.</p>
         <button type="button" disabled={isFutureGradebookPeriod(periodAccess, academicYear, dateSuggestedTerm)} onClick={() => { chooseTerm(dateSuggestedTerm); setConfirmedPeriod(false) }} className="mt-3 rounded-lg bg-amber-700 px-4 py-2 font-bold text-white">{tr('Utiliser la période de cette date', 'Use the period for this date')}</button>{isFutureGradebookPeriod(periodAccess, academicYear, dateSuggestedTerm) && <p className="mt-2 font-semibold">{tr('La saisie reste dans le quarter ouvert par le SuperAdmin.', 'Grade entry remains in the quarter opened by the SuperAdmin.')}</p>}
-        </div>}<label className="flex items-start gap-3 text-sm dark:text-white">
+        </div>}<label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100">
         <input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={confirmedPeriod} onChange={event => setConfirmedPeriod(event.target.checked)}/>
         <span>{tr('Je confirme que cette année scolaire et ce quarter sont corrects.', 'I confirm that this academic year and quarter are correct.')}</span>
         </label>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <div className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-100 pt-5 dark:border-sky-900 sm:grid-cols-2">
         <button type="button" onClick={() => setPeriodConfirmation(null)} className="rounded-xl border px-5 py-3 font-bold dark:border-slate-700 dark:text-white">{tr('Annuler', 'Cancel')}</button>
         <button type="button" disabled={!confirmedPeriod} onClick={() => periodConfirmation === 'task' ? void addAssignment(true) : void submitFinalGrades(true)} className="rounded-xl bg-emerald-700 px-5 py-3 font-bold text-white disabled:opacity-40">{tr('Confirmer et continuer', 'Confirm and continue')}</button>
         </div>
