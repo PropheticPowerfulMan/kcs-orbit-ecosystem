@@ -1,4 +1,3 @@
-import QRCode from 'qrcode'
 import { academicRecordsAPI } from '@/services/api'
 type ReportSubject = {
   id: string
@@ -49,122 +48,24 @@ export type PrintableReportCard = {
   }
 }
 
-const escapeHtml = (value: unknown) =>
-  String(value ?? '').replace(/[&<>"]/g, (character) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
-  })[character] ?? character)
-
-const printableAsset = (value?: string | null) => {
-  if (!value) return ''
-  if (/^(data:|blob:|https?:)/i.test(value)) return value
-  return new URL(value, window.location.origin).href
-}
-
 export async function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void, reservedWindow?: Window | null) {
   const language = document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en'
-  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
-  // Reserve the window synchronously in the click event. Opening it after the
-  // photo, authenticity-registry and QR awaits is blocked by some browsers.
   const printWindow = reservedWindow ?? window.open('', '_blank', 'width=1100,height=900')
   if (!printWindow) {
-    onBlocked(tr('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres contextuelles puis réessayez.', 'The browser blocked the print window. Allow pop-ups and try again.'))
+    onBlocked(language === 'fr' ? 'Autorisez les fenêtres d’impression puis réessayez.' : 'Allow print windows and try again.')
     return
   }
-  printWindow.document.write(`<!doctype html><html><head><title>${tr('Préparation du bulletin…', 'Preparing report card…')}</title></head><body style="font-family:system-ui;padding:2rem;color:#053665">${tr('Préparation sécurisée du bulletin officiel…', 'Securely preparing the official report card…')}</body></html>`)
-  printWindow.document.close()
-  const dateLocale = language === 'fr' ? 'fr-FR' : 'en-GB'
-  const localizedTerm = (value: string) => language === 'fr'
-    ? value.replace(/Semester/g, 'Semestre').replace(/Trimester/g, 'Quarter').replace(/Annual final/gi, 'Final annuel')
-    : value
-  const logo = printableAsset('/images/kcs.jpg')
-  const watermark = printableAsset('/images/kcs.jpg?v=official-watermark-20260927')
-  let photo = printableAsset(card.student.officialAvatar)
-  if (!photo && card.student.id) {
-    try {
-      const response = await academicRecordsAPI.teacherReportStudentPhoto(card.student.id)
-      photo = printableAsset(response.data?.data?.officialAvatar)
-    } catch { /* A portrait is optional when printing a verified academic record. */ }
-  }
-  let signatures: { mainTeacher?: { image?: string | null; name?: string } | null; principal?: { image?: string | null; name?: string } | null; officialSealImage?: string | null } = {}
-  let officialSettings: { principalName?: string; signatureImage?: string; officialSealImage?: string } = {}
-  try { signatures = (await academicRecordsAPI.officialSignatures(card.student.id)).data?.data ?? {} } catch { /* Missing signatures do not invalidate the academic record. */ }
-  if (card.student.id) try { officialSettings = (await academicRecordsAPI.reportCardOfficialSettings()).data?.data ?? {} } catch { /* Teacher print access is independent from SuperAdmin-only officialization settings. */ }
-  if (officialSettings.principalName || officialSettings.signatureImage) signatures.principal = { name: officialSettings.principalName || signatures.principal?.name, image: officialSettings.signatureImage || signatures.principal?.image }
-  signatures.officialSealImage = officialSettings.officialSealImage || signatures.officialSealImage
-  const signatureBlock = (entry: { image?: string | null; name?: string } | null | undefined, label: string) => entry?.image
-    ? `<div class="signature"><img src="${escapeHtml(entry.image)}" alt=""><b>${escapeHtml(teacherDisplayName(entry.name || '') || label)}</b><span>${escapeHtml(label)}</span></div>`
-    : `<div class="signature"><b>${escapeHtml(teacherDisplayName(entry?.name || ''))}</b><span>${escapeHtml(label)}</span></div>`
-  const studentName = [card.student.user.lastName, card.student.user.middleName, card.student.user.firstName].filter(Boolean).join(' ')
-  const issuedAt = new Date()
-  const canonicalRecord = JSON.stringify({ id: card.id, student: card.student.studentNumber, term: card.term, average: card.average, status: card.publicationStatus, subjects: (card.subjects ?? []).map(({ course, percentage, letterGrade, termResults }) => [course.name, course.teacherName ?? '', course.credits ?? 0, percentage, letterGrade, termResults ?? null]) })
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalRecord))
-  const fingerprint = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('').toUpperCase()
-  const documentId = `KCS-RC-${issuedAt.toISOString().slice(0,10).replace(/-/g,'')}-${fingerprint.slice(0,16)}`
   try {
-    await academicRecordsAPI.registerReportCardVerification({ documentId, fingerprint, reportCardId: card.id })
+    const response = await academicRecordsAPI.reportCardPrintDocument(card.id, language)
+    // Only trusted, server-generated report HTML is accepted. All personal fields are escaped there.
+    const html = response.data.data.html as string
+    if (!html.startsWith('<!doctype html>')) throw new Error('Invalid official report document')
+    const ready = `<script>addEventListener('load',async function(){await document.fonts.ready;await Promise.all(Array.from(document.images,function(i){return i.complete?Promise.resolve():new Promise(function(r){i.onload=r;i.onerror=r})}));setTimeout(function(){window.focus();window.print()},150)});<\/script>`
+    const url = URL.createObjectURL(new Blob([html.replace('</body>', ready + '</body>')], { type: 'text/html;charset=utf-8' }))
+    printWindow.location.replace(url)
+    window.setTimeout(() => URL.revokeObjectURL(url), 300_000)
   } catch {
     printWindow.close()
-    onBlocked(tr('Le registre d’authenticité est momentanément indisponible. Réessayez avant d’imprimer.', 'The authenticity registry is temporarily unavailable. Try again before printing.'))
-    return
+    onBlocked(language === 'fr' ? 'Impossible de préparer le bulletin officiel. Réessayez.' : 'Unable to prepare the official report card. Please retry.')
   }
-  const verificationUrl = `${window.location.origin}/verify/report-card?document=${encodeURIComponent(documentId)}&fingerprint=${encodeURIComponent(fingerprint)}`
-  const qrCode = await QRCode.toDataURL(verificationUrl, { errorCorrectionLevel: 'H', margin: 1, width: 320, color: { dark: '#052F5F', light: '#FFFFFF' } })
-  const statusLabel = ({
-    DRAFT: tr('BROUILLON', 'DRAFT'),
-    READY_FOR_REVIEW: tr('PRÊT POUR EXAMEN', 'READY FOR REVIEW'),
-    APPROVED: tr('APPROUVÉ', 'APPROVED'),
-    EMAILED: tr('ENVOYÉ PAR E-MAIL', 'EMAILED'),
-    POSTED_TO_PORTAL: tr('PUBLIÉ DANS LE PORTAIL', 'POSTED TO PORTAL'),
-  } as Record<string, string>)[card.publicationStatus] ?? card.publicationStatus.replace(/_/g, ' ')
-  const annual = card.term.toLowerCase().includes('annual final')
-  const quarterTerms = ['Semester 1 · Quarter 1', 'Semester 1 · Quarter 2', 'Semester 2 · Quarter 3', 'Semester 2 · Quarter 4']
-  const termValue = (subject: ReportSubject, sourceTerm: string) => {
-    const value = subject.termResults?.[sourceTerm]
-    return value == null ? '—' : `${value.toFixed(2)}%`
-  }
-  const subjects = (card.subjects ?? []).map((subject) => `
-    <tr><td><b>${escapeHtml(courseDisplayName(subject.course.name))}</b></td>
-    <td class="number">${escapeHtml(teacherDisplayName(subject.course.teacherName || '—'))}</td>${annual ? quarterTerms.map((sourceTerm) => `<td class="number">${termValue(subject, sourceTerm)}</td>`).join('') : ''}<td class="number">${subject.percentage.toFixed(2)}%</td>
-    <td class="grade">${escapeHtml(subject.letterGrade)}</td></tr>`).join('')
-  const attendance = card.attendanceSummary
-  const photoBlock = photo
-    ? `<img class="student-photo" src="${escapeHtml(photo)}" alt="${tr('Photo de l’élève', 'Student photograph')}">`
-    : '<div class="student-photo placeholder">KCS</div>'
-
-  const html = `<!doctype html><html lang="${language}"><head><meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${escapeHtml(documentId)} · ${tr('Bulletin officiel', 'Official Report Card')}</title>
-  <style>
-  @page{size:A4;margin:10mm}*{box-sizing:border-box}body{margin:0;background:#eaf2f8;color:#102849;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .sheet{position:relative;isolation:isolate;width:210mm;height:277mm;margin:14px auto;overflow:visible;background:#fff;border:1px solid #cad8e6;box-shadow:0 18px 55px #082b4d26}.top-line{height:6px;background:linear-gradient(90deg,#f1b82d 0 18%,#0d5d99 18% 84%,#20bfa9 84%)}
-  .watermark-wrap{position:absolute;z-index:0;inset:0;display:grid;place-items:center;pointer-events:none}.watermark{display:block;width:138mm;height:138mm;object-fit:contain;object-position:center;opacity:.085;filter:grayscale(1);mix-blend-mode:multiply}.content{position:relative;z-index:1;padding:8mm 10mm 7mm}
-  .masthead{display:flex;align-items:center;justify-content:space-between;gap:18px;padding-bottom:12px;border-bottom:3px solid #d6a62a}.school-logo{width:22mm;height:22mm;object-fit:contain;flex-shrink:0}.document-title{text-align:right}.document-title small{display:block;color:#60758c;font-size:9px;font-weight:800;letter-spacing:.17em;text-transform:uppercase}.document-title h1{margin:4px 0 0;color:#053665;font-size:23px;text-transform:uppercase}.document-title p{margin:5px 0 0;color:#8f6d15;font-size:9px;font-weight:800}
-  .status{margin-top:10px;padding:7px 12px;border-radius:7px;background:#eaf5fb;color:#073b70;font-size:9px;font-weight:900;letter-spacing:.09em;text-align:center;text-transform:uppercase}.status.draft{background:#fff4cf;color:#795b0a}
-  .identity{display:grid;grid-template-columns:26mm 1fr 38mm;gap:13px;align-items:center;margin:13px 0;padding:12px;background:linear-gradient(120deg,#f8fbfd,#edf7f5);border:1px solid #c8ddec;border-radius:10px}.student-photo{width:26mm;height:32mm;object-fit:cover;border:2px solid #d8aa2f;border-radius:8px;background:#fff}.student-photo.placeholder{display:flex;align-items:center;justify-content:center;color:#0d5d99;font-weight:900}
-  .identity h2{margin:0 0 8px;color:#062f5b;font-size:19px}.identity p{margin:3px 0;color:#566c82;font-size:10px}.identity p b{color:#102849}.average{text-align:center;padding:10px;border-left:1px solid #b9cfdd}.average span{display:block;color:#60758c;font-size:8px;font-weight:800;text-transform:uppercase}.average b{display:block;margin-top:4px;color:#08716a;font-size:24px}
-  h3{margin:10px 0 5px;color:#073b70;font-size:10px;letter-spacing:.06em;text-transform:uppercase}table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:8.2px}.course-col{width:${annual?'23%':'36%'}}.credit-col{width:${annual?'19%':'32%'}}.result-col{width:${annual?'12%':'20%'}}.grade-col{width:${annual?'10%':'12%'}}.term-col{width:9%}thead{display:table-header-group}th{padding:5px 4px;text-align:left;background:#0d5d99;color:#fff;font-size:6.8px;text-transform:uppercase}td{padding:5px 4px;border-bottom:1px solid #dce5ee}tbody tr:nth-child(even){background:#f3f8fb}td span{display:block;margin-top:1px;color:#62758a;font-size:6.8px}th:nth-child(n+2),td:nth-child(n+2){text-align:center}.number,.grade{text-align:center}.grade{color:#08716a;font-weight:900}.dense td{padding:3.5px 3px;font-size:7.2px}.dense td span{font-size:6px}.ultradense td{padding:2px;font-size:7.6px}.ultradense td span{display:none}.dense .identity,.ultradense .identity{margin:8px 0;padding:8px}.dense h3,.ultradense h3{margin:7px 0 4px}.dense .comments,.ultradense .comments{gap:6px}.dense .comment,.ultradense .comment{min-height:28px;padding:5px;font-size:7px}.dense .signatures,.ultradense .signatures{margin-top:6px}
-  .attendance{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.stat{padding:8px;text-align:center;border:1px solid #d5e2eb;border-radius:7px;background:#fff}.stat span{display:block;color:#6d8193;font-size:7px;font-weight:800;text-transform:uppercase}.stat b{display:block;margin-top:3px;color:#073b70;font-size:14px}
-  .comments{display:grid;grid-template-columns:1.5fr 1fr;gap:10px}.comment{min-height:34px;padding:6px 8px;border:1px solid #d2e0e9;border-left:4px solid #20a995;border-radius:7px;background:#fbfdfe;font-size:9px;line-height:1.5}.comment b{display:block;margin-bottom:4px;color:#073b70;text-transform:uppercase}
-  .empty{padding:18px;text-align:center;color:#725b15;background:#fff7dc;border:1px solid #ead99d;border-radius:8px;font-size:9px}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:8px}.signature{display:grid;min-height:12mm;align-content:end;justify-items:center;border-bottom:1px solid #496178;padding-bottom:3px;text-align:center;color:#52677d;font-size:8px}.signature img{display:block;max-width:42mm;height:8mm;object-fit:contain}.signature b{color:#183b5e;font-size:8px}.signature span{display:block;margin-bottom:0;padding-top:2px}
-  .authenticity{display:grid;grid-template-columns:20mm 1fr;gap:10px;align-items:center;margin-top:8px;padding:5px 7px;border:1px solid #b8cfdf;border-radius:8px;background:#f4f9fc}.authenticity img{width:18mm;height:18mm}.authenticity b{color:#073b70}.authenticity p{margin:2px 0;font-size:7.5px;line-height:1.35;word-break:break-all}.official-seal{position:absolute;right:19mm;bottom:38mm;z-index:2;pointer-events:none}.official-seal img{width:30mm;height:30mm;object-fit:contain;opacity:.78}footer{display:flex;justify-content:space-between;margin-top:8px;padding-top:5px;border-top:2px solid #20bfa9;color:#5b7086;font-size:8px;line-height:1.45}footer strong{color:#073b70}
-  .ultradense .student-photo{width:20mm;height:24mm}.ultradense .identity{grid-template-columns:20mm 1fr 32mm}.ultradense .identity h2{font-size:16px}.ultradense .school-logo{width:18mm;height:18mm}.ultradense .masthead{padding-bottom:6px}.ultradense .document-title h1{font-size:20px}.ultradense .stat{padding:5px}.ultradense .comment{line-height:1.25}.ultradense footer{font-size:7px}
-  @media print{body{background:#fff}.sheet{width:auto;min-height:277mm;height:auto;margin:0;border:0;box-shadow:none}.content{padding:8mm 8mm 6mm}}
-  </style></head><body><main class="sheet ${(card.subjects?.length ?? 0)>16?'ultradense':(card.subjects?.length ?? 0)>10?'dense':''}"><div class="top-line"></div><div class="watermark-wrap" aria-hidden="true"><img class="watermark" src="${escapeHtml(watermark)}" alt=""></div>
-  <div class="content"><header class="masthead"><img class="school-logo" src="${escapeHtml(logo)}" alt="Kinshasa Christian School">
-  <div class="document-title"><small>${tr('Dossier de progression académique', 'Academic Progress Record')}</small><h1>${tr('Bulletin scolaire officiel', 'Official Report Card')}</h1><p>${escapeHtml(documentId)}</p></div></header>
-  <div class="status ${card.publicationStatus==='DRAFT'?'draft':''}">${tr('Statut du document', 'Document status')} · ${escapeHtml(statusLabel)}</div>
-  <section class="identity">${photoBlock}<div><h2>${escapeHtml(studentName)}</h2>
-  <p>${tr('Matricule', 'Student ID')} · <b>${escapeHtml(card.student.studentNumber)}</b></p><p>${tr('Classe', 'Class')} · <b>${escapeHtml([card.student.grade,card.student.section].filter(Boolean).join(' ')||tr('En attente', 'Pending'))}</b></p>
-  <p>${tr('Période scolaire', 'Reporting period')} · <b>${escapeHtml(localizedTerm(card.term))}</b></p></div><div class="average"><span>${tr('Moyenne finale', 'Final average')}</span><b>${card.average.toFixed(2)}%</b></div></section>
-  <h3>${tr('Résultats académiques', 'Academic performance')}</h3>${subjects?`<table><colgroup><col class="course-col"><col class="credit-col">${annual?'<col class="term-col"><col class="term-col"><col class="term-col"><col class="term-col">':''}<col class="result-col"><col class="grade-col"></colgroup><thead><tr><th>${tr('Cours', 'Course')}</th><th>${tr('Enseignant', 'Teacher')}</th>${annual?'<th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th>':''}<th>${annual?tr('Moyenne annuelle','Annual average'):tr('Résultat final', 'Final result')}</th><th>${tr('Note', 'Grade')}</th></tr></thead><tbody>${subjects}</tbody></table>`:`<div class="empty">${tr('Aucun résultat de matière soumis n’est encore rattaché à ce bulletin.', 'No submitted subject result is attached to this report card yet.')}</div>`}
-  <h3>${tr('Résumé des présences', 'Attendance summary')}</h3>${attendance?`<div class="attendance"><div class="stat"><span>${tr('Présent', 'Present')}</span><b>${attendance.present}</b></div><div class="stat"><span>${tr('Absent', 'Absent')}</span><b>${attendance.absent}</b></div><div class="stat"><span>${tr('Retard', 'Late')}</span><b>${attendance.late}</b></div><div class="stat"><span>${tr('Excusé', 'Excused')}</span><b>${attendance.excused}</b></div><div class="stat"><span>${tr('Taux', 'Rate')}</span><b>${attendance.attendanceRate??'—'}%</b></div></div>`:`<div class="empty">${tr('Le résumé des présences n’est pas disponible pour cette période.', 'Attendance summary is not available for this reporting period.')}</div>`}
-  <h3>${tr('Appréciation de la direction de classe', 'Class leadership review')}</h3><div class="comments"><div class="comment"><b>${tr('Commentaire du titulaire', 'Main Teacher comment')}</b>${escapeHtml(card.teacherComment||tr('Aucun commentaire saisi.', 'No comment entered.'))}</div><div class="comment"><b>${tr('Conduite', 'Conduct')}</b>${escapeHtml(card.conduct||tr('Non renseignée.', 'Not entered.'))}</div></div>
-  <div class="signatures">${signatureBlock(signatures.mainTeacher,tr('Titulaire de classe','Main Teacher'))}${signatureBlock(signatures.principal,tr('Préfet / Signature autorisée','Principal / Authorized signature'))}</div>
-  ${signatures.officialSealImage ? `<div class="official-seal"><img src="${escapeHtml(signatures.officialSealImage)}" alt="${tr('Sceau officiel de l’école','Official school seal')}"></div>` : ''}
-  <section class="authenticity"><img src="${escapeHtml(qrCode)}" alt="QR verification"><div><b>${tr('Authentification numérique internationale', 'International digital authentication')}</b><p>${tr('Scannez pour vérifier ce document directement dans le registre officiel KCS Nexus.', 'Scan to verify this document directly against the official KCS Nexus registry.')}</p><p><strong>Document ID:</strong> ${escapeHtml(documentId)}</p><p><strong>SHA-256:</strong> ${escapeHtml(fingerprint)}</p><p><strong>UTC:</strong> ${escapeHtml(issuedAt.toISOString())} · QR ISO/IEC 18004 · ECC H</p></div></section>
-  <footer><div><strong>Kinshasa Christian School</strong><br>Avenue de la République n° 1 · Macampagne, Ngaliema<br>Kinshasa, ${tr('République démocratique du Congo', 'Democratic Republic of Congo')} · Réf. 80 jours<br>+243 895 326 011 · +243 994 645 735<br>kinshasachristianschool@gmail.com</div><div style="text-align:right">KCS Nexus AI · ${tr('Bulletin officiel', 'Official Report Card')}<br>${escapeHtml(issuedAt.toLocaleDateString(dateLocale))}</div></footer>
-  </div></main><script>addEventListener('load',function(){var i=Array.prototype.slice.call(document.images);Promise.all(i.map(function(x){if(x.complete)return Promise.resolve();return new Promise(function(r){x.onload=r;x.onerror=r})})).then(function(){setTimeout(function(){window.focus();window.print()},250)})});<\/script></body></html>`
-  const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}))
-  printWindow.location.replace(url)
-  window.setTimeout(()=>URL.revokeObjectURL(url),60_000)
 }

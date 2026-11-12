@@ -24,7 +24,7 @@ import { summarizeAttendanceStatuses, normalizeAttendanceCorrection } from '../u
 import { aggregateReportCardResults, reportCardSourcePeriods } from '../services/annualReportCard.service.js'
 import { attendanceWindow, attendanceWithSuspensions } from '../services/reportAttendance.service.js'
 import { submitCourseFinalGrades } from '../services/finalGradeSubmission.service.js'
-import { officialReportCardPdf } from '../utils/officialReportCardPdf.js'
+import { officialReportCardPdf, officialReportCardDocument } from '../utils/officialReportCardPdf.js'
 
 const academicYearSchema = z.string().refine(isSequentialAcademicYear, 'Academic year must be sequential and use YYYY-YYYY')
 const academicTermSchema = z.string().refine(isKcsAcademicTerm, `Academic term must be one of: ${KCS_ACADEMIC_TERMS.join(', ')}`)
@@ -802,7 +802,7 @@ const reportCardPdfStudentSelect = {
 
 type PdfReportCard = Prisma.ReportCardGetPayload<{include:{student:{select:typeof reportCardPdfStudentSelect}}}>
 
-async function prepareReportCardPdfs(cards: PdfReportCard[], language: 'fr' | 'en') {
+async function prepareReportCardPdfs(cards: PdfReportCard[], language: 'fr' | 'en', htmlOnly = false) {
  const settingsRow=await prisma.auditLog.findFirst({where:{action:'REPORT_CARD_OFFICIALIZATION_SETTINGS',targetType:'ReportCardSettings',targetId:'global'},orderBy:{createdAt:'desc'},select:{metadata:true}})
  const officialSettings=(settingsRow?.metadata??{}) as {principalName?:string;signatureImage?:string;officialSealImage?:string}
  const officialAccount=await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{signatureImage:true,officialSealImage:true}})
@@ -828,13 +828,31 @@ async function prepareReportCardPdfs(cards: PdfReportCard[], language: 'fr' | 'e
    const teacherName=[course.teacher.user.lastName,course.teacher.user.middleName,course.teacher.user.firstName].filter(Boolean).join(' ')
    return[{name,teacherName,code:course.code,credits:course.credits,percentage,letterGrade:letter(percentage),termResults:item.termResults}]
   })
+  subjects.sort((left,right)=>(left.code||left.name).localeCompare(right.code||right.name,'en',{numeric:true,sensitivity:'base'}))
   const learner=[card.student.user.lastName,card.student.user.middleName,card.student.user.firstName].filter(Boolean).join(' ')
   const mainTeacher=mainTeachers.find(teacher=>isTeacherHomeroomForStudent(teacher,card.student))
-  const pdf=await officialReportCardPdf({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(card.attendanceSummary??missingAttendance.get(card.id)) as any,language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
+  const render = htmlOnly ? async (input: Parameters<typeof officialReportCardPdf>[0]) => ({...await officialReportCardDocument(input), buffer: Buffer.alloc(0)}) : officialReportCardPdf
+  const pdf=await render({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(card.attendanceSummary??missingAttendance.get(card.id)) as any,language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
   pdfByCard.set(card.id,pdf)
  }
  return pdfByCard
 }
+
+academicRecordsRouter.get('/report-cards/:id/print-document',requireRoles('admin','staff','teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const language=z.enum(['fr','en']).parse(req.query.language??'en')
+ const id=getRouteParam(req.params.id)
+ const card=await prisma.reportCard.findUnique({where:{id},include:{student:{select:reportCardPdfStudentSelect}}})
+ if(!card)throw new ApiError(404,'Report card not found')
+ if(req.user!.role==='teacher'){
+  const teacher=await prisma.teacherProfile.findUnique({where:{userId:req.user!.sub},select:{status:true,homeroomGrade:true,homeroomSection:true}})
+  if(!teacher||!isTeacherHomeroomForStudent(teacher,card.student))throw new ApiError(403,'This report card is outside the assigned homeroom')
+ }
+ const doc=(await prepareReportCardPdfs([card],language,true)).get(id)!
+ const actorId=await resolveAcademicActorId(req)
+ await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:doc.documentId,metadata:{fingerprint:doc.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:card.publicationStatus,approvedAt:card.approvedAt?.toISOString()??null}}})
+ res.setHeader('Cache-Control','private, no-store')
+ return success(res,{html:doc.html,documentId:doc.documentId},'Official report document prepared')
+}))
 
 academicRecordsRouter.get('/report-cards/:id/pdf',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const language=z.enum(['fr','en']).parse(req.query.language??'en')
@@ -873,7 +891,7 @@ academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHand
   const linked=new Set(card.student.parentLinks.map(link=>link.parentId))
   if(request.parentIds.some(id=>!linked.has(id)))throw new ApiError(409,'Every selected recipient must be a linked parent of the selected learner')
  }
- const pdfByCard=await prepareReportCardPdfs(cards,payload.language)
+ const pdfByCard=await prepareReportCardPdfs(cards,'en')
  let recipients=0
  try{await prisma.$transaction(async tx=>{
   await tx.auditLog.create({data:{id:batchId,actorId,action:'REPORT_CARD_DELIVERY_BATCH',targetType:'ReportCardBatch',metadata:{requestHash,reportCards:cards.length,recipients:uniqueDeliveries.reduce((sum,item)=>sum+item.parentIds.length,0)}}})

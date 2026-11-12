@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-shell-report-sections-20261112-v14'
+const CACHE_NAME = 'kcs-nexus-report-print-parity-20261112-v15'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {

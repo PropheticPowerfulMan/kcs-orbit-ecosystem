@@ -43,7 +43,7 @@ type Props = {
   busy: boolean;
   progress?: string;
   onClose: () => void;
-  onDeliver: (approvePending?: boolean) => void;
+  onDeliver: (approvePending: boolean, deliveryLanguage: 'fr' | 'en') => void;
 };
 const field =
   "w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white";
@@ -76,6 +76,7 @@ export default function ReportCardDeliveryDialog({
 }: Props) {
   const language = useUIStore((state) => state.language);
   const tr = (fr: string, en: string) => (language === "fr" ? fr : en);
+  const [deliveryLanguage, setDeliveryLanguage] = useState<'fr' | 'en'>(language === 'fr' ? 'fr' : 'en');
   const [grade, setGrade] = useState(initialGrade);
   const [section, setSection] = useState("ALL");
   const [year, setYear] = useState(initialYear);
@@ -367,8 +368,8 @@ export default function ReportCardDeliveryDialog({
             {selectedCardCount} {tr("bulletin(s)", "report card(s)")} ·{" "}
             {selectedRows.length}{" "}
             {tr("livraison(s) sélectionnée(s)", "selected delivery item(s)")} ·{" "}
-            {tr("Langue du mail et du PDF", "Email and PDF language")}{" "}
-            {language.toUpperCase()}
+            {tr("Langue du message", "Email message language")}{" "}
+            {deliveryLanguage.toUpperCase()}
           </div>
           <div className="overflow-x-auto rounded-xl border border-sky-100 dark:border-kcs-blue-800">
             <table className="w-full min-w-[690px] text-left text-xs">
@@ -459,6 +460,10 @@ export default function ReportCardDeliveryDialog({
             )}
           </div>
         </div>
+        <div className="mx-4 mb-3 grid shrink-0 gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950 sm:grid-cols-[1fr_13rem] sm:items-center">
+          <div><label htmlFor="report-delivery-language" className="block text-sm font-black text-sky-950 dark:!text-sky-100">{tr('Langue du message aux parents', 'Parent email message language')}</label><p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{tr('Choisissez la langue du message. Le bulletin PDF joint reste toujours en anglais, langue officielle de l’école.', 'Choose the email message language. The attached report-card PDF is always in English, the school’s official language.')}</p></div>
+          <select id="report-delivery-language" aria-label={tr('Langue du message de l’e-mail', 'Email message language')} value={deliveryLanguage} onChange={event => setDeliveryLanguage(event.target.value as 'fr' | 'en')} disabled={busy} className={field}><option value="fr">Français · FR</option><option value="en">English · EN</option></select>
+        </div>
         {review && pendingApprovalCount > 0 && <label className="mx-4 mb-3 flex shrink-0 items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-200"><input type="checkbox" checked={approvalConfirmed} disabled={busy} onChange={event => setApprovalConfirmed(event.target.checked)} className="mt-1 size-4 shrink-0"/><span>{tr(`J’ai vérifié les ${pendingApprovalCount} bulletin(s) encore non approuvé(s). Je confirme leur approbation avant l’envoi aux parents sélectionnés.`, `I have reviewed the ${pendingApprovalCount} report card(s) awaiting approval. I confirm their approval before delivery to the selected parents.`)}</span></label>}
         <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-sky-100 p-4 dark:border-kcs-blue-800">
           <button
@@ -474,7 +479,7 @@ export default function ReportCardDeliveryDialog({
           <button
             type="button"
             disabled={busy || !selectedRows.length || (review && pendingApprovalCount > 0 && !approvalConfirmed)}
-            onClick={() => (review ? onDeliver(approvalConfirmed) : setReview(true))}
+            onClick={() => (review ? onDeliver(approvalConfirmed, deliveryLanguage) : setReview(true))}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50"
           >
             {busy ? (
