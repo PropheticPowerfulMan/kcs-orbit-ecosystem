@@ -623,6 +623,7 @@ export const academicRecordsAPI = {
   updateReportCardEditorial: (id: string, data: { teacherComment: string; conduct: string; average: number; attendanceSummary: object | null; subjects: Array<{ courseId: string; courseName?: string; percentage: number }> }, silentFeedback = false) => api.patch(`/academic-records/report-cards/${id}/editorial`, data, { headers: { 'x-silent-feedback': String(silentFeedback) } }),
   reportCardOfficialSettings: () => api.get('/academic-records/report-cards/official-settings'),
   saveReportCardOfficialSettings: (data: { principalName: string; signatureImage: string; officialSealImage: string }) => api.put('/academic-records/report-cards/official-settings', data),
+  reportCardPdf: (id: string, language: 'fr' | 'en') => api.get(`/academic-records/report-cards/${id}/pdf`, { params: { language }, responseType: 'blob', timeout: 60_000 }),
   deliverReportCards: (deliveries: Array<{ reportCardId: string; parentIds: string[] }>, language: 'fr' | 'en', requestId?: string) => api.post('/academic-records/report-cards/deliver', { deliveries, language, requestId }, { timeout: 180_000 }),
   transcript: (studentId: string) => api.get('/academic-records/transcripts/' + studentId, { timeout: 60_000 }),
   legacyTemplate: (format: 'csv' | 'xlsx') => api.get('/academic-records/legacy-records/template', { params: { format }, responseType: 'blob', timeout: 60_000 }),

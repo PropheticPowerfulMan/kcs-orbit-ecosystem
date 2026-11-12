@@ -1602,6 +1602,22 @@ const AdminSectionView = ({
   const [editingStudent, setEditingStudent] = useState<AdminStudentRecord | null>(null)
   const [studentEditForm, setStudentEditForm] = useState<AdminStudentEditForm>(() => createAdminStudentEditForm(null))
   const [savingStudentEdit, setSavingStudentEdit] = useState(false)
+  const [studentClassSections, setStudentClassSections] = useState<Array<{grade:string;section:string}>>([])
+  const [studentSectionsError, setStudentSectionsError] = useState(false)
+  useEffect(() => {
+    if (!editingStudent) return
+    let active = true
+    setStudentSectionsError(false)
+    mainTeacherAPI.roster().then(response => {
+      if (active) setStudentClassSections([...(response.data?.data?.classes ?? []), ...(response.data?.data?.students ?? [])])
+    }).catch(() => { if (active) setStudentSectionsError(true) })
+    return () => { active = false }
+  }, [editingStudent?.id])
+  const studentSectionOptions = useMemo(() => [...new Set(studentClassSections
+    .filter(item => normalizeSchoolLevel(item.grade) === normalizeSchoolLevel(studentEditForm.grade))
+    .map(item => item.section?.trim()).filter(Boolean).concat(studentEditForm.section ? [studentEditForm.section] : []))]
+    .sort((left, right) => left.localeCompare(right, 'en', { numeric: true })), [studentClassSections, studentEditForm.grade, studentEditForm.section])
+
   const [newFamily, setNewFamily] = useState({
     parentFirstName: '',
     parentMiddleName: '',
@@ -2005,6 +2021,9 @@ const AdminSectionView = ({
         const successMessage = response.data?.message || `${normalizedName} a été mis à jour avec succès.`
         setStudentNotice(`${successMessage} Le rafraîchissement de l’écran a échoué ; utilisez Actualiser sans soumettre de nouveau le formulaire. ${extractStudentApiMessage(refreshError, '')}`.trim())
         return
+      }
+      if (!updatedStudent || normalizeSchoolLevel(updatedStudent.grade) !== normalizeSchoolLevel(studentEditForm.grade) || (updatedStudent.section || '').trim().toLowerCase() !== studentEditForm.section.trim().toLowerCase()) {
+        throw new Error(language === 'fr' ? 'Le registre ne confirme pas encore la classe et la section demandées. Actualisez pour vérifier avant de recommencer.' : 'The registry has not confirmed the requested class and section. Refresh to verify before retrying.')
       }
       if (updatedStudent) {
         setSelectedStudent(updatedStudent)
@@ -3256,13 +3275,17 @@ const AdminSectionView = ({
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Niveau
-                      <select value={studentEditForm.grade} onChange={(event) => setStudentEditForm((current) => ({ ...current, grade: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+                      <select value={studentEditForm.grade} onChange={(event) => setStudentEditForm((current) => ({ ...current, grade: event.target.value, section: '' }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                         {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
                       </select>
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Suffixe / section
-                      <input value={studentEditForm.section} maxLength={40} onChange={(event) => setStudentEditForm((current) => ({ ...current, section: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Vide pour une classe entière" />
+                      {language === 'fr' ? 'Section / sous-classe' : 'Section / class group'}
+                      <select aria-label={language === 'fr' ? 'Section de l’élève' : 'Student section'} value={studentEditForm.section} onChange={(event) => setStudentEditForm((current) => ({ ...current, section: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+                        <option value="">{language === 'fr' ? 'Classe entière / sans section' : 'Whole class / no section'}</option>
+                        {studentSectionOptions.map(section => <option key={section} value={section}>{section}</option>)}
+                      </select>
+                      <span className="text-xs text-gray-500 dark:text-gray-300">{studentSectionsError ? (language === 'fr' ? 'Les sections n’ont pas pu être actualisées. Rouvrez cette fenêtre pour réessayer.' : 'Sections could not be refreshed. Reopen this window to retry.') : (language === 'fr' ? 'Sections affectées par le Principal pour ce niveau.' : 'Sections assigned by the Principal for this grade.')}</span>
                     </label>
                   </div>
                 </section>

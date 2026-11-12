@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-shell-attendance-history-20261110-v13'
+const CACHE_NAME = 'kcs-nexus-shell-report-sections-20261112-v14'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
@@ -24,7 +24,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Ne pas intercepter les applications indépendantes.
+  // Ne pas intercepter les applications indÃ©pendantes.
   if (
     url.origin === self.location.origin &&
     SIBLING_APP_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
@@ -40,7 +40,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation : toujours privilégier la version réseau.
+  // Navigation : toujours privilÃ©gier la version rÃ©seau.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -71,14 +71,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Ressources statiques : cache prioritaire, puis réseau.
+  // Ressources statiques : cache prioritaire, puis rÃ©seau.
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
 
       return fetch(request).then((response) => {
         if (response.ok) {
-          // Cloner immédiatement, avant toute opération asynchrone.
+          // Cloner immÃ©diatement, avant toute opÃ©ration asynchrone.
           const copy = response.clone();
 
           event.waitUntil(

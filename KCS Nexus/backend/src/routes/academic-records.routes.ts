@@ -605,18 +605,23 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
   throw new ApiError(409,`Submission blocked: final grades are still missing for ${missingCourses.join(', ')}`)
  }
  const termLabel=reportCardTerm(payload.academicYear,payload.term)
- const current=await tx.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
- if(current&&['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus))throw new ApiError(409,'This report card is already approved or published and cannot be replaced without Super Administration review')
- const replacesPreviousSubmission=current?.publicationStatus==='READY_FOR_REVIEW'
+ const existing=await tx.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
+ const current=existing?await lockedReportCard(tx,existing.id):null
+ const replacesPreviousSubmission=Boolean(current&&current.publicationStatus!=='DRAFT')
  const visibleGrades=context.grades.filter(item=>visibility.visibleCourseIds.includes(item.courseId))
  const visibleAverage=weightedCourseAverage(visibleGrades)
- const corrections={...academicCorrections(current?.academicCorrections),hiddenCourseIds:visibility.hiddenCourseIds}
+ const corrections={hiddenCourseIds:visibility.hiddenCourseIds}
+ if(current){
+  await tx.grade.deleteMany({where:{studentId,assignmentId:null,period:periodKey(payload.academicYear,payload.term,'APPROVED')}})
+  await tx.correspondenceLog.updateMany({where:{reportCardId:current.id,channel:'EMAIL',status:'QUEUED'},data:{status:'FAILED',failureReason:'REPORT_CARD_SUPERSEDED'}})
+ }
   const saved=await tx.reportCard.upsert({
    where:{studentId_term:{studentId,term:termLabel}},
    create:{studentId,term:termLabel,average:visibleAverage,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,academicCorrections:corrections,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'},
    update:{average:visibleAverage,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,academicCorrections:corrections,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW',approvedById:null,approvedAt:null,portalPostedAt:null,emailedAt:null},
   })
-  await tx.auditLog.create({data:{actorId:req.user!.sub,action:replacesPreviousSubmission?'MAIN_TEACHER_REPORT_CARD_RESUBMITTED':'MAIN_TEACHER_REPORT_CARD_SUBMITTED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,replacesPreviousSubmission,hiddenCourseIds:visibility.hiddenCourseIds,courseGrades:visibleGrades.map(item=>({courseId:item.courseId,percentage:item.percentage,credits:item.course.credits}))}}})
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:replacesPreviousSubmission?'MAIN_TEACHER_REPORT_CARD_RESUBMITTED':'MAIN_TEACHER_REPORT_CARD_SUBMITTED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,replacesPreviousSubmission,previousReportCard:current?{average:current.average,teacherComment:current.teacherComment,conduct:current.conduct,attendanceSummary:current.attendanceSummary,academicCorrections:current.academicCorrections,publicationStatus:current.publicationStatus,approvedAt:current.approvedAt?.toISOString()??null,emailedAt:current.emailedAt?.toISOString()??null}:null,hiddenCourseIds:visibility.hiddenCourseIds,courseGrades:visibleGrades.map(item=>({courseId:item.courseId,percentage:item.percentage,credits:item.course.credits}))}}})
+  if(current)await synchronizeStudentAcademicMetrics(tx,[studentId])
   const recipients=await tx.user.findMany({where:{OR:[{role:'ADMIN'},{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'}]},select:{id:true}})
   if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:replacesPreviousSubmission?'Updated report card ready for review':'Report card ready for review',message:`A main teacher ${replacesPreviousSubmission?'replaced the previous submission':'submitted the complete report card'} for ${context.student.studentNumber}.`,type:'INFO',link:'/admin/report-cards'}))})
   return{saved,notified:recipients.length,replacesPreviousSubmission}
@@ -790,33 +795,17 @@ academicRecordsRouter.put('/report-cards/official-settings',requireSuperAdmin(),
  return success(res,payload,'Official report-card signature, principal name, and school seal saved')
 }))
 
-academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
- const payload=z.object({requestId:z.string().min(8).max(128).optional(),language:z.enum(['fr','en']).default('en'),deliveries:z.array(z.object({reportCardId:z.string().min(1),parentIds:z.array(z.string().min(1)).min(1).max(10)})).min(1).max(250)}).parse(req.body)
- const actorId=await resolveAcademicActorId(req)
- if(!actorId)throw new ApiError(403,'The report-card delivery identity is unavailable')
- const batchId='report-card-delivery-'+createHash('sha256').update(actorId+':'+(payload.requestId??randomUUID())).digest('hex')
- const requestHash=createHash('sha256').update(JSON.stringify({language:payload.language,deliveries:payload.deliveries.map(item=>({reportCardId:item.reportCardId,parentIds:[...new Set(item.parentIds)].sort()})).sort((a,b)=>a.reportCardId.localeCompare(b.reportCardId))})).digest('hex')
- const previous=await prisma.auditLog.findUnique({where:{id:batchId},select:{metadata:true}})
- if(previous){
-  const data=previous.metadata as {requestHash:string;reportCards:number;recipients:number}
-  if(data.requestHash!==requestHash)throw new ApiError(409,'The delivery request was reused with different recipients')
-  return success(res,{reportCards:data.reportCards,recipients:data.recipients},'Previously queued report-card delivery confirmed')
- }
+const reportCardPdfStudentSelect = {
+ id:true,studentNumber:true,officialAvatar:true,grade:true,section:true,
+ user:{select:{firstName:true,middleName:true,lastName:true,orbitUserId:true}},
+} as const
+
+type PdfReportCard = Prisma.ReportCardGetPayload<{include:{student:{select:typeof reportCardPdfStudentSelect}}}>
+
+async function prepareReportCardPdfs(cards: PdfReportCard[], language: 'fr' | 'en') {
  const settingsRow=await prisma.auditLog.findFirst({where:{action:'REPORT_CARD_OFFICIALIZATION_SETTINGS',targetType:'ReportCardSettings',targetId:'global'},orderBy:{createdAt:'desc'},select:{metadata:true}})
  const officialSettings=(settingsRow?.metadata??{}) as {principalName?:string;signatureImage?:string;officialSealImage?:string}
  const officialAccount=await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{signatureImage:true,officialSealImage:true}})
- const deliveryByCard=new Map<string,{reportCardId:string;parentIds:string[]}>()
- for(const item of payload.deliveries){const old=deliveryByCard.get(item.reportCardId);deliveryByCard.set(item.reportCardId,{reportCardId:item.reportCardId,parentIds:[...new Set([...(old?.parentIds??[]),...item.parentIds])]})}
- const uniqueDeliveries=[...deliveryByCard.values()]
- const cards=await prisma.reportCard.findMany({where:{id:{in:uniqueDeliveries.map(item=>item.reportCardId)}},include:{student:{select:{id:true,studentNumber:true,officialAvatar:true,grade:true,section:true,user:{select:{firstName:true,middleName:true,lastName:true,orbitUserId:true}},parentLinks:{include:{parent:{select:{id:true,firstName:true,middleName:true,lastName:true,email:true,phone:true}}}}}}}})
- if(cards.length!==uniqueDeliveries.length)throw new ApiError(404,'One or more selected report cards no longer exist')
- const invalid=cards.filter(card=>!['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(card.publicationStatus))
- if(invalid.length)throw new ApiError(409,'Only approved report cards may be sent to parents')
- for(const card of cards){
-  const request=deliveryByCard.get(card.id)!
-  const linked=new Set(card.student.parentLinks.map(link=>link.parentId))
-  if(request.parentIds.some(id=>!linked.has(id)))throw new ApiError(409,'Every selected recipient must be a linked parent of the selected learner')
- }
  const mainTeachers=await prisma.teacherProfile.findMany({where:{status:'HOMEROOM_TEACHER'},select:{status:true,homeroomGrade:true,homeroomSection:true,user:{select:{firstName:true,middleName:true,lastName:true,signatureImage:true}}}})
  const missingAttendance = await reportCardAttendanceSummaries(cards)
  const pdfByCard=new Map<string,Awaited<ReturnType<typeof officialReportCardPdf>>>()
@@ -841,9 +830,50 @@ academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHand
   })
   const learner=[card.student.user.lastName,card.student.user.middleName,card.student.user.firstName].filter(Boolean).join(' ')
   const mainTeacher=mainTeachers.find(teacher=>isTeacherHomeroomForStudent(teacher,card.student))
-  const pdf=await officialReportCardPdf({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(card.attendanceSummary??missingAttendance.get(card.id)) as any,language:payload.language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
+  const pdf=await officialReportCardPdf({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(card.attendanceSummary??missingAttendance.get(card.id)) as any,language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
   pdfByCard.set(card.id,pdf)
  }
+ return pdfByCard
+}
+
+academicRecordsRouter.get('/report-cards/:id/pdf',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const language=z.enum(['fr','en']).parse(req.query.language??'en')
+ const id=getRouteParam(req.params.id)
+ const card=await prisma.reportCard.findUnique({where:{id},include:{student:{select:reportCardPdfStudentSelect}}})
+ if(!card)throw new ApiError(404,'Report card not found')
+ const pdf=(await prepareReportCardPdfs([card],language)).get(id)!
+ const actorId=await resolveAcademicActorId(req)
+ await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:pdf.documentId,metadata:{fingerprint:pdf.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:card.publicationStatus,approvedAt:card.approvedAt?.toISOString()??null}}})
+ res.setHeader('Cache-Control','private, no-store')
+ res.setHeader('Content-Disposition',`inline; filename="${pdf.documentId}.pdf"`)
+ res.type('application/pdf').send(pdf.buffer)
+}))
+
+academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=z.object({requestId:z.string().min(8).max(128).optional(),language:z.enum(['fr','en']).default('en'),deliveries:z.array(z.object({reportCardId:z.string().min(1),parentIds:z.array(z.string().min(1)).min(1).max(10)})).min(1).max(250)}).parse(req.body)
+ const actorId=await resolveAcademicActorId(req)
+ if(!actorId)throw new ApiError(403,'The report-card delivery identity is unavailable')
+ const batchId='report-card-delivery-'+createHash('sha256').update(actorId+':'+(payload.requestId??randomUUID())).digest('hex')
+ const requestHash=createHash('sha256').update(JSON.stringify({language:payload.language,deliveries:payload.deliveries.map(item=>({reportCardId:item.reportCardId,parentIds:[...new Set(item.parentIds)].sort()})).sort((a,b)=>a.reportCardId.localeCompare(b.reportCardId))})).digest('hex')
+ const previous=await prisma.auditLog.findUnique({where:{id:batchId},select:{metadata:true}})
+ if(previous){
+  const data=previous.metadata as {requestHash:string;reportCards:number;recipients:number}
+  if(data.requestHash!==requestHash)throw new ApiError(409,'The delivery request was reused with different recipients')
+  return success(res,{reportCards:data.reportCards,recipients:data.recipients},'Previously queued report-card delivery confirmed')
+ }
+ const deliveryByCard=new Map<string,{reportCardId:string;parentIds:string[]}>()
+ for(const item of payload.deliveries){const old=deliveryByCard.get(item.reportCardId);deliveryByCard.set(item.reportCardId,{reportCardId:item.reportCardId,parentIds:[...new Set([...(old?.parentIds??[]),...item.parentIds])]})}
+ const uniqueDeliveries=[...deliveryByCard.values()]
+ const cards=await prisma.reportCard.findMany({where:{id:{in:uniqueDeliveries.map(item=>item.reportCardId)}},include:{student:{select:{id:true,studentNumber:true,officialAvatar:true,grade:true,section:true,user:{select:{firstName:true,middleName:true,lastName:true,orbitUserId:true}},parentLinks:{include:{parent:{select:{id:true,firstName:true,middleName:true,lastName:true,email:true,phone:true}}}}}}}})
+ if(cards.length!==uniqueDeliveries.length)throw new ApiError(404,'One or more selected report cards no longer exist')
+ const invalid=cards.filter(card=>!['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(card.publicationStatus))
+ if(invalid.length)throw new ApiError(409,'Only approved report cards may be sent to parents')
+ for(const card of cards){
+  const request=deliveryByCard.get(card.id)!
+  const linked=new Set(card.student.parentLinks.map(link=>link.parentId))
+  if(request.parentIds.some(id=>!linked.has(id)))throw new ApiError(409,'Every selected recipient must be a linked parent of the selected learner')
+ }
+ const pdfByCard=await prepareReportCardPdfs(cards,payload.language)
  let recipients=0
  try{await prisma.$transaction(async tx=>{
   await tx.auditLog.create({data:{id:batchId,actorId,action:'REPORT_CARD_DELIVERY_BATCH',targetType:'ReportCardBatch',metadata:{requestHash,reportCards:cards.length,recipients:uniqueDeliveries.reduce((sum,item)=>sum+item.parentIds.length,0)}}})

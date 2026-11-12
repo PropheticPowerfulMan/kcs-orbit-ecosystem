@@ -1,3 +1,4 @@
+import { verifyGraduationApproval, type GraduationApproval } from "./graduation-approval";
 import { AppSlug, Prisma } from "@prisma/client";
 import {
   AcademicProgressionOverride,
@@ -13,6 +14,7 @@ export type AcademicYearRolloverInput = {
   force?: boolean;
   passThreshold?: number;
   overrides?: AcademicProgressionOverride[];
+  graduationApproval?: GraduationApproval;
 };
 
 function normalizeDate(value?: Date) {
@@ -71,6 +73,14 @@ async function loadRolloverCatalog(organizationId: string) {
 
 export async function previewAcademicYearRollover(input: AcademicYearRolloverInput) {
   const { students, classes } = await loadRolloverCatalog(input.organizationId);
+  const approval = verifyGraduationApproval(input.graduationApproval, input.organizationId);
+  const approved = new Map((approval?.students ?? []).map(student => [student.id, student.average]));
+  for (const student of students) {
+    if (/^grade\s*12(?:\s|$)/i.test(student.className ?? '')) student.averagePercent = approved.get(student.id) ?? null;
+  }
+  for (const override of input.overrides ?? []) {
+    if (override.decision === 'GRADUATE' && (!approved.has(override.studentId) || !students.some(s => s.id === override.studentId && /^grade\s*12(?:\s|$)/i.test(s.className ?? '')))) throw new Error('Graduation requires an approved Grade 12 annual report with an average of at least 70%.');
+  }
 
   return buildAcademicProgressionPlan({
     students,
@@ -113,8 +123,15 @@ function buildStudentUpdate(item: Awaited<ReturnType<typeof previewAcademicYearR
 export async function executeAcademicYearRollover(input: AcademicYearRolloverInput) {
   const plan = await previewAcademicYearRollover(input);
   assertRunnablePlan(plan, input.force);
+  const approval = verifyGraduationApproval(input.graduationApproval, input.organizationId);
+  if (!approval?.closed || approval.academicYear !== plan.academicYear) throw new Error('Academic rollover requires explicit SuperAdmin annual closure and current Nexus authorization.');
+  const approved = new Set(approval.students.map(student => student.id));
+  if (plan.items.some(item => item.action === 'GRADUATE' && !approved.has(item.studentId))) throw new Error('A graduation decision lacks an approved annual report.');
 
   const applied = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${'kcs-rollover:'+input.organizationId+':'+plan.academicYear}))`);
+    const previous = await tx.auditLog.findFirst({where:{organizationId:input.organizationId,action:'academic_year.rollover.executed',entityType:'academicYear',entityId:plan.nextAcademicYear},select:{id:true}});
+    if (previous) return [];
     const results = [];
 
     for (const item of plan.items) {
@@ -179,63 +196,17 @@ export async function executeAcademicYearRollover(input: AcademicYearRolloverInp
     });
 
     return results;
-  });
+  }, {maxWait:10000,timeout:60000});
 
   return {
     ...plan,
-    applied: applied.length
+    applied: applied.length,
+    graduatedStudentIds: (await prisma.student.findMany({ where: { organizationId: input.organizationId, id: { in: approval.students.map(student=>student.id) }, status: 'GRADUATED' }, select: { id: true } })).map(student=>student.id)
   };
 }
 
 export async function runDueAcademicYearRollovers(effectiveDate = new Date()) {
-  const window = getAcademicYearWindow(effectiveDate);
-  if (!window.isRolloverWindow) {
-    return {
-      checked: 0,
-      executed: 0,
-      skipped: 0,
-      reason: "outside_rollover_window"
-    };
-  }
-
-  const nextAcademicYear = getAcademicYearWindow(new Date(Date.UTC(effectiveDate.getUTCFullYear() + 1, 8, 1))).academicYear;
-  const organizations = await prisma.organization.findMany({
-    where: { isActive: true },
-    select: { id: true }
-  });
-  let executed = 0;
-  let skipped = 0;
-
-  for (const organization of organizations) {
-    const alreadyExecuted = await prisma.auditLog.findFirst({
-      where: {
-        organizationId: organization.id,
-        action: "academic_year.rollover.executed",
-        entityType: "academicYear",
-        entityId: nextAcademicYear
-      },
-      select: { id: true }
-    });
-
-    if (alreadyExecuted) {
-      skipped += 1;
-      continue;
-    }
-
-    await executeAcademicYearRollover({
-      organizationId: organization.id,
-      effectiveDate,
-      force: false
-    });
-    executed += 1;
-  }
-
-  return {
-    checked: organizations.length,
-    executed,
-    skipped,
-    reason: "rollover_window"
-  };
+  return { checked: 0, executed: 0, skipped: 0, reason: "explicit_superadmin_approval_required" };
 }
 
 export function startAcademicYearRolloverScheduler(intervalMs = 24 * 60 * 60 * 1000) {
