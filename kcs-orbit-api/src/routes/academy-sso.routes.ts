@@ -1,4 +1,5 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { studentUserAccess } from '../services/student-access';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../db";
@@ -39,25 +40,41 @@ router.post("/service-tickets", async (req, res, next) => {
     let user = await prisma.user.findUnique({ where: { id: parsed.data.userId } });
     if (!user) {
       const [student, teacher] = await Promise.all([
-        prisma.student.findUnique({ where: { id: parsed.data.userId }, select: { id: true, firstName: true, middleName: true, lastName: true, email: true, organizationId: true } }),
+        prisma.student.findUnique({ where: { id: parsed.data.userId }, select: { id: true, firstName: true, middleName: true, lastName: true, email: true, organizationId: true, status: true } }),
         prisma.teacher.findUnique({ where: { id: parsed.data.userId }, select: { id: true, fullName: true, email: true, organizationId: true } }),
       ]);
+      if (student && ['GRADUATED','ARCHIVED','DISMISSED', 'EXPELLED','DELETED','INACTIVE'].includes(String(student.status ?? '').trim().toUpperCase())) return res.status(403).json({message:'Student account is archived'});
       const source = student
         ? { fullName: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(" "), email: student.email, organizationId: student.organizationId, role: "STUDENT" as const }
         : teacher
           ? { fullName: teacher.fullName, email: teacher.email, organizationId: teacher.organizationId, role: "TEACHER" as const }
           : null;
       if (!source) return res.status(404).json({ message: "Orbit identity not found" });
-      const email = source.email || `academy-${parsed.data.userId}@sso.invalid`;
-      const existing = await prisma.user.findUnique({ where: { email } });
-      user = existing || await prisma.user.create({
-        data: { fullName: source.fullName, email, passwordHash: "!academy-sso-only!", role: source.role, organizationId: source.organizationId },
-      });
+      const sourceId = parsed.data.userId;
+      const aliasEmail = `academy-${createHmac("sha256", process.env.ACADEMY_INTEGRATION_KEY!).update(String(source.organizationId)+"\0"+sourceId).digest("hex")}@sso.invalid`;
+      let email = source.email || aliasEmail;
+      let existing = await prisma.user.findUnique({where:{email}});
+      if (student) {
+        const linkedAudit = await prisma.auditLog.findFirst({where:{organizationId:source.organizationId ?? undefined,action:'ACADEMY_SERVICE_TICKET_CREATED',metadata:{path:['sourceIdentityId'],equals:sourceId}},orderBy:[{createdAt:'asc'},{id:'asc'}],select:{userId:true}});
+        const linkedUser = linkedAudit?.userId ? await prisma.user.findUnique({where:{id:linkedAudit.userId}}) : null;
+        if (linkedUser?.role === 'STUDENT' && linkedUser.organizationId === source.organizationId) existing = linkedUser;
+        const first = existing ? await prisma.auditLog.findFirst({where:{userId:existing.id,action:'ACADEMY_SERVICE_TICKET_CREATED'},orderBy:[{createdAt:'asc'},{id:'asc'}],select:{metadata:true}}) : null;
+        const boundId = (first?.metadata as Record<string,unknown> | null)?.sourceIdentityId;
+        const ambiguousEmail = !boundId && source.email ? await prisma.student.count({where:{organizationId:source.organizationId,email:{equals:source.email,mode:'insensitive'}}}) > 1 : false;
+        if ((boundId && boundId !== sourceId) || ambiguousEmail || (existing && (existing.role !== 'STUDENT' || existing.organizationId !== source.organizationId))) {
+          email = aliasEmail;
+          existing = await prisma.user.findUnique({where:{email}});
+        }
+      }
+      if (existing && (existing.organizationId !== source.organizationId || existing.role !== source.role)) return res.status(409).json({message:'Orbit identity conflicts with an existing Academy account'});
+      user = existing || await prisma.user.create({data:{fullName:source.fullName,email,passwordHash:'!academy-sso-only!',role:source.role,organizationId:source.organizationId}});
+
     }
 
     if (!user.organizationId) return res.status(404).json({ message: "Orbit organization not found" });
     const role = user.role === "STUDENT" ? "STUDENT" : user.role === "TEACHER" ? "TEACHER" : user.role === "ADMIN" ? "ADMIN" : user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : null;
     if (!role || !isAcademyRole(role)) return res.status(403).json({ message: "Academy role denied" });
+    if (user.role === 'STUDENT' && user.id === parsed.data.userId && !await studentUserAccess(user.id,user.organizationId)) return res.status(403).json({message:'Student account is archived or inactive'});
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
     if (requiredOrganization && user.organizationId !== requiredOrganization) return res.status(403).json({ message: "Academy organization denied" });
     const ticket = randomBytes(32).toString("base64url"); const expiresAt = new Date(Date.now() + 60_000);
@@ -73,6 +90,7 @@ router.post("/exchange", async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ message: "Invalid launch ticket" });
     const record = await prisma.academyLaunchTicket.findUnique({ where: { tokenHash: hashToken(parsed.data.ticket) }, include: { user: { select: { fullName: true, email: true } } } });
     if (!record || record.usedAt || record.expiresAt <= new Date()) return res.status(401).json({ message: "Launch ticket expired or already used" });
+    if (record.role === 'STUDENT' && !await studentUserAccess(record.userId,record.organizationId)) return res.status(403).json({message:'Student account is archived or inactive'});
     if (!isAcademyRole(record.role)) return res.status(403).json({ message: "Academy role denied" });
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
     if (requiredOrganization && record.organizationId !== requiredOrganization) return res.status(403).json({ message: "Academy organization denied" });
@@ -91,6 +109,7 @@ router.post("/validate", async (req, res, next) => {
     if (!parsed.success) return res.status(401).json({ message: "Invalid Academy session" });
     const session = await prisma.academySession.findUnique({ where: { tokenHash: hashToken(parsed.data.token) }, include: { user: { select: { fullName: true, email: true } } } });
     if (!session || session.revokedAt || session.expiresAt <= new Date()) return res.status(401).json({ message: "Academy session expired or revoked" });
+    if (session.role === 'STUDENT' && !await studentUserAccess(session.userId,session.organizationId)) return res.status(403).json({message:'Student account is archived or inactive'});
     if (!isAcademyRole(session.role)) return res.status(403).json({ message: "Academy role denied" });
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
     if (requiredOrganization && session.organizationId !== requiredOrganization) return res.status(403).json({ message: "Academy organization denied" });

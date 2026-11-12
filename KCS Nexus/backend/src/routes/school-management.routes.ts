@@ -224,7 +224,7 @@ schoolManagementRouter.get('/teachers/main-assignments', requireOperationalAdmin
   return success(res, merged, 'Main teacher assignments loaded from Nexus and Orbit')
 }))
 
-schoolManagementRouter.get('/teachers/class-rosters', requireOperationalAdministrator, asyncHandler(async (_req, res) => {
+schoolManagementRouter.get('/teachers/class-rosters', requireRoles('admin'), asyncHandler(async (_req, res) => {
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   const [students, assignedTeachers] = await Promise.all([
     prisma.studentProfile.findMany({
@@ -239,7 +239,7 @@ schoolManagementRouter.get('/teachers/class-rosters', requireOperationalAdminist
       orderBy: [{ grade: 'asc' }, { user: { lastName: 'asc' } }],
     }),
     prisma.teacherProfile.findMany({
-      where: { status: { in: ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'] }, user: { role: 'TEACHER' } },
+      where: { status: { in: ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'] } },
       select: {
         id: true,
         status: true,

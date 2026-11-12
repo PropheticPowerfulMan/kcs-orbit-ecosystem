@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import { createHash } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { academicPeriodAccess, lockAcademicYears } from '../services/academicPeriodAccess.service.js'
 import { academicPeriodIsReadOnly, quarterTerms } from '../utils/academicPeriodPolicy.js'
 import { academicCalendars, invalidateAcademicCalendarCache } from '../services/reportAttendance.service.js'
@@ -220,47 +220,67 @@ academicCalendarRouter.put('/schedule', requireCalendarManager, asyncHandler(asy
   res.json({ data: entries, message: 'Semester timetable published to teacher and student dashboards.' })
 }))
 
+async function graduationAuthorization(input: Record<string, unknown>, requireClosed: boolean) {
+  const access = await academicPeriodAccess()
+  const year = typeof input.academicYear === 'string' ? input.academicYear : access.activeAcademicYear
+  if (!year || !/^\d{4}-\d{4}$/.test(year)) throw new ApiError(409, 'Select a published academic year before rollover.')
+  const closed = access.closedPeriods.some(period => period.academicYear === year && period.term === 'Annual final')
+  if (requireClosed && !closed) throw new ApiError(409, 'Confirm the annual closure in Nexus before promoting or graduating students.')
+  const cards = await prisma.reportCard.findMany({ where: { term: year+' · Annual final', publicationStatus: { in: ['APPROVED','EMAILED','POSTED_TO_PORTAL'] }, approvedAt: { not: null }, average: { gte: 70, lte: 100 }, student: { grade: 'Grade 12' } }, select: { average: true, student: { select: { user: { select: { orbitUserId: true } } } } } })
+  const payload = JSON.stringify({ organizationId: calendarOrganizationId, academicYear: year, closed, expiresAt: Date.now()+60000, students: cards.filter(card=>card.student.user.orbitUserId).map(card=>({id:card.student.user.orbitUserId!,average:card.average})) })
+  return { payload, signature: createHmac('sha256', calendarApiKey!).update(payload).digest('hex') }
+}
+
 academicCalendarRouter.post('/rollover/preview', requireCalendarManager, asyncHandler(async (req, res) => {
   const response = await fetch(orbitUrl('/rollover/preview'), {
     method: 'POST', headers: headers(true),
-    body: JSON.stringify({ ...req.body, organizationId: calendarOrganizationId }),
+    body: JSON.stringify({ ...req.body, organizationId: calendarOrganizationId, graduationApproval: await graduationAuthorization(req.body, false) }),
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new ApiError(response.status, data.message || 'Academic promotion preview failed.')
   res.json(data)
 }))
 
-academicCalendarRouter.post('/rollover/run', requireCalendarManager, asyncHandler(async (req: AuthenticatedRequest, res) => {
+academicCalendarRouter.post('/rollover/run', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const graduationApproval = await graduationAuthorization(req.body, true)
+  if (JSON.parse(graduationApproval.payload).students.length && (!env.SAVANEX_API_URL || !env.SAVANEX_AUTH_API_KEY)) throw new ApiError(503, 'The source identity authority must be configured before graduation can revoke ecosystem access.')
   const response = await fetch(orbitUrl('/rollover/run'), {
     method: 'POST', headers: headers(true),
-    body: JSON.stringify({ ...req.body, organizationId: calendarOrganizationId, passThreshold: 70 }),
+    body: JSON.stringify({ ...req.body, organizationId: calendarOrganizationId, passThreshold: 70, graduationApproval }),
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new ApiError(response.status, data.message || 'Academic promotion run failed.')
   const planItems = (data as any)?.plan?.items ?? (data as any)?.data?.plan?.items ?? (data as any)?.data?.items ?? []
-  const graduates = Array.isArray(planItems) ? planItems.filter((item: any) => String(item?.action || item?.decision || '').toUpperCase() === 'GRADUATE') : []
+  const repeatedGraduates = ((data as any)?.plan?.graduatedStudentIds ?? []).map((studentId: string) => ({studentId, action:'GRADUATE'}))
+  const graduates = Array.isArray(planItems) ? planItems.filter((item: any) => String(item?.action || item?.decision || '').toUpperCase() === 'GRADUATE').concat(repeatedGraduates) : repeatedGraduates
   if (graduates.length) {
     const studentIds = graduates.map((item: any) => String(item.studentId || '')).filter(Boolean)
     const studentNumbers = graduates.map((item: any) => String(item.studentNumber || '')).filter(Boolean)
     const profiles = await prisma.studentProfile.findMany({
-      where: { grade: 'Grade 12', status: { equals: 'active', mode: 'insensitive' }, OR: [{ id: { in: studentIds } }, { studentNumber: { in: studentNumbers } }, { user: { orbitUserId: { in: studentIds } } }] },
+      where: { grade: 'Grade 12', OR: [{ id: { in: studentIds } }, { studentNumber: { in: studentNumbers } }, { user: { orbitUserId: { in: studentIds } } }] },
       include: { archive: true, user: true, parentLinks: true, enrollments: { select: { id: true, courseId: true } }, _count: { select: { grades: true, submissions: true, attendanceRecords: true, reportCards: true, transcripts: true, disciplineCases: true } } },
     })
     const actorId = req.user?.sub === 'configured-superadmin'
       ? (await prisma.user.findUnique({ where: { email: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com' }, select: { id: true } }))?.id
       : req.user?.sub
     if (!actorId) throw new ApiError(409, 'The academic rollover audit identity is unavailable')
-    for (const student of profiles.filter((profile) => !profile.archive)) {
+    for (const student of profiles) {
       const fullName = [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' ')
       const snapshot = { archiveType: 'GRADUATION', identity: { userId: student.userId, orbitUserId: student.user.orbitUserId, studentNumber: student.studentNumber, fullName, email: student.user.email }, academicPlacement: { grade: student.grade, section: student.section, enrollmentDate: student.enrollmentDate }, parentUserIds: student.parentLinks.map((link) => link.parentId), courseEnrollments: student.enrollments, recordCounts: student._count, statusBeforeArchive: student.status, passingRule: 'Grade 12 final average >= 70%' }
       await prisma.$transaction(async (tx) => {
-        const archive = await tx.studentArchive.create({ data: { studentId: student.id, userId: student.userId, studentNumber: student.studentNumber, orbitUserId: student.user.orbitUserId, fullName, grade: student.grade, section: student.section, reason: 'GRADUATION · Grade 12 successfully completed under the KCS ≥ 70% passing rule', effectiveDate: new Date(), archivedSnapshot: snapshot, archivedById: actorId } })
+        const archive = student.archive || await tx.studentArchive.create({ data: { studentId: student.id, userId: student.userId, studentNumber: student.studentNumber, orbitUserId: student.user.orbitUserId, fullName, grade: student.grade, section: student.section, reason: 'GRADUATION · Grade 12 successfully completed under the KCS ≥ 70% passing rule', effectiveDate: new Date(), archivedSnapshot: snapshot, archivedById: actorId } })
         await tx.enrollment.deleteMany({ where: { studentId: student.id } })
         await tx.refreshToken.deleteMany({ where: { userId: student.userId } })
         await tx.studentProfile.update({ where: { id: student.id }, data: { status: 'graduated' } })
         await tx.user.update({ where: { id: student.userId }, data: { accountBlockedAt: new Date(), accountBlockedReason: 'Grade 12 graduation archive', accountBlockedBy: actorId, loginLockedUntil: null } })
         await tx.auditLog.create({ data: { actorId, action: 'GRADE_12_GRADUATE_REMOVED_FROM_ACTIVE_ROSTERS_AND_ARCHIVED', targetType: 'StudentArchive', targetId: archive.id, metadata: { studentId: student.id, studentNumber: student.studentNumber, passingRule: '>=70%' } } })
       })
+    }
+    if (env.SAVANEX_API_URL && env.SAVANEX_AUTH_API_KEY) {
+      for (const student of profiles) {
+        const response = await fetch(new URL('/api/integration/students/archive-access/', env.SAVANEX_API_URL), { method:'POST', headers:{'content-type':'application/json','x-api-key':env.SAVANEX_AUTH_API_KEY}, body:JSON.stringify({identifiers:[student.user.accessCode,student.studentNumber,student.user.email].filter(Boolean)}), signal:AbortSignal.timeout(10000) })
+        if (!response.ok) throw new ApiError(503, 'Graduation was archived; source access revocation is pending. Retry the same rollover to complete it safely.')
+      }
     }
     ;(data as any).nexusGraduationArchive = { requested: graduates.length, archived: profiles.filter((profile) => !profile.archive).length }
   }
