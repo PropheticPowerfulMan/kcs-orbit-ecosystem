@@ -1,0 +1,21 @@
+.nexus-weekly-timetable{--timetable-line:#d5e8f5}
+.nexus-weekly-timetable .timetable-stat{border:1px solid var(--timetable-line);background:linear-gradient(135deg,#f6fbff,#eaf4ff);color:#123b64;box-shadow:0 3px 14px -10px #0b4a73}
+.dark .nexus-weekly-timetable{--timetable-line:#205071}
+.dark .nexus-weekly-timetable .timetable-stat{background:linear-gradient(135deg,#0a2741,#103956);color:#e3f5ff}
+.nexus-weekly-timetable .timetable-session{transition:transform .2s ease,box-shadow .2s ease;box-shadow:0 3px 15px -12px #0d4f75}
+.nexus-weekly-timetable .timetable-session:hover{transform:translateY(-2px);box-shadow:0 8px 22px -14px #0d4f75}
+.nexus-weekly-timetable button{transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
+.nexus-weekly-timetable button:hover{transform:translateY(-1px)}
+.nexus-weekly-timetable button:active{transform:scale(.97)}
+.nexus-weekly-timetable button:focus-visible{outline:2px solid #38bdf8;outline-offset:3px}
+.nexus-timetable-editor{border-radius:24px!important;background:linear-gradient(145deg,#f8fcff,#edf5ff)!important;box-shadow:0 8px 28px -24px #0b4974}
+.dark .nexus-timetable-editor{background:linear-gradient(145deg,#08243c,#0c3150)!important}
+.nexus-timetable-editor>div:first-child{padding-bottom:18px;border-bottom:1px solid #cbe3f2}
+.dark .nexus-timetable-editor>div:first-child{border-bottom-color:#245171}
+.nexus-timetable-editor h3{font-size:18px;line-height:1.4;letter-spacing:-.025em}
+.nexus-timetable-editor input,.nexus-timetable-editor select{transition:border-color .18s,box-shadow .18s}
+.nexus-timetable-editor input:focus,.nexus-timetable-editor select:focus{outline:none;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,.13)}
+.nexus-timetable-editor button{transition:transform .18s,box-shadow .18s}
+.nexus-timetable-editor button:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 6px 16px -12px #0369a1}
+.nexus-timetable-editor button:not(:disabled):active{transform:scale(.97)}
+@media(prefers-reduced-motion:reduce){.nexus-weekly-timetable .timetable-session,.nexus-weekly-timetable button,.nexus-timetable-editor button{transition:none!important;transform:none!important}}

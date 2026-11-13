@@ -1,3 +1,4 @@
+import { tutorRequestSchema, tutorGuidanceMessages } from '../utils/tutorGuidance.js'
 import { Router } from 'express'
 import OpenAI from 'openai'
 import { z } from 'zod'
@@ -409,38 +410,34 @@ aiRouter.post('/teacher-assistant', authenticate, requireRoles('teacher', 'staff
 
 aiRouter.post('/tutor', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (!req.user) throw new ApiError(401, 'Authentication required')
-  if (!openai) throw new ApiError(503, 'AI Tutor requires an active AI provider configuration.')
-  const schema = z.object({ subject: z.string(), question: z.string(), studentId: z.string().optional() })
-  const { subject, question } = schema.parse(req.body)
+  const request = tutorRequestSchema.parse(req.body)
+  const tr = (fr: string, en: string) => request.language === 'fr' ? fr : en
+  if (!openai) throw new ApiError(503, tr('Le tuteur IA est temporairement indisponible. Réessayez plus tard.', 'AI Tutor is temporarily unavailable. Please try again later.'))
   const studentId = await resolveStudentProfileId(req.user.sub)
-  if (!studentId) throw new ApiError(409, 'Student academic profile synchronization is required before using AI Tutor.')
-
-  const response = await openai.chat.completions.create({
-        model: openaiModel,
-        messages: [
-          { role: 'system', content: `You are an expert ${subject} tutor for an American international school in Kinshasa. Explain clearly and step by step.` },
-          { role: 'user', content: question },
-        ],
-        temperature: 0.5,
-      })
-
-  if (studentId) {
-    await prisma.aITutorSession.create({
-      data: {
-        studentId,
-        subject,
-        topic: question.slice(0, 80),
-        messages: {
-          create: [
-            { role: 'user', content: question },
-            { role: 'assistant', content: response.choices[0]?.message?.content ?? 'The AI provider returned no answer.' },
-          ],
-        },
-      },
-    })
+  if (!studentId) throw new ApiError(409, tr('Votre profil scolaire doit être synchronisé avant d’utiliser le tuteur.', 'Your school profile must be synchronized before using AI Tutor.'))
+  // Fetch only the authenticated learner's level. No grades or restricted documents
+  // are ever loaded or forwarded to the provider, even when visibility is enabled.
+  const profile = await prisma.studentProfile.findUnique({ where: { id: studentId }, select: { grade: true } })
+  let answer: string | undefined
+  try {
+    const completion = await openai.chat.completions.create({
+      model: openaiModel,
+      messages: tutorGuidanceMessages(request, profile?.grade ?? null),
+      temperature: 0.4,
+      max_tokens: 1400,
+    }, { timeout: 40_000, maxRetries: 0 })
+    answer = completion.choices[0]?.message?.content?.trim()
+  } catch {
+    throw new ApiError(503, tr('Le tuteur n’a pas pu répondre. Votre question reste disponible pour réessayer.', 'The tutor could not respond. Your question is still available to retry.'))
   }
-
-  return success(res, { response: response.choices[0]?.message?.content ?? 'The AI provider returned no answer.', source: 'openai', model: openaiModel })
+  if (!answer) throw new ApiError(503, tr('Aucune réponse reçue. Veuillez réessayer.', 'No answer was received. Please try again.'))
+  await prisma.aITutorSession.create({
+    data: { studentId, subject: request.subject, topic: request.question.slice(0, 80), messages: {
+      create: [{ role: 'user', content: request.question }, { role: 'assistant', content: answer }],
+    } },
+  })
+  res.setHeader('Cache-Control', 'private, no-store')
+  return success(res, { response: answer, source: 'openai', model: openaiModel })
 }))
 
 aiRouter.post('/quiz', authenticate, asyncHandler(async (req, res) => {
