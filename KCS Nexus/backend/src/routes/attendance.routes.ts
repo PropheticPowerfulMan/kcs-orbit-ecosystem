@@ -1,3 +1,4 @@
+import {assertAttendanceSchoolDay,attendanceDayAccess} from '../services/attendanceCalendar.service.js'
 import { academicCycleForDate, protectAcademicPeriod } from '../services/academicPeriodAccess.service.js'
 import { Router } from 'express'
 import type { Prisma } from '@prisma/client'
@@ -89,6 +90,7 @@ async function synchronizeAssignedOrbitStudents(assignedClasses: Array<{ grade: 
 }
 
 attendanceRouter.use(authenticate)
+attendanceRouter.get('/day-access',asyncHandler(async(req,res)=>{const day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.query.date);res.setHeader('Cache-Control','private, no-store');return success(res,await attendanceDayAccess(day),'Attendance day access loaded')}))
 
 attendanceRouter.get('/staff/me', requireRoles('admin', 'staff', 'teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const user = await prisma.user.findUnique({
@@ -186,6 +188,7 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
     console.warn('[teacher-attendance] Orbit roster synchronization unavailable during submission; validating against Nexus.', error)
   }
   const date = normalizedDay(payload.date)
+  await assertAttendanceSchoolDay(date)
   const ids = payload.entries.map((entry) => entry.studentId)
   if (new Set(ids).size !== ids.length) throw new ApiError(400, 'Duplicate student in attendance register')
   const activeStudents = await prisma.studentProfile.findMany({
@@ -354,6 +357,7 @@ attendanceRouter.get('/students', requireRoles('admin'), asyncHandler(async (req
 attendanceRouter.post('/students', requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = studentAttendanceSchema.parse(req.body)
   const date = normalizedDay(payload.date)
+  await assertAttendanceSchoolDay(date)
   const ids = payload.entries.map((entry) => entry.studentId)
   if (new Set(ids).size !== ids.length) throw new ApiError(400, 'Duplicate student in attendance register')
   const students = await prisma.studentProfile.findMany({
@@ -444,6 +448,7 @@ attendanceRouter.get('/staff/history', requireRoles('admin'), asyncHandler(async
 attendanceRouter.post('/staff', requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = staffAttendanceSchema.parse(req.body)
   const date = normalizedDay(payload.date)
+  await assertAttendanceSchoolDay(date)
   const ids = payload.entries.map((entry) => entry.staffOrbitId)
   if (new Set(ids).size !== ids.length) throw new ApiError(400, 'Duplicate staff member in attendance register')
   const recorderId = await resolveAttendanceRecorderId(req.user!.sub)

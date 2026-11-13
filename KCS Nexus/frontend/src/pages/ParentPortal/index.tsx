@@ -1,3 +1,5 @@
+import ReleasedReportCardsPanel from '@/components/shared/ReleasedReportCardsPanel'
+import {academicPortalAPI} from '@/services/api'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { AlertTriangle, Bell, BookOpen, Calendar, CheckCircle2, Clock, Mail, Phone, TrendingUp, UserRound } from 'lucide-react'
@@ -16,6 +18,7 @@ import { useUIStore } from '@/store/uiStore'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 
 type ParentChild = {
+  academicVisibility?:{enabled:boolean;grades:boolean;reportCards:boolean;transcripts:boolean;revision:number}
   id: string
   localProfileId?: string | null
   studentNumber: string
@@ -93,6 +96,7 @@ function downloadCalendarEvent(event: EventItem) {
 export default function ParentPortal() {
   const { user } = useAuthStore()
   const language = useUIStore((state) => state.language)
+  const tr=(fr:string,en:string)=>language==='fr'?fr:en
   const location = useLocation()
   const segment = segmentFrom(location.pathname)
   const [children, setChildren] = useState<ParentChild[]>([])
@@ -138,6 +142,9 @@ export default function ParentPortal() {
   const academicSummary = selectedChild?.academicSummary
   const academicAccess = selectedChild?.academicAccess
   const academicLocked = academicAccess?.allowed === false
+  const resultsReleased=Boolean(selectedChild?.academicVisibility?.enabled&&[selectedChild.academicVisibility.grades,selectedChild.academicVisibility.reportCards,selectedChild.academicVisibility.transcripts].some(Boolean))
+  const [releasedCards,setReleasedCards]=useState<any[]>([])
+  useEffect(()=>{let active=true;setReleasedCards([]);const id=selectedChild?.localProfileId;if(id&&selectedChild?.academicVisibility?.reportCards&&!academicLocked)void academicPortalAPI.reportCards(id).then(r=>{if(active)setReleasedCards(r.data.data)}).catch(()=>{});return()=>{active=false}},[selectedChild?.localProfileId,selectedChild?.academicVisibility?.reportCards,academicLocked])
 
   useEffect(() => {
     let active = true
@@ -150,7 +157,7 @@ export default function ParentPortal() {
           studentNumber: String(profile.studentNumber ?? ''),
           name: [profile.user?.lastName, profile.user?.middleName, profile.user?.firstName].filter(Boolean).join(' ') || String(profile.studentNumber ?? 'Student'),
           grade: [profile.grade, profile.section].filter(Boolean).join(' '), avatar: profile.user?.avatar ?? null,
-          gpa: profile.gpa ?? null, attendance: profile.attendanceRate ?? null, academicSummary: profile.academicSummary, academicAccess: profile.academicAccess,
+          gpa: profile.academicVisibility?.grades ? profile.gpa ?? null : null, attendance: profile.attendanceRate ?? null, academicSummary: profile.academicSummary, academicAccess: profile.academicAccess, academicVisibility:profile.academicVisibility,
         }))
         setChildren(loaded)
         setSelectedId((current) => current || loaded[0]?.id || '')
@@ -236,7 +243,7 @@ export default function ParentPortal() {
     <Link to="/portal/parent/finance" className={button + ' mt-5 inline-flex'}>Voir les détails dans EduPay</Link>
   </div>
 
-  const academics = academicLocked ? financialLockCard : (
+  const academics = !resultsReleased ? <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100" role="status"><h3 className="font-bold">{tr('Résultats non publiés par la Super Administration','Results not released by Super Administration')}</h3><p className="mt-2 text-sm">{tr('L’école doit autoriser la consultation des points et documents.','The school must release access to grades and official documents.')}</p></div> : academicLocked ? financialLockCard : (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
         {[[[language === 'fr' ? 'Moyenne vérifiée' : 'Verified average', academicSummary?.academicYear, academicSummary?.term].filter(Boolean).join(' · '), academicSummary?.average != null ? academicSummary.average + '%' : '—'], ['Verified attendance', academicSummary?.attendanceRate != null ? academicSummary.attendanceRate + '%' : 'Aucune donnée'], ['Recorded grades', String(academicSummary?.publishedGrades ?? grades.length)]].map(([label, value]) => <div key={label} className={card}><p className="text-xs font-bold uppercase tracking-wide text-gray-400">{label}</p><p className="mt-2 text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}
@@ -247,7 +254,7 @@ export default function ParentPortal() {
       </div>
       <div className={card}><h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Assignments</h2>{assignments.length === 0 ? empty('No assignment is currently linked to this student.') : <div className="grid gap-3 md:grid-cols-2">{assignments.map((item) => <div key={item.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold dark:text-white">{item.assignment?.title ?? 'Assignment'}</p><p className="mt-1 text-sm text-gray-500">{item.assignment?.course?.name ?? 'Course'} · due {displayDate(item.assignment?.dueDate)}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{item.assignment?.description || 'No additional teacher instructions.'}</p><div className="mt-2 flex flex-wrap gap-2 text-xs font-bold text-kcs-blue-700"><span className="rounded-full bg-kcs-blue-100 px-2 py-1">{item.assignment?.isInteractive?'INTERACTIVE':item.assignment?.type || 'WORK'}</span><span className="rounded-full bg-kcs-blue-100 px-2 py-1">{item.assignment?.cadence?.replace('_',' ') || 'ONE TIME'}</span>{item.assignment?.estimatedMinutes&&<span className="rounded-full bg-kcs-blue-100 px-2 py-1">{item.assignment.estimatedMinutes} min</span>}<span className="rounded-full bg-kcs-blue-100 px-2 py-1">{item.status}</span></div>{item.status==='GRADED'&&item.score!=null&&<div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/30"><div className="flex items-center justify-between gap-3"><strong className="text-emerald-800 dark:text-emerald-200">Verified result</strong><span className="text-lg font-black text-emerald-700">{item.score}/{item.assignment?.maxScore??'—'} · {item.percentage?.toFixed?.(1)??item.percentage??'—'}%</span></div>{item.feedback&&<p className="mt-2 text-sm text-emerald-900 dark:text-emerald-100">{item.feedback}</p>}</div>}{item.status==='SUBMITTED'&&<p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800 dark:bg-amber-950/30 dark:text-amber-100">Submitted and waiting for the teacher’s final review.</p>}{item.assignment?.resourceUrl&&<a className="mt-3 inline-block text-sm font-bold text-kcs-blue-600 underline" href={item.assignment.resourceUrl} target="_blank" rel="noreferrer">{item.assignment.resourceName||'Open teacher resource'}</a>}</div>)}</div>}</div>
       <div className="grid gap-6 xl:grid-cols-2"><div className={card}><h2 className="mb-4 font-bold dark:text-white">Verified attendance history</h2>{attendance.length === 0 ? empty('No attendance record has been entered yet.') : <div className="space-y-2">{attendance.slice(0,12).map((record) => <div key={record.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30"><span><strong className="dark:text-white">{displayDate(record.date)}</strong><span className="block text-xs text-gray-500">{record.subject || record.className}{record.period ? ' · ' + record.period : ''}</span></span><span className="rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-bold text-kcs-blue-700">{record.status}</span></div>)}</div>}</div><div className={card}><h2 className="mb-4 font-bold dark:text-white">Published timetable</h2>{timetable.length === 0 ? empty('No timetable has been published for this child.') : <div className="space-y-2">{timetable.slice(0,12).map((slot,index) => <div key={slot.id ?? index} className="flex justify-between rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30"><span className="font-semibold dark:text-white">{slot.day}</span><span className="text-gray-500">{slot.startTime}–{slot.endTime} · {slot.room}</span></div>)}</div>}</div></div>
-      <OfficialTranscriptPanel studentId={selectedChild?.localProfileId ?? selectedChild?.id} />
+      {selectedChild?.academicVisibility?.transcripts&&<OfficialTranscriptPanel studentId={selectedChild?.localProfileId ?? selectedChild?.id} />}{selectedChild?.academicVisibility?.reportCards&&<ReleasedReportCardsPanel cards={releasedCards}/>}
     </div>
   )
 

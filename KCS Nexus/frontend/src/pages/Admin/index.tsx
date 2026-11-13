@@ -1,3 +1,4 @@
+import AcademicVisibilityControlCenter from '@/components/admin/AcademicVisibilityControlCenter'
 import AdminReportsHub from '@/components/admin/AdminReportsHub'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import QRCode from 'qrcode';
@@ -3321,6 +3322,7 @@ const AdminSectionView = ({
   }
 
   if (segment === 'transcripts') return <AcademicRecordsControlCenter view="transcripts" />
+  if (segment === 'academic-visibility') return <AcademicVisibilityControlCenter />
   if (segment === 'report-cards') return <AcademicRecordsControlCenter view="report-cards" />
   if (segment === 'certificates') return <CertificateControlCenter />
   if (segment === 'student-archives') return <StudentArchivesCenter />

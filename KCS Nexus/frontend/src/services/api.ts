@@ -385,6 +385,7 @@ export const teacherWorkspaceAPI = {
 }
 
 export const attendanceAPI = {
+  dayAccess: (date: string) => api.get('/attendance/day-access', {params:{date}}),
   teacherHomeroom: (date: string, grade?: string, section?: string) => api.get('/attendance/teacher/homeroom', { params: { date, grade, section } }),
   saveTeacherHomeroom: (data: object) => api.post('/attendance/teacher/homeroom', data, { headers: { 'x-silent-feedback': 'true' } }),
   history: (from?: string, to?: string, options?: { page: number; pageSize?: number; q?: string }) => api.get('/attendance/history', { params: { from, to, ...options } }),
@@ -586,6 +587,8 @@ export const lessonPlanAPI = {
 }
 
 export const academicCalendarAPI = {
+  attendanceSettings: (academicYear: string) => api.get('/academic-calendar/attendance-settings', {params:{academicYear}}),
+  saveAttendanceSettings: (data: unknown) => api.put('/academic-calendar/attendance-settings', data),
   periodAccess: () => api.get('/academic-calendar/period-access'),
   closePeriod: (academicYear: string, term: string, confirmation: string) => api.post('/academic-calendar/close-period', { academicYear, term, confirmation }, { timeout: 90_000, headers: { 'x-silent-feedback': 'true', 'x-ui-language': useUIStore.getState().language } }),
   current: () => api.get('/academic-calendar/current'),
@@ -655,3 +658,7 @@ export const syllabiAPI = {
   download: (courseId: string, version?: string) => api.get('/syllabi/' + courseId + '/download', { params: version ? { version } : undefined, responseType: 'blob' }),
   remove: (courseId: string) => api.delete('/syllabi/' + courseId),
 }
+
+export const academicVisibilityAPI = { get: () => api.get('/academic-visibility'), save: (data: unknown) => api.put('/academic-visibility', data) }
+
+export const academicPortalAPI = {reportCards:(studentId:string)=>api.get('/academic-records/portal-report-cards/'+encodeURIComponent(studentId)),reportDocument:(id:string)=>api.get('/academic-records/report-cards/'+encodeURIComponent(id)+'/portal-document',{params:{language:'en'}})}

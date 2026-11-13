@@ -31,11 +31,11 @@ test('published calendar boundaries determine the semester and quarter', () => {
  assert.equal(attendanceWindowForCalendar('2027-2028','Semester 1 · Quarter 1',calendar).lte.toISOString(),'2027-11-05T23:59:59.999Z')
  assert.equal(attendanceWindowForCalendar('2027-2028','Semester 1',calendar).lte.toISOString(),'2028-01-28T23:59:59.999Z')
 })
-test('draft and review queues refresh while approved records and manual corrections retain their summary', () => {
+test('all automatically computed report cards refresh while manual corrections retain their summary', () => {
  const base={attendanceSummary:{present:1},publicationStatus:'DRAFT'}
  assert.equal(shouldRefreshReportCardAttendance(base),true)
  assert.equal(shouldRefreshReportCardAttendance({...base,publicationStatus:'READY_FOR_REVIEW'}),true)
- for(const publicationStatus of ['APPROVED','EMAILED','POSTED_TO_PORTAL'])assert.equal(shouldRefreshReportCardAttendance({...base,publicationStatus}),false)
+ for(const publicationStatus of ['APPROVED','EMAILED','POSTED_TO_PORTAL'])assert.equal(shouldRefreshReportCardAttendance({...base,publicationStatus}),true)
  assert.equal(shouldRefreshReportCardAttendance({...base,academicCorrections:{correctedBy:'admin',attendanceOverride:true}}),false)
  assert.equal(shouldRefreshReportCardAttendance({...base,academicCorrections:{correctedBy:'admin',attendanceOverride:false}}),true)
  assert.equal(shouldRefreshReportCardAttendance({...base,academicCorrections:{correctedBy:'admin'}}),false)
@@ -46,4 +46,10 @@ test('polishing an approved record does not mistake its frozen state for a manua
  assert.equal(hasReportCardAttendanceOverride({academicCorrections:{attendanceOverride:false}}),false)
  assert.equal(hasReportCardAttendanceOverride({academicCorrections:{correctedBy:'admin',attendanceOverride:true}}),true)
  assert.equal(attendanceSummarySnapshotKey({present:1,total:1,attendanceRate:100}),attendanceSummarySnapshotKey({attendanceRate:100,total:1,present:1}))
+})
+
+test('official attendance excludes weekends, public holidays and published breaks without deleting history',()=>{
+ const rows=[{date:new Date('2026-12-18'),status:'PRESENT'},{date:new Date('2026-12-19'),status:'PRESENT'},{date:new Date('2026-12-21'),status:'PRESENT'},{date:new Date('2026-12-25'),status:'PRESENT'},{date:new Date('2027-01-05'),status:'ABSENT'}]
+ const result=attendanceWithSuspensions(rows,[],{gte:new Date('2026-12-01'),lte:new Date('2027-01-31')},{nonSchoolRanges:[{startDate:'2026-12-21',endDate:'2027-01-04',label:'Break'}]})
+ assert.equal(rows.length,5);assert.deepEqual(result.map(x=>x.date.toISOString().slice(0,10)),['2026-12-18','2027-01-05'])
 })
