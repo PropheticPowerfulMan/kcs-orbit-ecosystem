@@ -1,3 +1,4 @@
+import './TimetableSurfaces.css'
 import { useMemo, useState } from 'react'
 import { CalendarDays, Clock3, MapPin, UserRound, UsersRound } from 'lucide-react'
 
@@ -19,7 +20,9 @@ export type WeeklyTimetableEntry = {
 type Props = {
   entries: WeeklyTimetableEntry[]
   language?: string
-  audience: 'student' | 'teacher'
+  audience: 'student' | 'teacher' | 'parent' | 'staff'
+  compact?: boolean
+  showSummary?: boolean
 }
 
 const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
@@ -45,7 +48,7 @@ const tone = (index: number) => [
   'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/35 dark:text-amber-50',
 ][index % 4]
 
-export default function WeeklyTimetable({ entries, language = 'en', audience }: Props) {
+export default function WeeklyTimetable({ entries, language = 'en', audience, compact = false, showSummary = true }: Props) {
   const fr = language === 'fr'
   const normalized = useMemo(() => entries.map((entry, index) => ({
     ...entry,
@@ -65,13 +68,13 @@ export default function WeeklyTimetable({ entries, language = 'en', audience }: 
   const empty = fr ? "Aucun cours officiel n’a encore été publié dans cet horaire." : 'No official class has been published in this timetable yet.'
   if (!normalized.length && audience === 'student') return <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50 dark:text-slate-300">{empty}</div>
 
-  const Details = ({ entry, index, compact = false }: { entry: typeof normalized[number]; index: number; compact?: boolean }) => <article className={'min-w-0 overflow-hidden rounded-2xl border p-4 shadow-sm subpixel-antialiased [text-rendering:optimizeLegibility] ' + tone(index) + (audience === 'teacher' ? ' border-l-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md' : '')}>
+  const Details = ({ entry, index, compact = false }: { entry: typeof normalized[number]; index: number; compact?: boolean }) => <article className={'timetable-session min-w-0 overflow-hidden rounded-2xl border p-3.5 shadow-sm subpixel-antialiased [text-rendering:optimizeLegibility] ' + tone(index) + (audience === 'teacher' ? ' border-l-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md' : '')}>
     <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0 flex-1 overflow-hidden"><p className="max-w-full break-words [overflow-wrap:anywhere] text-base font-black leading-snug tracking-normal sm:text-[17px]">{titleOf(entry)}</p>{codeOf(entry) && <p className="mt-1 text-xs font-bold uppercase tracking-wide opacity-80">{codeOf(entry)}</p>}</div>
+      <div className="min-w-0 flex-1 overflow-hidden"><p className="max-w-full break-words [overflow-wrap:anywhere] text-sm font-extrabold leading-snug tracking-normal sm:text-[15px]">{titleOf(entry)}</p>{codeOf(entry) && <p className="mt-1 text-xs font-bold uppercase tracking-wide opacity-80">{codeOf(entry)}</p>}</div>
       {!compact && <CalendarDays size={17} className="shrink-0 opacity-60"/>}
     </div>
-    <p className="mt-3 flex min-w-0 items-center gap-1.5 break-words [overflow-wrap:anywhere] text-sm font-extrabold"><Clock3 size={14} className="shrink-0"/><span className="min-w-0">{entry.start}-{entry.end}</span></p>
-    <div className="mt-2 min-w-0 space-y-1.5 text-sm font-semibold leading-relaxed">
+    <p className="mt-3 flex w-fit min-w-0 items-center gap-1.5 rounded-lg bg-white/50 px-2 py-1 text-xs font-extrabold dark:bg-black/10"><Clock3 size={14} className="shrink-0"/><span className="min-w-0">{entry.start}-{entry.end}</span></p>
+    <div className="mt-3 min-w-0 space-y-1.5 text-xs font-medium leading-relaxed">
       {entry.room && <p className="flex min-w-0 items-start gap-1.5 break-words [overflow-wrap:anywhere]"><MapPin size={13}/>{entry.room}</p>}
       {entry.teacher && <p className="flex min-w-0 items-start gap-1.5 break-words [overflow-wrap:anywhere]"><UserRound size={13}/>{entry.teacher}</p>}
       {entry.className && <p className="flex min-w-0 items-start gap-1.5 break-words [overflow-wrap:anywhere]"><UsersRound size={13}/>{entry.className}</p>}
@@ -80,27 +83,27 @@ export default function WeeklyTimetable({ entries, language = 'en', audience }: 
     {entry.description && !compact && <p className="mt-3 border-t border-current/15 pt-3 text-[13px] font-medium leading-relaxed opacity-90">{entry.description}</p>}
   </article>
 
-  return <section className="min-w-0 space-y-5 subpixel-antialiased [text-rendering:optimizeLegibility]">{audience === 'teacher' && <header className="relative overflow-hidden rounded-3xl border border-sky-500/30 bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-800 to-sky-700 p-5 text-white shadow-lg sm:p-6"><div className="absolute -right-8 -top-8 size-40 rounded-full border-[18px] border-white/5" aria-hidden="true"/><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-cyan-200"><CalendarDays size={17}/>{fr ? 'Emploi du temps officiel' : 'Official teaching schedule'}</p><h2 className="relative mt-3 text-2xl font-black sm:text-3xl">{fr ? 'Votre semaine d’enseignement' : 'Your teaching week'}</h2><p className="relative mt-2 max-w-2xl text-sm leading-relaxed text-sky-100">{fr ? 'Retrouvez vos cours, salles et classes dans une vue claire. Sur téléphone et tablette, choisissez un jour pour consulter ses séances.' : 'Find your courses, rooms and classes in one clear view. On phones and tablets, choose a day to explore its sessions.'}</p></header>}
-    <div className="grid gap-3 sm:grid-cols-3">
-      <div className="rounded-2xl bg-kcs-blue-950 p-4 text-white"><p className="text-xs uppercase text-blue-200">{fr ? 'Cours programmés' : 'Scheduled classes'}</p><b className="mt-1 block text-2xl">{normalized.length}</b></div>
-      <div className="rounded-2xl bg-kcs-blue-700 p-4 text-white"><p className="text-xs uppercase text-blue-100">{fr ? 'Jours de cours' : 'School days'}</p><b className="mt-1 block text-2xl">{days.length}</b></div>
-      <div className="rounded-2xl bg-kcs-gold-400 p-4 text-kcs-blue-950"><p className="text-xs uppercase opacity-70">{fr ? 'Plage horaire' : 'Time range'}</p><b className="mt-1 block text-lg">{normalized[0]?.start || '—'} - {normalized[normalized.length - 1]?.end || '—'}</b></div>
-    </div>
+  return <section className="nexus-weekly-timetable min-w-0 space-y-5 subpixel-antialiased [text-rendering:optimizeLegibility]">{!compact && <header className="relative overflow-hidden rounded-3xl border border-sky-500/30 bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-800 to-sky-700 p-5 text-white shadow-lg sm:p-6"><div className="absolute -right-8 -top-8 size-40 rounded-full border-[18px] border-white/5" aria-hidden="true"/><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-cyan-200"><CalendarDays size={17}/>{fr ? 'Emploi du temps officiel' : 'Official timetable'}</p><h2 className="relative mt-3 text-xl font-extrabold tracking-tight sm:text-2xl">{audience==='teacher'?(fr?'Votre semaine d’enseignement':'Your teaching week'):(fr?'Votre semaine de cours':'Your school week')}</h2><p className="relative mt-2 max-w-2xl text-sm leading-relaxed text-sky-100">{fr ? 'Retrouvez vos cours, salles et classes dans une vue claire. Sur téléphone et tablette, choisissez un jour pour consulter ses séances.' : 'Find your courses, rooms and classes in one clear view. On phones and tablets, choose a day to explore its sessions.'}</p></header>}
+    {showSummary && <div className="grid gap-3 sm:grid-cols-3">
+      <div className="timetable-stat rounded-2xl p-4"><p className="text-[10px] font-bold uppercase tracking-wider opacity-70">{fr ? 'Cours programmés' : 'Scheduled classes'}</p><b className="mt-1 block text-2xl">{normalized.length}</b></div>
+      <div className="timetable-stat rounded-2xl p-4"><p className="text-[10px] font-bold uppercase tracking-wider opacity-70">{fr ? 'Jours de cours' : 'School days'}</p><b className="mt-1 block text-2xl">{days.length}</b></div>
+      <div className="timetable-stat rounded-2xl p-4"><p className="text-[10px] font-bold uppercase tracking-wider opacity-70">{fr ? 'Plage horaire' : 'Time range'}</p><b className="mt-1 block text-lg">{normalized[0]?.start || '—'} - {normalized[normalized.length - 1]?.end || '—'}</b></div>
+    </div>}
 
     {!normalized.length && <div className="rounded-3xl border border-dashed border-sky-300 bg-sky-50 p-8 text-center dark:border-kcs-blue-600 dark:bg-kcs-blue-900"><CalendarDays size={32} className="mx-auto text-sky-600 dark:text-sky-300"/><h3 className="mt-4 font-black text-kcs-blue-950 dark:text-white">{fr ? 'En attente de l’emploi du temps officiel' : 'Awaiting the official timetable'}</h3><p className="mt-2 text-sm text-slate-600 dark:text-slate-200">{empty}</p></div>}
     {normalized.length > 0 && <div className="lg:hidden">
       <div className="flex snap-x gap-2 overflow-x-auto rounded-2xl bg-sky-50 p-2 dark:bg-kcs-blue-950">
-        {days.map((day) => <button type="button" key={day} onClick={() => setSelectedDay(day)} aria-pressed={activeDay === day} className={'shrink-0 snap-start rounded-full px-4 py-2 text-sm font-bold ' + (activeDay === day ? 'bg-gradient-to-r from-kcs-blue-800 to-sky-600 text-white shadow-md dark:!text-white' : 'border bg-white text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:!text-white')}>{dayLabel(day)}</button>)}
+        {days.map((day) => <button type="button" key={day} onClick={() => setSelectedDay(day)} data-kcs-no-processing="true" aria-pressed={activeDay === day} className={'shrink-0 snap-start rounded-xl px-4 py-2.5 text-xs font-bold ' + (activeDay === day ? 'bg-gradient-to-r from-indigo-700 to-sky-600 text-white shadow-md dark:!text-white' : 'border bg-white text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:!text-white')}>{dayLabel(day)}</button>)}
       </div>
       <div className="space-y-3">{normalized.filter((entry) => entry.dayKey === activeDay).map((entry, index) => <Details key={entry.id} entry={entry} index={index}/>)}</div>
     </div>}
 
     {normalized.length > 0 && <div className="hidden overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900 lg:block">
       <table className="w-full min-w-[980px] table-fixed text-[15px]">
-        <thead><tr className="bg-kcs-blue-950 text-left text-sm text-white"><th className="w-32 p-4">{fr ? 'Heure' : 'Time'}</th>{days.map((day) => <th key={day} className="p-4">{dayLabel(day)}</th>)}</tr></thead>
+        <thead className="sticky top-0 z-10"><tr className="bg-gradient-to-r from-kcs-blue-950 to-sky-900 text-left text-xs uppercase tracking-wide text-white"><th className="w-32 p-4">{fr ? 'Heure' : 'Time'}</th>{days.map((day) => <th key={day} className="p-4">{dayLabel(day)}</th>)}</tr></thead>
         <tbody>{slots.map((slot, rowIndex) => {
           const [start, end] = slot.split('-')
-          return <tr key={slot} className="border-t border-slate-100 align-top dark:border-kcs-blue-800"><th className="bg-slate-50 p-4 text-left text-sm text-kcs-blue-950 dark:bg-kcs-blue-950 dark:text-white"><Clock3 className="mb-1" size={16}/>{start}<span className="block text-xs font-normal text-slate-500">{end}</span></th>{days.map((day, dayIndex) => <td key={day} className="min-w-0 overflow-hidden p-2 align-top">{normalized.filter((entry) => entry.dayKey === day && entry.start === start && entry.end === end).map((entry) => <Details key={entry.id} entry={entry} index={rowIndex + dayIndex} compact/>)}</td>)}</tr>
+          return <tr key={slot} className="border-t border-slate-100 align-top dark:border-kcs-blue-800"><th className="bg-sky-50/80 p-4 text-left text-xs font-bold text-kcs-blue-950 dark:bg-kcs-blue-950 dark:text-white"><Clock3 className="mb-1" size={16}/>{start}<span className="block text-xs font-normal text-slate-500">{end}</span></th>{days.map((day, dayIndex) => <td key={day} className="min-w-0 overflow-hidden p-2 align-top">{normalized.filter((entry) => entry.dayKey === day && entry.start === start && entry.end === end).map((entry) => <Details key={entry.id} entry={entry} index={rowIndex + dayIndex} compact/>)}</td>)}</tr>
         })}</tbody>
       </table>
     </div>}
