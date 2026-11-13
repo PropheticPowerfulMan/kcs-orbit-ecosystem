@@ -17,6 +17,8 @@ export function buildTranscriptRecords(input:{studentGrade:string;activeAcademic
  for(const row of input.grades){
   const[year,rawTerm,status]=row.period.split('::');if(status!=='APPROVED')continue
   const snapshot=input.gradeSnapshots?.[year+'::'+term(rawTerm)]
+  // A current class transfer must not turn an elementary course result into high-school credit.
+  if(!snapshot&&/^(?:K[345]|Kindergarten(?:\s*K?[345])?|Grade\s*[1-8])(?:\s*[a-z])?$/i.test((row.course.grade??'').trim()))continue
   const imported=gradeByYear.get(year);const knownYearGrade=imported?.size===1?[...imported][0]:null
   // Never project the learner's current class backwards into previous years.
   const authoritative=snapshot??(year===input.activeAcademicYear?input.studentGrade:knownYearGrade)

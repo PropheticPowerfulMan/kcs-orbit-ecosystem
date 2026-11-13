@@ -13,3 +13,5 @@ test('verified imports merge with Nexus without double counting and keep source 
 test('unknown historical classes are identified rather than projected backwards',()=>{const result=buildTranscriptRecords({...input,studentGrade:'Grade 12',grades:[grade('Annual final',90,'2024-2025',{...course,grade:'Mixed'})]});assert.equal(result.rows.length,0);assert.equal(result.summary.unclassifiedRecords,1)})
 
 test('partial attendance does not treat missing quarters as zero or overweight a single quarter',()=>{const result=buildTranscriptRecords({...input,grades:[grade('Semester 1 · Quarter 1',80),grade('Semester 1 · Quarter 2',90),grade('Semester 2 · Quarter 3',70)]});assert.equal(result.summary.cumulativeAverage,80)})
+
+test('a later transfer to high school does not convert elementary course grades into transcript credit',()=>{const result=buildTranscriptRecords({...input,studentGrade:'Grade 11',grades:[grade('Semester 1 · Quarter 1',95,'2026-2027',{...course,grade:'Grade 1'})]});assert.equal(result.rows.length,0);assert.equal(result.summary.credits,0)})
