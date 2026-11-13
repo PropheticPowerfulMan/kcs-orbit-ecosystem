@@ -1,3 +1,5 @@
+import {attendanceCalendarKey,nonSchoolSettings} from '../services/attendanceCalendar.service.js'
+import {DRC_HOLIDAYS} from '../utils/schoolDayPolicy.js'
 import { Prisma } from '@prisma/client'
 import { createHash, createHmac } from 'node:crypto'
 import { academicPeriodAccess, lockAcademicYears } from '../services/academicPeriodAccess.service.js'
@@ -285,4 +287,28 @@ academicCalendarRouter.post('/rollover/run', requireSuperAdmin(), asyncHandler(a
     ;(data as any).nexusGraduationArchive = { requested: graduates.length, archived: profiles.filter((profile) => !profile.archive).length }
   }
   res.json(data)
+}))
+
+const nonSchoolRangeSchema=z.object({startDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),endDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),label:z.string().trim().min(2).max(180)}).strict().refine(r=>r.startDate<=r.endDate,'End date must follow start date.')
+academicCalendarRouter.get('/attendance-settings',asyncHandler(async(req,res)=>{
+ const year=z.string().regex(/^\d{4}-\d{4}$/).parse(req.query.academicYear)
+ const settings=await nonSchoolSettings(year)
+ res.setHeader('Cache-Control','private, no-store');return success(res,{academicYear:year,...settings,holidays:DRC_HOLIDAYS},'School closure settings loaded')
+}))
+academicCalendarRouter.put('/attendance-settings',requireCalendarManager,asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const input=z.object({academicYear:z.string().regex(/^\d{4}-\d{4}$/),revision:z.number().int().min(0),ranges:z.array(nonSchoolRangeSchema).max(300)}).strict().parse(req.body)
+ const calendar=(await academicCalendars()).find(c=>c.name===input.academicYear&&c.status!=='PLANNED')
+ if(!calendar)throw new ApiError(409,'Publish this school year before configuring school closures.')
+ for(const r of input.ranges){if(r.startDate<calendar.startDate.slice(0,10)||r.endDate>calendar.endDate.slice(0,10)||new Date(r.startDate).toISOString().slice(0,10)!==r.startDate||new Date(r.endDate).toISOString().slice(0,10)!==r.endDate)throw new ApiError(400,'Every closure must contain valid dates within the published school year.')}
+ const actorId=await databaseActorId(req.user!.sub)
+ const saved=await prisma.$transaction(async tx=>{
+  await tx.$queryRaw(Prisma.sql`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${attendanceCalendarKey(input.academicYear)}))`)
+  const current=await tx.auditLog.findUnique({where:{id:attendanceCalendarKey(input.academicYear)},select:{metadata:true}})
+  if(((current?.metadata as any)?.revision??0)!==input.revision)throw new ApiError(409,'Settings changed. Reload before retrying.')
+  const value={revision:input.revision+1,ranges:input.ranges}
+  await tx.auditLog.upsert({where:{id:attendanceCalendarKey(input.academicYear)},create:{id:attendanceCalendarKey(input.academicYear),actorId,action:'ATTENDANCE_CALENDAR_SETTINGS',targetType:'AttendanceCalendar',targetId:input.academicYear,metadata:value},update:{actorId,metadata:value}})
+  await tx.auditLog.create({data:{actorId,action:'ATTENDANCE_CALENDAR_PUBLISHED',targetType:'AttendanceCalendar',targetId:input.academicYear,metadata:{previous:current?.metadata??null,next:value}}})
+  return value
+ })
+ return success(res,{academicYear:input.academicYear,...saved},'School closure dates published')
 }))

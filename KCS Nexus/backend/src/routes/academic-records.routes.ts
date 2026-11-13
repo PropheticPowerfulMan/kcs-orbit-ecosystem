@@ -1,3 +1,6 @@
+import {reportCardAttendanceSummaries,splitReportCardTerm} from '../services/reportCardAttendanceSnapshot.service.js'
+import {canViewAcademic} from '../utils/academicVisibilityPolicy.js'
+import {assertAcademicVisible,academicVisibilityPolicy,setIndividualTranscriptVisibility} from '../services/academicVisibility.service.js'
 import { certificateDeliveryRouter } from './certificateDelivery.routes.js'
 import { officialStudentPortrait } from '../services/officialPortrait.service.js'
 import { databaseActorId } from '../utils/databaseActor.js'
@@ -66,33 +69,9 @@ const weightedCourseAverage=(grades:Array<{percentage:number;course:{credits:num
  const credits=grades.reduce((sum,item)=>sum+Math.max(item.course.credits||1,1),0)
  return credits?Number((grades.reduce((sum,item)=>sum+(item.percentage*Math.max(item.course.credits||1,1)),0)/credits).toFixed(2)):0
 }
-const splitReportCardTerm=(value:string)=>{
- const academicYear=value.slice(0,9)
- const term=value.slice(9).replace(/^[^A-Za-z0-9]+/,'').trim()
- return{academicYear,term}
-}
 
-async function reportCardAttendanceSummaries(cards: Array<{ id: string; studentId: string; term: string; attendanceSummary: unknown; publicationStatus?: string; academicCorrections?: unknown }>) {
- const cycles=[...new Set(cards.filter(shouldRefreshReportCardAttendance).map(card=>card.term))]
- const windows=new Map(await Promise.all(cycles.map(async label=>{
-  const cycle=splitReportCardTerm(label)
-  return [label,await attendanceWindow(cycle.academicYear,cycle.term)] as const
- })))
- const missingIds=[...new Set(cards.filter(shouldRefreshReportCardAttendance).map(card=>card.studentId))]
- const dates=[...windows.values()]
- const range=dates.length?{gte:new Date(Math.min(...dates.map(w=>w.gte.getTime()))),lte:new Date(Math.max(...dates.map(w=>w.lte.getTime())))}:null
- const [attendance,suspensions]=range&&missingIds.length?await Promise.all([
-  prisma.attendanceRecord.findMany({where:{studentId:{in:missingIds},date:range},select:{studentId:true,status:true,date:true,period:true,createdAt:true,updatedAt:true}}),
-  prisma.disciplineCase.findMany({where:{studentId:{in:missingIds},suspensionStart:{lte:range.lte},suspensionEnd:{gte:range.gte},status:{not:'RESOLVED'}},select:{studentId:true,suspensionStart:true,suspensionEnd:true}}),
- ]):[[],[]]
- return new Map(cards.filter(shouldRefreshReportCardAttendance).map(card => {
-  const window = windows.get(card.term)!
-  return [card.id, summarizeAttendance(attendanceWithSuspensions(
-   attendance.filter(row => row.studentId === card.studentId && row.date >= window.gte && row.date <= window.lte),
-   suspensions.filter(row => row.studentId === card.studentId), window,
-  ))] as const
- }))
-}
+
+
 
 const lockedReportCard=async(tx:Prisma.TransactionClient,id:string)=>{
  const initial=await tx.reportCard.findUnique({where:{id}})
@@ -855,6 +834,15 @@ const reportCardPrintDocumentHandler = (withTeacherReview: boolean) => asyncHand
  const unsavedReview=Boolean(review&&(review.teacherComment!==(card.teacherComment??'').trim()||review.conduct!==(card.conduct??'').trim()))
  if(unsavedReview){const cycle=splitReportCardTerm(card.term);assertAcademicPeriodOpen(await academicPeriodAccess(),cycle.academicYear,cycle.term)}
  const printCard=unsavedReview&&review?{...card,teacherComment:review.teacherComment,conduct:review.conduct,publicationStatus:'DRAFT' as const,approvedAt:null}:card
+ if(req.user!.role==='student'||req.user!.role==='parent'){
+  const role=req.user!.role
+  const owned=role==='student'?Boolean(await prisma.studentProfile.findFirst({where:{id:card.studentId,userId:req.user!.sub},select:{id:true}})):Boolean(await prisma.parentStudentLink.findUnique({where:{parentId_studentId:{parentId:req.user!.sub,studentId:card.studentId}}}))
+  if(!owned)throw new ApiError(403,'Report card access denied')
+  if(!['EMAILED','POSTED_TO_PORTAL'].includes(card.publicationStatus))throw new ApiError(403,'This report card has not been published to its family')
+  await assertAcademicVisible(req.user!.sub,role,card.studentId,'reportCards',splitReportCardTerm(card.term))
+  if(role==='parent'){const clearance=await getParentAcademicClearance(req.user!.sub);if(!clearance.allowed)throw new ApiError(402,clearance.reason)}
+  res.locals.academicDocumentReleased=true
+ }
  const doc=(await prepareReportCardPdfs([printCard],language,true)).get(id)!
  const actorId=await resolveAcademicActorId(req)
  await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:doc.documentId,metadata:{fingerprint:doc.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:printCard.publicationStatus,approvedAt:printCard.approvedAt?.toISOString()??null,unsavedReviewPreview:unsavedReview}}})
@@ -862,6 +850,18 @@ const reportCardPrintDocumentHandler = (withTeacherReview: boolean) => asyncHand
  return success(res,{html:doc.html,documentId:doc.documentId,unsavedReviewPreview:unsavedReview},'Official report document prepared')
 })
 academicRecordsRouter.get('/report-cards/:id/print-document',requireRoles('admin','staff','teacher'),reportCardPrintDocumentHandler(false))
+academicRecordsRouter.get('/report-cards/:id/portal-document',requireRoles('student','parent'),reportCardPrintDocumentHandler(false))
+academicRecordsRouter.get('/portal-report-cards/:studentId',requireRoles('student','parent'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const studentId=getRouteParam(req.params.studentId),role=req.user!.role as 'student'|'parent'
+ const student=await prisma.studentProfile.findUnique({where:{id:studentId},select:{userId:true,studentNumber:true,grade:true,section:true}})
+ const own=student&&(role==='student'?student.userId===req.user!.sub:Boolean(await prisma.parentStudentLink.findUnique({where:{parentId_studentId:{parentId:req.user!.sub,studentId}}})))
+ if(!own)throw new ApiError(403,'Report card access denied')
+ if(role==='parent'){const clearance=await getParentAcademicClearance(req.user!.sub);if(!clearance.allowed)throw new ApiError(402,clearance.reason)}
+ const[policy,actor,cards]=await Promise.all([academicVisibilityPolicy(),prisma.user.findUnique({where:{id:req.user!.sub},select:{orbitUserId:true}}),prisma.reportCard.findMany({where:{studentId,publicationStatus:{in:['EMAILED','POSTED_TO_PORTAL']}},select:{id:true,term:true,average:true,publicationStatus:true},orderBy:{createdAt:'desc'}})])
+ const visible=cards.filter(c=>canViewAcademic(policy,'reportCards',{audience:role,...student!,section:student!.section??'',...splitReportCardTerm(c.term),parentIds:[req.user!.sub,actor?.orbitUserId??'']}))
+ res.locals.academicDocumentReleased=true;res.setHeader('Cache-Control','private, no-store');return success(res,visible,'Released report cards loaded')
+}))
+
 academicRecordsRouter.post('/report-cards/:id/print-document',requireRoles('teacher'),reportCardPrintDocumentHandler(true))
 
 academicRecordsRouter.get('/report-cards/:id/pdf',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
@@ -984,20 +984,18 @@ academicRecordsRouter.patch('/report-cards/:id/publish',requireRoles('admin','st
 }))
 
 academicRecordsRouter.patch('/transcripts/:studentId/visibility', requireSuperAdmin(), asyncHandler(async(req:AuthenticatedRequest,res)=>{
- const studentId=getRouteParam(req.params.studentId)
- const visible=z.object({visible:z.boolean()}).parse(req.body).visible
- const student=await prisma.studentProfile.update({where:{id:studentId},data:{transcriptVisible:visible},select:{id:true,studentNumber:true,transcriptVisible:true}}).catch(()=>null)
- if(!student)throw new ApiError(404,'Student not found')
- const actorId=req.user!.sub==='configured-superadmin'?(await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{id:true}}))?.id:req.user!.sub
- await prisma.auditLog.create({data:{actorId:actorId||null,action:visible?'STUDENT_TRANSCRIPT_ACCESS_GRANTED':'STUDENT_TRANSCRIPT_ACCESS_REVOKED',targetType:'StudentProfile',targetId:studentId,metadata:{studentNumber:student.studentNumber}}})
- return success(res,student,visible?'Student transcript access granted':'Student transcript access revoked')
+ const studentId=getRouteParam(req.params.studentId),visible=z.object({visible:z.boolean()}).parse(req.body).visible
+ const student=await setIndividualTranscriptVisibility(studentId,visible,await resolveAcademicActorId(req))
+ return success(res,student,student.centralVisibilityEnabled?'Individual transcript release updated':'Individual transcript release saved. Central Results visibility is still closed.')
 }))
 
 academicRecordsRouter.get('/transcripts/:studentId',requireRoles('admin','staff','teacher','student','parent'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ if(req.user!.role==='student'||req.user!.role==='parent'){await assertAcademicVisible(req.user!.sub,req.user!.role,getRouteParam(req.params.studentId),'transcripts');res.locals.academicDocumentReleased=true}
+
  const studentId=getRouteParam(req.params.studentId)
  const student=await prisma.studentProfile.findUnique({where:{id:studentId},include:{user:true}});if(!student)throw new ApiError(404,'Student not found')
- if(req.user!.role==='student'){const own=await prisma.studentProfile.findUnique({where:{userId:req.user!.sub},select:{id:true}});if(own?.id!==studentId)throw new ApiError(403,'Transcript access denied');if(!student.transcriptVisible)throw new ApiError(403,'Le relevé de notes n’est pas encore autorisé par la Super Administration.')}
- if(req.user!.role==='parent'){const link=await prisma.parentStudentLink.findUnique({where:{parentId_studentId:{parentId:req.user!.sub,studentId}}});if(!link)throw new ApiError(403,'Transcript access denied');if(!student.transcriptVisible)throw new ApiError(403,'Le relevé de notes n’est pas encore autorisé par la Super Administration.');const clearance=await getParentAcademicClearance(req.user!.sub);if(!clearance.allowed)throw new ApiError(402,clearance.reason)}
+ if(req.user!.role==='student'){const own=await prisma.studentProfile.findUnique({where:{userId:req.user!.sub},select:{id:true}});if(own?.id!==studentId)throw new ApiError(403,'Transcript access denied');}
+ if(req.user!.role==='parent'){const link=await prisma.parentStudentLink.findUnique({where:{parentId_studentId:{parentId:req.user!.sub,studentId}}});if(!link)throw new ApiError(403,'Transcript access denied');const clearance=await getParentAcademicClearance(req.user!.sub);if(!clearance.allowed)throw new ApiError(402,clearance.reason)}
  const [grades,legacy]=await Promise.all([
   prisma.grade.findMany({where:{studentId,assignmentId:null,period:{endsWith:'::APPROVED'}},include:{course:true},orderBy:{period:'asc'}}),
   prisma.legacyTranscriptRecord.findMany({where:{studentId,verificationStatus:'VERIFIED'},orderBy:[{academicYear:'asc'},{term:'asc'},{courseCode:'asc'}]})
@@ -1006,5 +1004,5 @@ academicRecordsRouter.get('/transcripts/:studentId',requireRoles('admin','staff'
  const legacyRows=legacy.map(item=>({id:item.id,studentId:item.studentId,percentage:item.percentage,letterGrade:item.letterGrade,cycle:{academicYear:item.academicYear,term:item.term,status:'VERIFIED_LEGACY'},credits:item.credits,qualityPoints:(item.percentage>=90?4:item.percentage>=80?3:item.percentage>=70?2:item.percentage>=60?1:0)*item.credits,course:{id:'legacy-'+item.id,code:item.courseCode,name:item.courseName,credits:item.credits},source:'QUICKSCHOOLS_VERIFIED',gradeLevel:item.gradeLevel,sourceSchool:item.sourceSchool,sourceDocument:item.sourceDocument}))
  const rows=[...legacyRows,...currentRows].sort((left,right)=>left.cycle.academicYear.localeCompare(right.cycle.academicYear)||left.cycle.term.localeCompare(right.cycle.term)||left.course.code.localeCompare(right.course.code))
  const credits=rows.reduce((sum,item)=>sum+item.credits,0),points=rows.reduce((sum,item)=>sum+item.qualityPoints,0)
- return success(res,{student:{id:student.id,studentNumber:student.studentNumber,name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),grade:student.grade,photoUrl:await officialStudentPortrait(student),transcriptVisible:student.transcriptVisible},rows,summary:{credits,cumulativeGpa:credits?Number((points/credits).toFixed(2)):null,officialRecords:rows.length,legacyRecords:legacyRows.length},generatedAt:new Date().toISOString(),dataPolicy:rows.length?'APPROVED_AND_VERIFIED_LEGACY_RECORDS_ONLY':'NO_OFFICIAL_DATA'})
+ return success(res,{student:{id:student.id,studentNumber:student.studentNumber,name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),grade:student.grade,photoUrl:await officialStudentPortrait(student),transcriptVisible:['student','parent'].includes(req.user!.role)?true:student.transcriptVisible},rows,summary:{credits,cumulativeGpa:credits?Number((points/credits).toFixed(2)):null,officialRecords:rows.length,legacyRecords:legacyRows.length},generatedAt:new Date().toISOString(),dataPolicy:rows.length?'APPROVED_AND_VERIFIED_LEGACY_RECORDS_ONLY':'NO_OFFICIAL_DATA'})
 }))

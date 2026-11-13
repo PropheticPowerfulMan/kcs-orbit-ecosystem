@@ -1,6 +1,10 @@
+import {nonSchoolSettings} from './attendanceCalendarSettings.service.js'
+import {schoolDayDecision,type NonSchoolRange,type SchoolCalendar} from '../utils/schoolDayPolicy.js'
 import { env } from '../config/env.js'
 
 type Window = { gte: Date; lte: Date }
+type SchoolDayContext={nonSchoolRanges?:NonSchoolRange[];calendar?:SchoolCalendar}
+const schoolDayContexts=new WeakMap<Window,SchoolDayContext>()
 type Calendar = { isCurrent?: boolean; status?: string; name: string; startDate: string; endDate: string; periods?: Array<{ type: string; sequence: number; startDate: string; endDate: string }> }
 let cached: Calendar[] = []
 let expiresAt = 0
@@ -61,18 +65,22 @@ export async function academicCalendars(): Promise<Calendar[]> {
 }
 
 export async function attendanceWindow(year: string, term: string) {
-  return attendanceWindowForCalendar(year, term, (await academicCalendars()).find(item => item.name === year))
+  const calendar=(await academicCalendars()).find(item => item.name === year)
+  const window=attendanceWindowForCalendar(year,term,calendar)
+  schoolDayContexts.set(window,{calendar,nonSchoolRanges:(await nonSchoolSettings(year)).ranges})
+  return window
 }
 
 type ReportAttendanceRecord = { status: string; date: Date; period?: string | null; createdAt?: Date; updatedAt?: Date }
 
 // One official school day is counted once, even after a section transfer or a corrected register.
-export const attendanceWithSuspensions = (records: ReportAttendanceRecord[], suspensions: Array<{suspensionStart: Date | null; suspensionEnd: Date | null}>, window: Window) => {
+export const attendanceWithSuspensions = (records: ReportAttendanceRecord[], suspensions: Array<{suspensionStart: Date | null; suspensionEnd: Date | null}>, window: Window, context:SchoolDayContext=schoolDayContexts.get(window)??{}) => {
  const days = new Map<string, ReportAttendanceRecord>()
+ const isSchoolDay=(date:Date)=>schoolDayDecision(date.toISOString().slice(0,10),[context.calendar??{name:'historic',startDate:window.gte.toISOString(),endDate:window.lte.toISOString()}],context.nonSchoolRanges??[]).allowed
  const timestamp = (row: ReportAttendanceRecord) => (row.updatedAt ?? row.createdAt ?? row.date).getTime()
  const daily = (row: ReportAttendanceRecord) => !row.period || row.period.toLowerCase() === 'daily'
  for (const row of records) {
-  if (row.date < window.gte || row.date > window.lte) continue
+  if (row.date < window.gte || row.date > window.lte || !isSchoolDay(row.date)) continue
   const day = row.date.toISOString().slice(0, 10), previous = days.get(day)
   if (!previous || (daily(row) && !daily(previous)) || (daily(row) === daily(previous) && timestamp(row) >= timestamp(previous))) days.set(day, row)
  }
@@ -83,7 +91,7 @@ export const attendanceWithSuspensions = (records: ReportAttendanceRecord[], sus
   cursor.setUTCHours(0, 0, 0, 0)
   for (; cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
    const weekday = cursor.getUTCDay(), day = cursor.toISOString().slice(0, 10)
-   if (weekday !== 0 && weekday !== 6) days.set(day, { ...days.get(day), date: new Date(cursor), status: 'SUSPENDED' })
+   if (weekday !== 0 && weekday !== 6 && isSchoolDay(cursor)) days.set(day, { ...days.get(day), date: new Date(cursor), status: 'SUSPENDED' })
   }
  }
  return [...days.values()].sort((left, right) => left.date.getTime() - right.date.getTime())
@@ -91,7 +99,6 @@ export const attendanceWithSuspensions = (records: ReportAttendanceRecord[], sus
 
 export function shouldRefreshReportCardAttendance(card: {attendanceSummary: unknown; publicationStatus?: string; academicCorrections?: unknown}) {
  if (!card.attendanceSummary) return true
- if (['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(card.publicationStatus ?? '')) return false
  return !hasReportCardAttendanceOverride(card)
 }
 
