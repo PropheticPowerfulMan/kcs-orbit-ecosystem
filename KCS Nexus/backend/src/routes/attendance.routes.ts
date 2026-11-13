@@ -1,7 +1,8 @@
+import {Prisma} from '@prisma/client'
+import {refreshSentinelStaffDay,sentinelStaffSyncState,isSentinelStaffRecord,staffBusinessNote} from '../services/sentinelStaffAttendance.service.js'
 import {assertAttendanceSchoolDay,attendanceDayAccess} from '../services/attendanceCalendar.service.js'
 import { academicCycleForDate, protectAcademicPeriod } from '../services/academicPeriodAccess.service.js'
 import { Router } from 'express'
-import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { env } from '../config/env.js'
@@ -38,7 +39,7 @@ const staffAttendanceSchema = z.object({
     status: attendanceStatusSchema,
     arrivalTime: z.string().max(20).optional(),
     departureTime: z.string().max(20).optional(),
-    note: z.string().max(500).optional(),
+    note: z.string().max(8000).optional(),
   })).min(1).max(1000),
 })
 
@@ -392,6 +393,7 @@ attendanceRouter.post('/students', requireRoles('admin'), asyncHandler(async (re
 
 attendanceRouter.get('/staff', requireRoles('admin'), asyncHandler(async (req, res) => {
   const date = req.query.date ? normalizedDay(z.coerce.date().parse(String(req.query.date))) : null
+  if(date)await refreshSentinelStaffDay(date.toISOString().slice(0,10))
   const [records, nexusStaff] = await Promise.all([
     prisma.staffAttendanceRecord.findMany({
       where: date ? { date } : {},
@@ -418,7 +420,8 @@ attendanceRouter.get('/staff', requireRoles('admin'), asyncHandler(async (req, r
     jobTitle: person.role === 'TEACHER' ? 'Teacher' : 'Staff',
     source: 'nexus',
   }))
-  return success(res, { records, roster, summary: summarize(records) }, 'Staff attendance register loaded')
+  const known=new Set(roster.map(person=>person.id));const extra=records.filter(record=>!known.has(record.staffOrbitId)).map(record=>({id:record.staffOrbitId,fullName:record.staffName,email:record.staffEmail,employeeId:record.employeeNumber,department:record.department,jobTitle:'Staff',source:'sentinel'}))
+  return success(res, { records:records.map(record=>({...record,note:staffBusinessNote(record),source:isSentinelStaffRecord(record)?'KCS_SENTINEL':'MANUAL'})), roster:[...roster,...extra], summary: summarize(records), sentinelSync:await sentinelStaffSyncState() }, 'Staff attendance register loaded')
 }))
 
 attendanceRouter.get('/staff/history', requireRoles('admin'), asyncHandler(async (req, res) => {
@@ -440,7 +443,7 @@ attendanceRouter.get('/staff/history', requireRoles('admin'), asyncHandler(async
   return success(res, {
     from: from.toISOString().slice(0, 10),
     to: to.toISOString().slice(0, 10),
-    records: records.map(record => ({ ...record, date: record.date.toISOString().slice(0, 10), recordedBy: record.recordedBy ? [record.recordedBy.lastName, record.recordedBy.middleName, record.recordedBy.firstName].filter(Boolean).join(' ') : null })),
+    records: records.map(record => ({ ...record, note:staffBusinessNote(record),source:isSentinelStaffRecord(record)?'SENTINEL':'MANUAL', date: record.date.toISOString().slice(0, 10), recordedBy: record.recordedBy ? [record.recordedBy.lastName, record.recordedBy.middleName, record.recordedBy.firstName].filter(Boolean).join(' ') : null })),
     summary: summarize(records),
   }, 'Official staff attendance history loaded')
 }))
@@ -455,12 +458,15 @@ attendanceRouter.post('/staff', requireRoles('admin'), asyncHandler(async (req: 
   const cycle = await academicCycleForDate(date)
   const saved = await prisma.$transaction(async (tx) => {
     if (cycle) await protectAcademicPeriod(tx, cycle.academicYear, cycle.term)
+    await tx.$queryRaw(Prisma.sql`SELECT 1 FROM pg_advisory_xact_lock(hashtext('sentinel-staff-sync'))`)
     const rows = []
     for (const entry of payload.entries) {
+      const previous=await tx.staffAttendanceRecord.findUnique({where:{staffOrbitId_date:{staffOrbitId:entry.staffOrbitId,date}}})
+      if(previous&&isSentinelStaffRecord(previous)&&previous.status===entry.status&&(previous.arrivalTime||'')===(entry.arrivalTime||'')&&(previous.departureTime||'')===(entry.departureTime??previous.departureTime??'')&&staffBusinessNote(previous)===(entry.note||'')){rows.push(previous);continue}
       rows.push(await tx.staffAttendanceRecord.upsert({
         where: { staffOrbitId_date: { staffOrbitId: entry.staffOrbitId, date } },
         create: { ...entry, date, recordedById: recorderId },
-        update: { employeeNumber: entry.employeeNumber, staffName: entry.staffName, staffEmail: entry.staffEmail, department: entry.department, status: entry.status, arrivalTime: entry.arrivalTime, departureTime: entry.departureTime, note: entry.note, recordedById: recorderId },
+        update: { employeeNumber: entry.employeeNumber, staffName: entry.staffName, staffEmail: entry.staffEmail, department: entry.department, status: entry.status, arrivalTime: entry.arrivalTime, departureTime: entry.departureTime, note: entry.note ?? '', recordedById: recorderId },
       }))
     }
     await tx.auditLog.create({ data: { actorId: recorderId, action: 'ADMIN_STAFF_ATTENDANCE_RECORDED', targetType: 'StaffRegister', targetId: date.toISOString().slice(0, 10), metadata: { count: rows.length } } })

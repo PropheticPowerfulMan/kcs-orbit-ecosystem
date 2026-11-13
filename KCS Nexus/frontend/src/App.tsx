@@ -119,7 +119,7 @@ const TranscriptVerificationPage = () => {
   const isReportCard = !isReportAnalytics && location.pathname.includes('report-card')
   const isGradebook = location.pathname.includes('gradebook')
   const isCertificate = location.pathname.includes('certificate')
-  const referenceIsValid = (isReportAnalytics ? /^KCS-RA-\d{8}-[A-Z0-9-]+$/i : isReportCard ? /^KCS-RC-\d{8}-[A-Z0-9-]+$/i : isGradebook ? /^KCS-GB-\d{8}-[A-Z0-9-]+$/i : isCertificate ? /^KCS-CERT-\d{8}-[A-Z0-9-]+$/i : /^KCS-TR-\d{8}-[A-Z0-9-]+$/i).test(documentId) && /^[A-F0-9]{6,}$/i.test(fingerprint)
+  const referenceIsValid = (isReportAnalytics ? /^KCS-RA-\d{8}-[A-Z0-9-]+$/i : isReportCard ? /^KCS-RC-\d{8}-[A-Z0-9-]+$/i : isGradebook ? /^KCS-GB-\d{8}-[A-Z0-9-]+$/i : isCertificate ? /^KCS-(?:CERT|ATT)-\d{8}-[A-Z0-9-]+$/i : /^KCS-TR-\d{8}-[A-Z0-9-]+$/i).test(documentId) && /^[A-F0-9]{6,}$/i.test(fingerprint)
   const [verification,setVerification]=useState<any>(null)
   const [checking,setChecking]=useState(true)
   useEffect(()=>{if(!referenceIsValid){setChecking(false);return}(isReportAnalytics ? academicRecordsAPI.verifyReportCardAnalytics(documentId,fingerprint) : isReportCard ? academicRecordsAPI.verifyReportCard(documentId,fingerprint) : isGradebook ? academicRecordsAPI.verifyGradebook(documentId,fingerprint) : isCertificate ? academicRecordsAPI.verifyCertificate(documentId,fingerprint) : academicRecordsAPI.verifyTranscript(documentId,fingerprint)).then(response=>setVerification(response.data.data)).catch(()=>setVerification(null)).finally(()=>setChecking(false))},[documentId,fingerprint,referenceIsValid,isReportAnalytics,isReportCard,isGradebook,isCertificate])

@@ -1,3 +1,4 @@
+import CertificateDeliveryDialog from './CertificateDeliveryDialog'
 import ReportCardWorkflowBoard, { reportCardQueue, reportCardClass, type ReportQueue } from './ReportCardWorkflowBoard'
 import { ACADEMIC_REPORT_PERIODS, academicPeriodLabel, reportPeriodIncludesSource, reportStatusLabel } from '@/constants/academicPeriods'
 import ReportCardDeliveryToolbar from './ReportCardDeliveryToolbar'
@@ -38,7 +39,7 @@ type EditorialForm = {
 type ReportCardOfficialSettings = { principalName: string; signatureImage: string; officialSealImage: string }
 
 type Transcript = {
-  student: { name: string; studentNumber: string; grade: string; photoUrl?: string | null }
+  student: { id?: string; name: string; studentNumber: string; grade: string; photoUrl?: string | null }
   rows: Array<{ id: string; percentage: number; letterGrade: string; credits: number; cycle: { academicYear: string; term: string }; course: { name: string; code: string } }>
   summary: { credits: number; cumulativeGpa: number | null; officialRecords: number }
   generatedAt?: string
@@ -84,6 +85,7 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   const [registry, setRegistry] = useState<RegistryStudent[]>(() => readRecordCache().registry ?? [])
   const [cacheSavedAt, setCacheSavedAt] = useState(() => readRecordCache().savedAt ?? '')
   const [transcript, setTranscript] = useState<Transcript | null>(null)
+  const [transcriptDeliveryOpen, setTranscriptDeliveryOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [studentQuery, setStudentQuery] = useState('')
@@ -207,23 +209,6 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
     setGradeFilter('ALL')
     setSectionFilter('ALL')
     setStatusFilter('ALL')
-  }
-
-  const generate = async () => {
-    if (!matching.length) {
-      setNotice(tr('Aucune note finale soumise ne correspond à cette année scolaire et à cette période. Demandez d’abord aux enseignants de soumettre les notes, puis actualisez.', 'No submitted final grade matches this academic year and term. Ask teachers to submit grades first, then refresh.'))
-      return
-    }
-    setBusy(true)
-    try {
-      const response = await academicRecordsAPI.generateReportCards({ academicYear, term })
-      setNotice(language === 'fr' ? `${response.data.data.count} bulletin(s) généré(s) pour examen contrôlé.` : `${response.data.data.count} report card(s) generated for controlled review.`)
-      await load()
-    } catch (error: any) {
-      setNotice(error?.response?.data?.message ?? tr('La génération des bulletins a échoué.', 'Report-card generation failed.'))
-    } finally {
-      setBusy(false)
-    }
   }
 
   const approve = async (id: string) => {
@@ -399,11 +384,10 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
     }
   }
 
-  const printTranscript = () => {
+  const printTranscript = async () => {
     if (!transcript || transcriptPrinting) return
     setTranscriptPrinting(true)
-    printOfficialTranscript(transcript, setNotice)
-    window.setTimeout(() => setTranscriptPrinting(false), 900)
+    try { await printOfficialTranscript(transcript, setNotice) } finally { setTranscriptPrinting(false) }
   }
 
   const printReportCard = async (card: Card) => {
@@ -487,10 +471,12 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-emerald-700 dark:text-emerald-300"><ShieldCheck size={17}/>{showTranscripts ? tr('Relevés académiques officiels', 'Official Academic Transcripts') : tr('Bulletins scolaires officiels', 'Official Report Cards')}</p><h2 className="mt-1 font-display text-2xl font-black text-kcs-blue-950 dark:text-white">{showTranscripts ? tr('Recherche, génération et impression des relevés', 'Transcript search, generation and printing') : tr('Examen, toilettage, approbation et envoi aux parents', 'Review, edit, approve and deliver to parents')}</h2><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{showTranscripts ? tr('Les relevés restent séparés des bulletins et ne contiennent que les résultats approuvés.', 'Transcripts remain separate from report cards and contain approved records only.') : tr('Sélectionnez précisément un ou plusieurs parents liés avant chaque envoi.', 'Precisely select one or more linked parents before delivery.')}</p></div><button disabled={busy} onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 px-3 py-2 text-sm font-bold text-emerald-800 dark:border-emerald-700 dark:text-emerald-200"><RefreshCw size={16} className={busy ? 'animate-spin' : ''}/>{tr('Actualiser', 'Refresh')}</button></div>
 
     {!showTranscripts && <ReportCardDeliveryToolbar cards={cards} year={academicYear} term={term} selected={selectedParents} onSelect={setSelectedParents} busy={busy || deliveryBusy} onReview={() => { setDeliveryCardId(''); setDeliveryReview(true); setDeliveryOpen(true) }}/>}
-    {!showTranscripts ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><input value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} className={inputClass} aria-label={tr('Année scolaire', 'Academic year')}/><select value={term} onChange={(event) => setTerm(event.target.value)} className={inputClass} aria-label={tr('Période scolaire', 'Academic term')}>{ACADEMIC_REPORT_PERIODS.map(value => <option key={value} value={value}>{academicPeriodLabel(value, language)}</option>)}</select><div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-semibold text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white"><b>{matching.length}</b> {tr('notes finales', 'final grades')} · <b>{finalStudentCount}</b> {tr('élèves', 'students')} · <b>{courseCount}</b> {tr('cours', 'courses')}</div><button disabled={busy} onClick={() => void generate()} className="inline-flex items-center justify-center rounded-xl bg-kcs-blue-700 px-4 py-3 font-black text-white hover:bg-kcs-blue-800 disabled:opacity-50"><FileCheck2 size={17} className="mr-2"/>{tr('Générer les bulletins', 'Generate report cards')}</button></div> : null}
+    {!showTranscripts ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><input value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} className={inputClass} aria-label={tr('Année scolaire', 'Academic year')}/><select value={term} onChange={(event) => setTerm(event.target.value)} className={inputClass} aria-label={tr('Période scolaire', 'Academic term')}>{ACADEMIC_REPORT_PERIODS.map(value => <option key={value} value={value}>{academicPeriodLabel(value, language)}</option>)}</select><div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-semibold text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white"><b>{matching.length}</b> {tr('notes finales', 'final grades')} · <b>{finalStudentCount}</b> {tr('élèves', 'students')} · <b>{courseCount}</b> {tr('cours', 'courses')}</div></div> : null}
     {notice ? <p className="rounded-xl border border-sky-100 bg-white p-3 text-sm font-semibold text-kcs-blue-900 dark:border-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white">{notice}</p> : null}
 
+    {transcriptDeliveryOpen && <CertificateDeliveryDialog academicYear={academicYear} documentType="transcript" authenticated={true} initialGrade={gradeFilter} onClose={()=>setTranscriptDeliveryOpen(false)} onDelivered={()=>setNotice(tr('Les transcripts sont enregistrés dans la file sécurisée d’envoi aux parents.','Transcripts are recorded in the secure parent delivery queue.'))}/>}
     <section className={showTranscripts ? 'rounded-2xl border border-sky-200 bg-white p-4 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950 sm:p-5' : 'hidden'}>
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-950/50"><div><h3 className="font-bold text-kcs-blue-950 dark:text-white">{tr('Parcours académique officiel · Grade 9 à Grade 12','Official academic career · Grade 9 through Grade 12')}</h3><p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{tr('Résultats approuvés et archives vérifiées, avec détail des périodes disponibles. PDF joint en anglais, message FR/EN au choix.','Approved results and verified history, with available period detail. English PDF attachment; choose French or English for the email.')}</p></div><button type="button" onClick={()=>setTranscriptDeliveryOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white"><Send size={17}/>{tr('Envoyer les transcripts aux parents','Send transcripts to parents')}</button></div>
     <section className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4 shadow-sm dark:border-violet-800 dark:bg-violet-950/20 sm:p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div className="max-w-3xl"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.16em] text-violet-700 dark:text-violet-300"><History size={17}/>{tr('Dossiers historiques vérifiés · Transition QuickSchools', 'Verified historical records · QuickSchools transition')}</p><h3 className="mt-2 text-xl font-black text-kcs-blue-950 dark:text-white">{tr('Importer l’historique de Grade 9 à 12 sans inventer de résultats', 'Import Grade 9–12 history without inventing results')}</h3><p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{tr('Utilisez uniquement les exports officiels QuickSchools ou les dossiers scolaires signés. L’importation est atomique, liée au matricule, empreintée, auditable et fusionnée avec les notes Nexus approuvées dans le relevé officiel.', 'Use only official QuickSchools exports or signed school records. The import is all-or-nothing, matched by student ID, fingerprinted, auditable and merged with approved Nexus grades in the official transcript.')}</p></div><div className="flex flex-wrap gap-2"><button type="button" disabled={legacyBusy} onClick={() => void downloadLegacyTemplate('xlsx')} className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-300 bg-white px-3 py-2 text-sm font-black text-violet-800 dark:bg-kcs-blue-950 dark:text-violet-200"><Download size={16}/>{tr('Modèle Excel', 'Excel template')}</button><button type="button" disabled={legacyBusy} onClick={() => void downloadLegacyTemplate('csv')} className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-300 bg-white px-3 py-2 text-sm font-black text-violet-800 dark:bg-kcs-blue-950 dark:text-violet-200"><Download size={16}/>{tr('Modèle CSV', 'CSV template')}</button></div></div>
       <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(16rem,1fr)_minmax(18rem,1fr)_auto]"><label className="rounded-xl border border-dashed border-violet-300 bg-white p-3 text-sm font-bold text-kcs-blue-950 dark:bg-kcs-blue-950 dark:text-white"><span className="mb-2 flex items-center gap-2"><Upload size={16}/>{tr('Fichier officiel CSV/XLS/XLSX', 'Official CSV/XLS/XLSX')}</span><input type="file" accept=".csv,.xls,.xlsx" onChange={(event) => setLegacyFile(event.target.files?.[0] ?? null)} className="block w-full text-xs"/></label><label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Confirmation contrôlée', 'Controlled confirmation')}<input value={legacyConfirmation} onChange={(event) => setLegacyConfirmation(event.target.value)} className={inputClass + ' mt-2'} placeholder="IMPORT VERIFIED LEGACY RECORDS"/></label><button type="button" disabled={legacyBusy || !legacyFile || legacyConfirmation !== 'IMPORT VERIFIED LEGACY RECORDS'} onClick={() => void importLegacyRecords()} className="inline-flex min-h-12 items-center justify-center gap-2 self-end rounded-xl bg-violet-700 px-4 py-3 text-sm font-black text-white disabled:opacity-50">{legacyBusy ? <Loader2 size={17} className="animate-spin"/> : <Upload size={17}/>} {tr('Importer l’historique vérifié', 'Import verified history')}</button></div>

@@ -24,8 +24,7 @@ type Student = {
 type Props = {
   studentIds?: string[];
   academicYear: string;
-  documentType: "completion" | "attendance";
-  documentLanguage: "fr" | "en";
+  documentType: "completion" | "attendance" | "transcript";
   authenticated: boolean;
   initialGrade: string;
   onClose: () => void;
@@ -46,7 +45,6 @@ export default function CertificateDeliveryDialog({
   studentIds,
   academicYear,
   documentType,
-  documentLanguage,
   authenticated,
   initialGrade,
   onClose,
@@ -54,6 +52,7 @@ export default function CertificateDeliveryDialog({
 }: Props) {
   const language = useUIStore((state) => state.language);
   const tr = (fr: string, en: string) => (language === "fr" ? fr : en);
+  const [emailLanguage, setEmailLanguage] = useState<"fr" | "en">(language);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -73,7 +72,7 @@ export default function CertificateDeliveryDialog({
     setError("");
     try {
       setStudents(
-        (await academicRecordsAPI.certificateRecipients()).data.data ?? [],
+        (await (documentType === 'transcript' ? academicRecordsAPI.transcriptRecipients() : academicRecordsAPI.certificateRecipients())).data.data ?? [],
       );
     } catch (failure: any) {
       setError(
@@ -155,28 +154,28 @@ export default function CertificateDeliveryDialog({
     const signature = JSON.stringify({
       academicYear,
       documentType,
-      documentLanguage,
+      emailLanguage,
       authenticated,
       deliveries,
     });
     if (intent.current?.signature !== signature)
       intent.current = { signature, id: crypto.randomUUID() };
     try {
-      for (let start = 0; start < deliveries.length; start += 50) {
+      for (let start = 0; start < deliveries.length; start += 10) {
         setProgress(
           tr("Envoi du lot ", "Sending batch ") +
-            (Math.floor(start / 50) + 1) +
+            (Math.floor(start / 10) + 1) +
             " / " +
-            Math.ceil(deliveries.length / 50),
+            Math.ceil(deliveries.length / 10),
         );
-        await academicRecordsAPI.deliverCertificates({
-          requestId: intent.current!.id + "-" + start,
-          academicYear,
-          documentType,
-          language: documentLanguage,
-          includeAuthentication: authenticated,
-          deliveries: deliveries.slice(start, start + 50),
-        });
+        const payload = {
+          requestId: intent.current!.id + "-" + start, academicYear,
+          language: emailLanguage, includeAuthentication: authenticated,
+          deliveries: deliveries.slice(start, start + 10),
+        }
+        await (documentType === 'transcript'
+          ? academicRecordsAPI.deliverTranscripts(payload)
+          : academicRecordsAPI.deliverCertificates({...payload, documentType}));
       }
       setCompleted(true);
       onDelivered();
@@ -200,7 +199,7 @@ export default function CertificateDeliveryDialog({
     }
   };
   const title =
-    documentType === "completion"
+    documentType === "transcript" ? tr("Relevés académiques", "Academic transcripts") : documentType === "completion"
       ? tr("Certificats de réussite", "Completion certificates")
       : tr("Attestations de fréquentation", "Certificates of attendance");
   return createPortal(
@@ -217,17 +216,14 @@ export default function CertificateDeliveryDialog({
               id="certificate-delivery-title"
               className="text-xl font-black text-kcs-blue-950 dark:text-white"
             >
-              {tr(
-                "Envoyer les certificats aux parents",
-                "Send certificates to parents",
-              )}
+              {documentType === 'transcript' ? tr('Envoyer les transcripts aux parents','Send transcripts to parents') : tr('Envoyer les certificats aux parents','Send certificates to parents')}
             </h2>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-200">
-              {title} · {academicYear} ·{" "}
-              {documentLanguage === "fr" ? "Français" : "English"} · PDF
+              {title} · {documentType === 'transcript' ? 'Grade 9–12' : academicYear} ·{" "}
+              {tr("PDF joint : English", "Attached PDF: English")}
             </p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-              {authenticated
+              {documentType==='transcript' ? tr('Code QR, référence et empreinte SHA-256 vérifiables dans le registre KCS.','QR code, document reference and SHA-256 fingerprint verifiable in the KCS register.') : authenticated
                 ? tr(
                     "Signatures et sceau inclus lorsqu’ils sont enregistrés.",
                     "Saved signatures and seal included when available.",
@@ -248,10 +244,17 @@ export default function CertificateDeliveryDialog({
           </button>
         </header>
         <div className="min-h-0 space-y-4 overflow-y-auto p-4 sm:p-5">
+          <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-700 dark:bg-kcs-blue-900/50">
+            <label htmlFor="certificate-email-language" className="block text-xs font-bold text-kcs-blue-950 dark:text-white">{tr('Langue du message e-mail','Email message language')}</label>
+            <select id="certificate-email-language" value={emailLanguage} disabled={busy || completed} onChange={event=>setEmailLanguage(event.target.value as 'fr'|'en')} className={field+' mt-2 sm:max-w-xs'}>
+              <option value="fr">Français (FR)</option><option value="en">English (EN)</option>
+            </select>
+            <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-200">{tr('Le message s’adressera à chaque parent par son nom. Le document PDF joint reste toujours en anglais.','Each message will address the parent by name. The attached PDF document is always in English.')}</p>
+          </section>
           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white">
             <p className="font-black">{completed ? tr('3 · Envoi enregistré', '3 · Delivery recorded') : review ? tr('2 · Vérifier avant l’envoi', '2 · Review before sending') : tr('1 · Cocher les parents destinataires', '1 · Check parent recipients')}</p>
-            <p className="mt-2 text-xs leading-5">{completed ? tr('Les PDF sont enregistrés dans les messageries Nexus et leur envoi par e-mail est placé dans la file sécurisée.', 'PDFs are saved in Nexus inboxes and email delivery is recorded in the secure queue.') : review ? tr('Relisez les noms des enfants, les parents et leurs e-mails ci-dessous. Confirmer l’envoi prépare les PDF et les place dans la file sécurisée de courriels.', 'Review the children, parents and email addresses below. Confirming delivery prepares the PDFs and places them in the secure email queue.') : tr('Chaque ligne relie un enfant à son parent. Cochez uniquement les parents qui doivent recevoir son certificat. Vous pouvez sélectionner plusieurs parents pour le même enfant.', 'Each row links a child to their parent. Check the parents who should receive that certificate. You can select multiple parents for the same child.')}</p>
-            <p className="mt-3 font-bold">{new Set(chosen.map(row => row.student.id)).size} {tr('certificat(s)', 'certificate(s)')} · {new Set(chosen.map(row => row.parent.id)).size} {tr('parent(s) choisi(s)', 'selected parent(s)')}</p>
+            <p className="mt-2 text-xs leading-5">{completed ? tr('Les PDF sont enregistrés dans les messageries Nexus et leur envoi par e-mail est placé dans la file sécurisée.', 'PDFs are saved in Nexus inboxes and email delivery is recorded in the secure queue.') : review ? tr('Relisez les noms des enfants, les parents et leurs e-mails ci-dessous. Confirmer l’envoi prépare les PDF et les place dans la file sécurisée de courriels.', 'Review the children, parents and email addresses below. Confirming delivery prepares the PDFs and places them in the secure email queue.') : tr('Chaque ligne relie un enfant à son parent. Cochez uniquement les parents qui doivent recevoir son document. Vous pouvez sélectionner plusieurs parents pour le même enfant.', 'Each row links a child to their parent. Check the parents who should receive that document. You can select multiple parents for the same child.')}</p>
+            <p className="mt-3 font-bold">{new Set(chosen.map(row => row.student.id)).size} {documentType === 'transcript' ? tr('relevé(s)','transcript(s)') : tr('certificat(s)', 'certificate(s)')} · {new Set(chosen.map(row => row.parent.id)).size} {tr('parent(s) choisi(s)', 'selected parent(s)')}</p>
           </div>
           {error && (
             <p
