@@ -221,8 +221,8 @@ export async function officialCertificatePdf(input: OfficialCertificateInput) {
     .fontSize(7)
     .text(
       tr(
-        "Macampagne, Ngaliema · Kinshasa · République démocratique du Congo",
-        "Macampagne, Ngaliema · Kinshasa · Democratic Republic of Congo",
+        "Macampagne, Ngaliema · Kinshasa · République démocratique du Congo · www.kinshasachristianschool.org",
+        "Macampagne, Ngaliema · Kinshasa · Democratic Republic of Congo · www.kinshasachristianschool.org",
       ),
       65,
       544,

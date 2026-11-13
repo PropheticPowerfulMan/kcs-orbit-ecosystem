@@ -1,7 +1,7 @@
 import { certificateDeliveryRouter } from './certificateDelivery.routes.js'
 import { officialStudentPortrait } from '../services/officialPortrait.service.js'
 import { databaseActorId } from '../utils/databaseActor.js'
-import { academicPeriodAccess, protectAcademicPeriod } from '../services/academicPeriodAccess.service.js'
+import { academicPeriodAccess, assertAcademicPeriodOpen, protectAcademicPeriod } from '../services/academicPeriodAccess.service.js'
 import { Prisma } from '@prisma/client'
 import { Router } from 'express'
 import { z } from 'zod'
@@ -22,7 +22,7 @@ import { academicPeriodKey, isKcsAcademicTerm, isSequentialAcademicYear, KCS_ACA
 import { isVisibleInSuperAdministrationQueue } from '../services/academicSubmissionWorkflow.js'
 import { summarizeAttendanceStatuses, normalizeAttendanceCorrection } from '../utils/attendancePolicy.js'
 import { aggregateReportCardResults, reportCardSourcePeriods } from '../services/annualReportCard.service.js'
-import { attendanceWindow, attendanceWithSuspensions } from '../services/reportAttendance.service.js'
+import { attendanceWindow, attendanceWithSuspensions, shouldRefreshReportCardAttendance, hasReportCardAttendanceOverride, attendanceSummarySnapshotKey } from '../services/reportAttendance.service.js'
 import { submitCourseFinalGrades } from '../services/finalGradeSubmission.service.js'
 import { officialReportCardPdf, officialReportCardDocument } from '../utils/officialReportCardPdf.js'
 
@@ -72,20 +72,20 @@ const splitReportCardTerm=(value:string)=>{
  return{academicYear,term}
 }
 
-async function reportCardAttendanceSummaries(cards: Array<{ id: string; studentId: string; term: string; attendanceSummary: unknown }>) {
- const cycles=[...new Set(cards.filter(card=>!card.attendanceSummary).map(card=>card.term))]
+async function reportCardAttendanceSummaries(cards: Array<{ id: string; studentId: string; term: string; attendanceSummary: unknown; publicationStatus?: string; academicCorrections?: unknown }>) {
+ const cycles=[...new Set(cards.filter(shouldRefreshReportCardAttendance).map(card=>card.term))]
  const windows=new Map(await Promise.all(cycles.map(async label=>{
   const cycle=splitReportCardTerm(label)
   return [label,await attendanceWindow(cycle.academicYear,cycle.term)] as const
  })))
- const missingIds=[...new Set(cards.filter(card=>!card.attendanceSummary).map(card=>card.studentId))]
+ const missingIds=[...new Set(cards.filter(shouldRefreshReportCardAttendance).map(card=>card.studentId))]
  const dates=[...windows.values()]
  const range=dates.length?{gte:new Date(Math.min(...dates.map(w=>w.gte.getTime()))),lte:new Date(Math.max(...dates.map(w=>w.lte.getTime())))}:null
  const [attendance,suspensions]=range&&missingIds.length?await Promise.all([
-  prisma.attendanceRecord.findMany({where:{studentId:{in:missingIds},date:range},select:{studentId:true,status:true,date:true}}),
+  prisma.attendanceRecord.findMany({where:{studentId:{in:missingIds},date:range},select:{studentId:true,status:true,date:true,period:true,createdAt:true,updatedAt:true}}),
   prisma.disciplineCase.findMany({where:{studentId:{in:missingIds},suspensionStart:{lte:range.lte},suspensionEnd:{gte:range.gte},status:{not:'RESOLVED'}},select:{studentId:true,suspensionStart:true,suspensionEnd:true}}),
  ]):[[],[]]
- return new Map(cards.filter(card => !card.attendanceSummary).map(card => {
+ return new Map(cards.filter(shouldRefreshReportCardAttendance).map(card => {
   const window = windows.get(card.term)!
   return [card.id, summarizeAttendance(attendanceWithSuspensions(
    attendance.filter(row => row.studentId === card.studentId && row.date >= window.gte && row.date <= window.lte),
@@ -121,7 +121,7 @@ const homeroomReportContext=async(userId:string,studentId:string,academicYear:st
   db.teacherProfile.findUnique({where:{userId},select:{id:true,status:true,homeroomGrade:true,homeroomSection:true}}),
   db.studentProfile.findUnique({
    where:{id:studentId},
-   include:{enrollments:{include:{course:true}},attendanceRecords:{where:{date:window},select:{status:true,date:true}},disciplineCases:{where:{suspensionStart:{lte:window.lte},suspensionEnd:{gte:window.gte},status:{not:'RESOLVED'}},select:{suspensionStart:true,suspensionEnd:true}}},
+   include:{enrollments:{include:{course:true}},attendanceRecords:{where:{date:window},select:{status:true,date:true,period:true,createdAt:true,updatedAt:true}},disciplineCases:{where:{suspensionStart:{lte:window.lte},suspensionEnd:{gte:window.gte},status:{not:'RESOLVED'}},select:{suspensionStart:true,suspensionEnd:true}}},
   }),
  ])
  if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
@@ -408,7 +408,7 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
     user:{select:{firstName:true,middleName:true,lastName:true}},
     enrollments:{select:{course:{select:{id:true,name:true,code:true,grade:true,credits:true,teacher:{select:{user:{select:{firstName:true,middleName:true,lastName:true}}}}}}}},
     reportCards:{where:{term:termLabel},take:1},
-    attendanceRecords:{where:{date:window},select:{status:true,date:true}},
+    attendanceRecords:{where:{date:window},select:{status:true,date:true,period:true,createdAt:true,updatedAt:true}},
     disciplineCases:{where:{suspensionStart:{lte:window.lte},suspensionEnd:{gte:window.gte},status:{not:'RESOLVED'}},select:{suspensionStart:true,suspensionEnd:true}},
    },
    orderBy:[{grade:'asc'},{section:'asc'},{user:{lastName:'asc'}}],
@@ -535,7 +535,7 @@ academicRecordsRouter.put('/report-cards/teacher-draft/:studentId',requireRoles(
  const visibility=reportCardVisibility(context.enrollments.map(item=>item.courseId),payload.hiddenCourseIds)
  const visibleGrades=context.grades.filter(item=>visibility.visibleCourseIds.includes(item.courseId))
  const visibleAverage=weightedCourseAverage(visibleGrades)
- const corrections={...academicCorrections(current?.academicCorrections),hiddenCourseIds:visibility.hiddenCourseIds}
+ const corrections={...academicCorrections(current?.academicCorrections),hiddenCourseIds:visibility.hiddenCourseIds,attendanceOverride:false}
   const saved=await tx.reportCard.upsert({
    where:{studentId_term:{studentId,term:termLabel}},
    create:{studentId,term:termLabel,average:visibleAverage,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,academicCorrections:corrections,principalStatus:'DRAFT',publicationStatus:'DRAFT'},
@@ -610,7 +610,7 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
  const replacesPreviousSubmission=Boolean(current&&current.publicationStatus!=='DRAFT')
  const visibleGrades=context.grades.filter(item=>visibility.visibleCourseIds.includes(item.courseId))
  const visibleAverage=weightedCourseAverage(visibleGrades)
- const corrections={hiddenCourseIds:visibility.hiddenCourseIds}
+ const corrections={hiddenCourseIds:visibility.hiddenCourseIds,attendanceOverride:false}
  if(current){
   await tx.grade.deleteMany({where:{studentId,assignmentId:null,period:periodKey(payload.academicYear,payload.term,'APPROVED')}})
   await tx.correspondenceLog.updateMany({where:{reportCardId:current.id,channel:'EMAIL',status:'QUEUED'},data:{status:'FAILED',failureReason:'REPORT_CARD_SUPERSEDED'}})
@@ -733,7 +733,7 @@ academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHan
    const correction=corrections.get(subject.courseId)
    return correction?{...subject,course:{...subject.course,name:correction.courseName||subject.course.name},percentage:correction.percentage,letterGrade:letter(correction.percentage)}:subject
   })
-  const attendanceSummary=card.attendanceSummary??missingAttendance.get(card.id)??null
+  const attendanceSummary=missingAttendance.get(card.id)??card.attendanceSummary??null
   return {...card,attendanceSummary,student,subjects:correctedSubjects.map(subject=>({...subject,course:{...subject.course,teacherName:[subject.course.teacher.user.lastName,subject.course.teacher.user.middleName,subject.course.teacher.user.firstName].filter(Boolean).join(' ')}})),hiddenCourseIds}
  })
  res.setHeader('Cache-Control','private, no-store, no-cache, must-revalidate')
@@ -766,10 +766,13 @@ academicRecordsRouter.patch('/report-cards/:id/editorial',requireSuperAdmin(),as
  const visible=[...sourceResults.values()].filter(item=>item.percentage!==null&&!hidden.has(item.courseId))
  const totalWeight=visible.reduce((sum,item)=>sum+Math.max(1,officialSources.find(row=>row.courseId===item.courseId)?.course.credits||1),0)
  const officialAverage=totalWeight?Number((visible.reduce((sum,item)=>sum+(previousCorrections.get(item.courseId)?.percentage??item.percentage!)*Math.max(1,officialSources.find(row=>row.courseId===item.courseId)?.course.credits||1),0)/totalWeight).toFixed(2)):0
+  const attendanceBaseline=(await reportCardAttendanceSummaries([current])).get(current.id)??current.attendanceSummary
+  const attendanceChanged=attendanceSummarySnapshotKey(payload.attendanceSummary)!==attendanceSummarySnapshotKey(attendanceBaseline)
+  const attendanceOverride=attendanceChanged?Boolean(payload.attendanceSummary):hasReportCardAttendanceOverride(current)
   const requiresReapproval=['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(current.publicationStatus)
   const updated=await tx.reportCard.update({where:{id},data:{
    teacherComment:payload.teacherComment||null,conduct:payload.conduct||null,average:officialAverage,attendanceSummary:payload.attendanceSummary as any,
-   academicCorrections:{...academicCorrections(current.academicCorrections),subjects:correctedSubjects,correctedBy:actorId,correctedAt:new Date().toISOString()} as any,
+   academicCorrections:{...academicCorrections(current.academicCorrections),subjects:correctedSubjects,attendanceOverride,correctedBy:actorId,correctedAt:new Date().toISOString()} as any,
    ...(requiresReapproval?{principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW' as const,approvedById:null,approvedAt:null,emailedAt:null,portalPostedAt:null}:{}),
   }})
   await tx.auditLog.create({data:{actorId,action:'SUPERADMIN_REPORT_CARD_FULL_CORRECTION',targetType:'ReportCard',targetId:id,metadata:{previous,next:{...payload,average:officialAverage,subjects:correctedSubjects},averageRule:'credit-weighted visible course results',requiresReapproval,term:current.term,studentId:current.studentId}}})
@@ -832,27 +835,34 @@ async function prepareReportCardPdfs(cards: PdfReportCard[], language: 'fr' | 'e
   const learner=[card.student.user.lastName,card.student.user.middleName,card.student.user.firstName].filter(Boolean).join(' ')
   const mainTeacher=mainTeachers.find(teacher=>isTeacherHomeroomForStudent(teacher,card.student))
   const render = htmlOnly ? async (input: Parameters<typeof officialReportCardPdf>[0]) => ({...await officialReportCardDocument(input), buffer: Buffer.alloc(0)}) : officialReportCardPdf
-  const pdf=await render({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(card.attendanceSummary??missingAttendance.get(card.id)) as any,language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
+  const pdf=await render({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(missingAttendance.get(card.id)??card.attendanceSummary) as any,language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
   pdfByCard.set(card.id,pdf)
  }
  return pdfByCard
 }
 
-academicRecordsRouter.get('/report-cards/:id/print-document',requireRoles('admin','staff','teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
- const language=z.enum(['fr','en']).parse(req.query.language??'en')
+// Printing an in-progress review must not silently save, submit or alter an approved record.
+const reportCardPrintDocumentHandler = (withTeacherReview: boolean) => asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const review=withTeacherReview?z.object({language:z.enum(['fr','en']),teacherComment:z.string().trim().max(1500),conduct:z.string().trim().max(500)}).strict().parse(req.body):null
+ const language=review?.language??z.enum(['fr','en']).parse(req.query.language??'en')
  const id=getRouteParam(req.params.id)
  const card=await prisma.reportCard.findUnique({where:{id},include:{student:{select:reportCardPdfStudentSelect}}})
  if(!card)throw new ApiError(404,'Report card not found')
- if(req.user!.role==='teacher'){
+ if(withTeacherReview||req.user!.role==='teacher'){
   const teacher=await prisma.teacherProfile.findUnique({where:{userId:req.user!.sub},select:{status:true,homeroomGrade:true,homeroomSection:true}})
   if(!teacher||!isTeacherHomeroomForStudent(teacher,card.student))throw new ApiError(403,'This report card is outside the assigned homeroom')
  }
- const doc=(await prepareReportCardPdfs([card],language,true)).get(id)!
+ const unsavedReview=Boolean(review&&(review.teacherComment!==(card.teacherComment??'').trim()||review.conduct!==(card.conduct??'').trim()))
+ if(unsavedReview){const cycle=splitReportCardTerm(card.term);assertAcademicPeriodOpen(await academicPeriodAccess(),cycle.academicYear,cycle.term)}
+ const printCard=unsavedReview&&review?{...card,teacherComment:review.teacherComment,conduct:review.conduct,publicationStatus:'DRAFT' as const,approvedAt:null}:card
+ const doc=(await prepareReportCardPdfs([printCard],language,true)).get(id)!
  const actorId=await resolveAcademicActorId(req)
- await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:doc.documentId,metadata:{fingerprint:doc.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:card.publicationStatus,approvedAt:card.approvedAt?.toISOString()??null}}})
+ await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:doc.documentId,metadata:{fingerprint:doc.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:printCard.publicationStatus,approvedAt:printCard.approvedAt?.toISOString()??null,unsavedReviewPreview:unsavedReview}}})
  res.setHeader('Cache-Control','private, no-store')
- return success(res,{html:doc.html,documentId:doc.documentId},'Official report document prepared')
-}))
+ return success(res,{html:doc.html,documentId:doc.documentId,unsavedReviewPreview:unsavedReview},'Official report document prepared')
+})
+academicRecordsRouter.get('/report-cards/:id/print-document',requireRoles('admin','staff','teacher'),reportCardPrintDocumentHandler(false))
+academicRecordsRouter.post('/report-cards/:id/print-document',requireRoles('teacher'),reportCardPrintDocumentHandler(true))
 
 academicRecordsRouter.get('/report-cards/:id/pdf',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const language=z.enum(['fr','en']).parse(req.query.language??'en')
@@ -930,6 +940,8 @@ academicRecordsRouter.patch('/report-cards/:id/approve',requireRoles('admin'),as
  const id=getRouteParam(req.params.id)
  const actorId=await resolveAcademicActorId(req)
  if(!actorId)throw new ApiError(403,'The approval identity is unavailable')
+ // Resolve the remote calendar before opening the database transaction.
+ await academicPeriodAccess()
  const card=await prisma.$transaction(async tx=>{
   const current=await lockedReportCard(tx,id)
   if(['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus))return current
@@ -951,7 +963,8 @@ academicRecordsRouter.patch('/report-cards/:id/approve',requireRoles('admin'),as
   await tx.grade.deleteMany({where:{studentId:current.studentId,assignmentId:null,period:approved}})
   for(const grade of frozen)await tx.grade.create({data:{studentId:grade.studentId,courseId:grade.courseId,assignmentId:null,score:grade.percentage,maxScore:100,percentage:grade.percentage,letterGrade:letter(grade.percentage),period:approved}})
   await synchronizeStudentAcademicMetrics(tx,[current.studentId])
-  const updated=await tx.reportCard.update({where:{id},data:{principalStatus:'APPROVED',publicationStatus:'APPROVED',approvedById:actorId,approvedAt:new Date()}})
+  const attendanceSummary=(await reportCardAttendanceSummaries([current])).get(id)??current.attendanceSummary
+  const updated=await tx.reportCard.update({where:{id},data:{principalStatus:'APPROVED',publicationStatus:'APPROVED',approvedById:actorId,approvedAt:new Date(),attendanceSummary:attendanceSummary as any}})
   await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_APPROVED',targetType:'ReportCard',targetId:id,metadata:{previousStatus:current.publicationStatus,academicYear,term,hiddenCourseIds:[...hiddenCourseIds],sourceGrades:source.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:x.letterGrade})),frozenGrades:frozen.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:letter(x.percentage)})),superAdminCorrectionsApplied:corrections.size}}})
   return updated
  },{maxWait:10000,timeout:60000})

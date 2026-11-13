@@ -2,7 +2,7 @@ import ReportCardAnalyticsPanel from '@/components/shared/ReportCardAnalyticsPan
 import { useUIStore } from '@/store/uiStore';
 import { useAcademicPeriodAccess } from '@/hooks/useAcademicPeriodAccess';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Clock3, Eye, EyeOff, FileCheck2, GraduationCap, Printer, RefreshCw, Save, Search, Send, ShieldCheck, UserRoundCheck, Users } from 'lucide-react';
+import { CheckCircle2, Clock3, Eye, EyeOff, FileCheck2, Filter, GraduationCap, Printer, RefreshCw, Loader2, Save, Search, Send, ShieldCheck, UserRoundCheck, Users } from 'lucide-react';
 import { academicRecordsAPI } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { printOfficialReportCard, teacherDisplayName, courseDisplayName } from '@/utils/officialReportCardPrint';
@@ -123,6 +123,7 @@ const writeReportDashboardCache = (userId: string, academicYear: string, term: s
 
 export default function TeacherWholeSchoolReportCards() {
   const language = useUIStore(state => state.language);
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en;
   const userId = useAuthStore((state) => state.user?.id ?? '');
   const [academicYear, setAcademicYear] = useState('2026-2027');
   const [term, setTerm] = useState(sessions[0]);
@@ -142,6 +143,7 @@ export default function TeacherWholeSchoolReportCards() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingAction, setSavingAction] = useState<'draft' | 'submit' | null>(null);
+  const [saveStep, setSaveStep] = useState<'sending' | 'verifying' | null>(null);
   const { readOnly: periodReadOnly } = useAcademicPeriodAccess(academicYear, term);
   const [printing, setPrinting] = useState(false);
   const [notice, setNotice] = useState('');
@@ -282,6 +284,7 @@ export default function TeacherWholeSchoolReportCards() {
     reportSaveRef.current = true;
     setSaving(true);
     setSavingAction(submit ? 'submit' : 'draft');
+    setSaveStep('sending');
     setError('');
     setNotice('');
     try {
@@ -295,18 +298,19 @@ export default function TeacherWholeSchoolReportCards() {
       let submission: any = null;
       let draft: any = null;
       if (submit) {
-        const response = await academicRecordsAPI.submitTeacherReport(selected.id, payload);
+        const response = await academicRecordsAPI.submitTeacherReport(selected.id, payload, true);
         submission = response.data?.data;
         if (submission?.publicationStatus !== 'READY_FOR_REVIEW' || submission?.superAdministrationQueued !== true) {
           throw new Error('The report card was not confirmed in the Super Administration review queue.');
         }
       } else {
-        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, payload);
+        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, payload, true);
         draft = response.data?.data;
         if (draft?.publicationStatus !== 'DRAFT' || draft?.principalStatus !== 'DRAFT') {
           throw new Error('The report-card draft was not confirmed in the official Nexus register.');
         }
       }
+      setSaveStep('verifying');
       const verification = await academicRecordsAPI.teacherReportDashboard({ academicYear, term });
       const confirmed = (verification.data?.data as Dashboard)?.learners?.find(item => item.id === selected.id)?.reportCard;
       const expected = submission ?? draft;
@@ -339,13 +343,18 @@ export default function TeacherWholeSchoolReportCards() {
         writeReportDashboardCache(userId, academicYear, term, next);
         return next;
       });
-      setNotice(submit ? (submission?.replacesPreviousSubmission ? 'The previous submission was replaced in the Super Administration review queue.' : 'The complete report card is confirmed in the Super Administration review queue.') : 'The main-teacher draft is saved and confirmed in the official Nexus register.');
+      const confirmation = submit ? submission?.replacesPreviousSubmission ? tr('La soumission précédente a été remplacée dans la file de contrôle de la Super Administration.', 'The previous submission was replaced in the Super Administration review queue.') : tr('La réception du bulletin complet est confirmée dans la file de contrôle de la Super Administration.', 'The complete report card is confirmed in the Super Administration review queue.') : tr('Le brouillon est enregistré et confirmé dans le registre officiel Nexus.', 'The main-teacher draft is saved and confirmed in the official Nexus register.');
+      setNotice(confirmation);
+      window.dispatchEvent(new CustomEvent('ecosystem:mutation-success', { detail: { message: confirmation } }));
     } catch (reason: any) {
-      setError(reason?.response?.data?.message ?? reason?.message ?? 'The report-card operation failed.');
+      const message = reason?.response?.data?.message ?? reason?.message ?? tr('L’opération sur le bulletin a échoué. Réessayez après vérification.', 'The report-card operation failed. Please check and retry.');
+      setError(message);
+      window.dispatchEvent(new CustomEvent('ecosystem:mutation-error', { detail: { message } }));
     } finally {
       reportSaveRef.current = false;
       setSaving(false);
       setSavingAction(null);
+      setSaveStep(null);
     }
   };
 
@@ -365,7 +374,7 @@ export default function TeacherWholeSchoolReportCards() {
       let publicationStatus = selected.reportCard?.publicationStatus ?? 'DRAFT';
       if (!reportCardId) {
         if (!selected.isHomeroomStudent) throw new Error('The main teacher must save this report card before it can be printed as an official document.');
-        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, { academicYear, term, teacherComment, conduct, hiddenCourseIds });
+        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, { academicYear, term, teacherComment, conduct, hiddenCourseIds }, true);
         const savedCard = response.data?.data;
         if (!savedCard?.id) throw new Error('The official report-card register did not confirm the saved draft.');
         reportCardId = savedCard.id;
@@ -412,8 +421,8 @@ export default function TeacherWholeSchoolReportCards() {
           id: reportCardId!,
           term: academicYear + ' · ' + term,
           average: visibleAverage ?? 0,
-          teacherComment: selected.reportCard?.teacherComment ?? teacherComment,
-          conduct: selected.reportCard?.conduct ?? conduct,
+          teacherComment,
+          conduct,
           publicationStatus,
           attendanceSummary: selected.attendance,
           subjects: visibleSubjects
@@ -441,6 +450,7 @@ export default function TeacherWholeSchoolReportCards() {
         },
         setError,
         reservedWindow,
+        !locked ? { teacherComment, conduct } : undefined,
       );
     } catch (reason: any) {
       reservedWindow.close();
@@ -449,9 +459,10 @@ export default function TeacherWholeSchoolReportCards() {
       setPrinting(false);
     }
   };
-  const homeroomCount = homeroomLearners.length;
+  const homeroomCount = new Set(homeroomLearners.map(learner => learner.id)).size;
   const readyCount = homeroomLearners.filter((learner) => learner.allSubjectsSubmitted).length;
-  const submittedCount = homeroomLearners.filter((learner) => learner.reportCard && learner.reportCard.publicationStatus !== 'DRAFT').length;
+  const submittedCount = homeroomLearners.filter((learner) => ['READY_FOR_REVIEW', 'APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(learner.reportCard?.publicationStatus ?? '')).length;
+  const workflowFilterLabel = {all: tr('Tous mes élèves', 'All my learners'), waiting: tr('En attente des notes', 'Waiting for grades'), ready: tr('Prêts pour le titulaire', 'Ready for main teacher'), submitted: tr('Soumis ou publiés', 'Submitted or published'), homeroom: tr('Ma classe principale', 'My homeroom')}[statusFilter];
 
   if (loading && !dashboard)
     return (
@@ -492,20 +503,22 @@ export default function TeacherWholeSchoolReportCards() {
       {(notice || error) && <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${error ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200' : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-200'}`}>{error || notice}</div>}
 
       <ReportCardAnalyticsPanel academicYear={academicYear} term={term} students={homeroomLearners.map(learner => ({ id: learner.id, name: learner.name, className: [learner.grade, learner.section].filter(Boolean).join(' '), average: learner.average, subjects: learner.subjects.filter(subject => !(learner.reportCard?.hiddenCourseIds ?? []).includes(subject.courseId)).map(subject => ({ courseId: subject.courseId, name: subject.courseName, percentage: subject.percentage })) }))}/>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {[
-          [Users, 'My class learners', homeroomLearners.length],
-          [UserRoundCheck, 'My homeroom', homeroomCount],
-          [FileCheck2, 'All subjects ready', readyCount],
-          [Send, 'In admin workflow', submittedCount],
-          [GraduationCap, 'Pass standard', '≥70%'],
-        ].map(([Icon, label, value]) => {
+          [Users, tr('Mes élèves', 'My class learners'), new Set(learners.map(learner => learner.id)).size, 'teaching-learners', tr('Élèves uniques dans mes cours et ma classe principale.', 'Unique learners across my courses and homeroom.')],
+          [UserRoundCheck, tr('Ma classe principale', 'My homeroom'), homeroomCount, 'homeroom-learners', tr('Élèves officiellement affectés à ma classe principale.', 'Learners officially assigned to my homeroom.')],
+          [FileCheck2, tr('Toutes les matières prêtes', 'All subjects ready'), readyCount, 'subjects-ready', tr('Élèves de ma classe principale avec toutes les notes de matières soumises.', 'Homeroom learners with every required subject result submitted.')],
+          [Send, tr('Circuit administratif', 'In admin workflow'), submittedCount, 'admin-workflow', tr('Bulletins soumis pour examen, approuvés ou publiés.', 'Report cards submitted for review, approved or published.')],
+          [Filter, tr('Résultats du Workflow', 'Workflow results'), visibleLearners.length, 'workflow-results', tr('Nombre exact d’élèves affichés après les filtres Workflow, classe et recherche.', 'Exact learner count after the Workflow, class and search filters.')],
+          [GraduationCap, tr('Seuil de réussite', 'Pass standard'), '≥70%', 'pass-standard', tr('Règle de réussite officielle KCS.', 'Official KCS passing standard.')],
+        ].map(([Icon, label, value, key, description]) => {
           const CardIcon = Icon as typeof Users;
           return (
-            <div key={String(label)} className={panel}>
+            <div key={String(key)} data-report-card-stat={String(key)} role="group" aria-label={`${label}: ${value}`} title={String(description)} className={panel}>
               <CardIcon size={18} className="text-kcs-blue-600 dark:text-kcs-blue-300" />
               <p className="mt-2 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white">{String(value)}</p>
-              <p className="text-xs font-semibold text-gray-500">{String(label)}</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-slate-300">{String(label)}</p>
+              {key === 'workflow-results' && <p className="mt-1 text-[10px] text-kcs-blue-700 dark:text-sky-200">{workflowFilterLabel}</p>}
             </div>
           );
         })}
@@ -736,14 +749,24 @@ export default function TeacherWholeSchoolReportCards() {
                   {selected.isHomeroomStudent && finalized && <p className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-kcs-blue-900 dark:border-sky-700 dark:bg-kcs-blue-900 dark:text-sky-100">{language === 'fr' ? 'Une nouvelle soumission remplace ce bulletin et le remet en attente de validation par la Super Administration.' : 'A new submission replaces this report card and returns it to Super Administration for approval.'}</p>}
                   {selected.isHomeroomStudent && (
                     <div className="mt-4 flex flex-wrap justify-end gap-2">
-                      <button type="button" aria-busy={savingAction === 'draft'} disabled={saving || locked || finalized} onClick={() => void updateReport(false)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-800 bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-kcs-blue-800 disabled:opacity-40 dark:border-kcs-gold-300 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300">
-                        {savingAction === 'draft' ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
-                        {savingAction === 'draft' ? 'Saving draft…' : 'Save draft'}
+                      <button type="button" aria-busy={savingAction === 'draft'} data-kcs-no-processing="true" data-report-save-step={savingAction === 'draft' ? saveStep ?? undefined : undefined} disabled={saving || locked || finalized} onClick={() => void updateReport(false)} className="relative inline-flex min-h-11 items-center justify-center gap-2 overflow-hidden rounded-xl border border-kcs-blue-800 bg-kcs-blue-700 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-kcs-blue-900/10 aria-busy:!opacity-100 aria-busy:!bg-kcs-blue-800 aria-busy:!text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-kcs-blue-800 active:translate-y-0 active:scale-[.98] disabled:cursor-wait disabled:opacity-60 dark:border-kcs-gold-300 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300 motion-reduce:transform-none motion-reduce:transition-none">
+                        {savingAction === 'draft' && <span aria-hidden="true" className="pointer-events-none absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/20 to-transparent motion-reduce:animate-none"/>}
+                        <span className="relative inline-flex items-center justify-center gap-2">{savingAction === 'draft' ? <Loader2 size={18} className="animate-spin motion-reduce:animate-none"/> : <Save size={17}/>}
+                        <span>{savingAction === 'draft' ? saveStep === 'verifying' ? tr('Vérification du brouillon…', 'Verifying draft…') : tr('Enregistrement sécurisé…', 'Saving securely…') : tr('Enregistrer le brouillon', 'Save draft')}</span>
+                        {savingAction === 'draft' && <span aria-hidden="true" className="flex gap-1"><i className="size-1.5 animate-bounce rounded-full bg-current motion-reduce:animate-none"/><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:120ms] motion-reduce:animate-none"/><i className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:240ms] motion-reduce:animate-none"/></span>}</span>
                       </button>
-                      <button type="button" aria-busy={savingAction === 'submit'} disabled={saving || locked || !allVisibleSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">
-                        {savingAction === 'submit' ? <RefreshCw size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-                        {savingAction === 'submit' ? 'Submitting…' : (awaitingReview || finalized) ? (language === 'fr' ? 'Remplacer la soumission à la Super Administration' : 'Replace submission to Super Administration') : 'Submit to Super Administration'}
+                      <button type="button" aria-busy={savingAction === 'submit'} data-kcs-no-processing="true" data-report-submission-step={savingAction === 'submit' ? saveStep ?? undefined : undefined} disabled={saving || locked || !allVisibleSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className="relative inline-flex min-h-11 min-w-64 items-center justify-center gap-2 overflow-hidden rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-900/15 aria-busy:!opacity-100 aria-busy:!bg-emerald-700 aria-busy:!text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-600 hover:shadow-emerald-700/25 active:translate-y-0 active:scale-[.98] disabled:cursor-wait disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-500 motion-reduce:transform-none motion-reduce:transition-none">
+                        {savingAction === 'submit' && <span aria-hidden="true" className="pointer-events-none absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/20 to-transparent motion-reduce:animate-none"/>}
+                        <span className="relative inline-flex items-center justify-center gap-2">
+                          {savingAction === 'submit' ? <Loader2 size={18} className="animate-spin motion-reduce:animate-none"/> : <Send size={17}/>}
+                          <span>{savingAction === 'submit' ? saveStep === 'verifying' ? tr('Vérification de la réception…', 'Verifying receipt…') : tr('Envoi sécurisé…', 'Sending securely…') : (awaitingReview || finalized) ? tr('Remplacer la soumission à la Super Administration', 'Replace submission to Super Administration') : tr('Soumettre à la Super Administration', 'Submit to Super Administration')}</span>
+                          {savingAction === 'submit' && <span aria-hidden="true" className="flex gap-1"><i className="size-1.5 animate-bounce rounded-full bg-white motion-reduce:animate-none"/><i className="size-1.5 animate-bounce rounded-full bg-white [animation-delay:120ms] motion-reduce:animate-none"/><i className="size-1.5 animate-bounce rounded-full bg-white [animation-delay:240ms] motion-reduce:animate-none"/></span>}
+                        </span>
                       </button>
+                      {saving && <div role="status" aria-live="polite" className="w-full rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100">
+                        <p className="flex items-center gap-2 font-bold"><Loader2 size={16} className="shrink-0 animate-spin motion-reduce:animate-none"/>{saveStep === 'verifying' ? tr('Confirmation dans le registre officiel…', 'Confirming the official register…') : savingAction === 'draft' ? tr('Enregistrement du brouillon…', 'Saving the draft…') : tr('Transmission du bulletin en cours…', 'Sending the report card…')}</p>
+                        <p className="mt-1 text-xs">{saveStep === 'verifying' ? savingAction === 'draft' ? tr('Le serveur vérifie que le brouillon et vos commentaires sont bien conservés.', 'The server is checking that your draft and comments have been saved.') : tr('Le serveur vérifie que la Super Administration a reçu le bulletin et vos commentaires.', 'The server is checking that Super Administration received the report card and your comments.') : tr('Veuillez patienter. La confirmation apparaîtra après vérification sur le serveur.', 'Please wait. Confirmation will appear after server verification.')}</p>
+                      </div>}
                     </div>
                   )}
                 </div>

@@ -48,7 +48,7 @@ export type PrintableReportCard = {
   }
 }
 
-export async function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void, reservedWindow?: Window | null) {
+export async function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void, reservedWindow?: Window | null, review?: { teacherComment: string; conduct: string }) {
   const language = document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en'
   const printWindow = reservedWindow ?? window.open('', '_blank', 'width=1100,height=900')
   if (!printWindow) {
@@ -56,7 +56,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
     return
   }
   try {
-    const response = await academicRecordsAPI.reportCardPrintDocument(card.id, language)
+    const response = await academicRecordsAPI.reportCardPrintDocument(card.id, language, review)
     // Only trusted, server-generated report HTML is accepted. All personal fields are escaped there.
     const html = response.data.data.html as string
     if (!html.startsWith('<!doctype html>')) throw new Error('Invalid official report document')
