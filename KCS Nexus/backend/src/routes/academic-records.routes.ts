@@ -1013,10 +1013,13 @@ async function authorizedTranscript(req:AuthenticatedRequest,res:any){
  return loadOfficialTranscript(studentId)
 }
 academicRecordsRouter.get('/transcripts/:studentId/document',requireRoles('admin','staff','teacher','student','parent'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
- const data=await authorizedTranscript(req,res);if(!data.rows.length)throw new ApiError(409,'No approved or verified Grade 9–12 academic records are available for this learner.')
+ const data=await authorizedTranscript(req,res),preview=!data.rows.length
+ // Keep administrative previews available before official results are approved.
+ // A preview is never issued and cannot bypass release or parent-delivery controls.
+ if(preview&&req.user!.sub!=='configured-superadmin')throw new ApiError(409,'No approved or verified Grade 9–12 academic records are available for this learner.')
  const document=await officialTranscriptDocument(data)
- await prisma.auditLog.create({data:{actorId:await databaseActorId(req.user!.sub),action:'TRANSCRIPT_VERIFICATION_ISSUED',targetType:'OfficialTranscript',targetId:document.documentId,metadata:{fingerprint:document.fingerprint,studentId:data.student.id,studentNumber:data.student.studentNumber,studentName:data.student.name,sourceVersion:data.sourceVersion,language:'en'}}})
- res.setHeader('Cache-Control','private, no-store');return success(res,document,'Official English transcript prepared')
+ await prisma.auditLog.create({data:{actorId:await databaseActorId(req.user!.sub),action:preview?'TRANSCRIPT_PREVIEW_GENERATED':'TRANSCRIPT_VERIFICATION_ISSUED',targetType:preview?'TranscriptPreview':'OfficialTranscript',targetId:document.documentId,metadata:{fingerprint:document.fingerprint,studentId:data.student.id,studentNumber:data.student.studentNumber,studentName:data.student.name,sourceVersion:data.sourceVersion,language:'en',preview}}})
+ res.setHeader('Cache-Control','private, no-store');return success(res,document,preview?'Administrative transcript preview prepared — no official results on file':'Official English transcript prepared')
 }))
 academicRecordsRouter.get('/transcripts/:studentId',requireRoles('admin','staff','teacher','student','parent'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const data=await authorizedTranscript(req,res);res.setHeader('Cache-Control','private, no-store');return success(res,data,'Verified Grade 9–12 academic record loaded')
