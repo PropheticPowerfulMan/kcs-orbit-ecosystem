@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-visibility-target-search-20261113-v20'
+const CACHE_NAME = 'kcs-nexus-visibility-target-search-20261113-v21'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
