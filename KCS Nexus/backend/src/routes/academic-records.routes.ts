@@ -1,3 +1,5 @@
+import { reportCardPeriodEndDate } from '../utils/reportCardPeriodEndDate.js'
+import { personalizeParentCorrespondence } from '../utils/parentCorrespondence.js'
 import {reportCardAttendanceSummaries,splitReportCardTerm} from '../services/reportCardAttendanceSnapshot.service.js'
 import {canViewAcademic} from '../utils/academicVisibilityPolicy.js'
 import {assertAcademicVisible,academicVisibilityPolicy,setIndividualTranscriptVisibility} from '../services/academicVisibility.service.js'
@@ -25,7 +27,7 @@ import { academicPeriodKey, isKcsAcademicTerm, isSequentialAcademicYear, KCS_ACA
 import { isVisibleInSuperAdministrationQueue } from '../services/academicSubmissionWorkflow.js'
 import { summarizeAttendanceStatuses, normalizeAttendanceCorrection } from '../utils/attendancePolicy.js'
 import { aggregateReportCardResults, reportCardSourcePeriods } from '../services/annualReportCard.service.js'
-import { attendanceWindow, attendanceWithSuspensions, shouldRefreshReportCardAttendance, hasReportCardAttendanceOverride, attendanceSummarySnapshotKey } from '../services/reportAttendance.service.js'
+import { academicCalendars, attendanceWindow, attendanceWithSuspensions, shouldRefreshReportCardAttendance, hasReportCardAttendanceOverride, attendanceSummarySnapshotKey } from '../services/reportAttendance.service.js'
 import { submitCourseFinalGrades } from '../services/finalGradeSubmission.service.js'
 import { officialReportCardPdf, officialReportCardDocument } from '../utils/officialReportCardPdf.js'
 
@@ -686,6 +688,7 @@ academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHan
   list.push(grade);gradesByStudent.set(grade.studentId,list)
  }
  const missingAttendance = await reportCardAttendanceSummaries(cards)
+ const calendars = await academicCalendars()
  const enriched=cards.map(card=>{
   const student=card.student
   const grades=gradesByStudent.get(card.studentId)??[]
@@ -790,6 +793,7 @@ async function prepareReportCardPdfs(cards: PdfReportCard[], language: 'fr' | 'e
  const officialAccount=await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{signatureImage:true,officialSealImage:true}})
  const mainTeachers=await prisma.teacherProfile.findMany({where:{status:'HOMEROOM_TEACHER'},select:{status:true,homeroomGrade:true,homeroomSection:true,user:{select:{firstName:true,middleName:true,lastName:true,signatureImage:true}}}})
  const missingAttendance = await reportCardAttendanceSummaries(cards)
+ const calendars = await academicCalendars()
  const pdfByCard=new Map<string,Awaited<ReturnType<typeof officialReportCardPdf>>>()
  for(const card of cards){
   const parsed=splitReportCardTerm(card.term)
@@ -814,7 +818,7 @@ async function prepareReportCardPdfs(cards: PdfReportCard[], language: 'fr' | 'e
   const learner=[card.student.user.lastName,card.student.user.middleName,card.student.user.firstName].filter(Boolean).join(' ')
   const mainTeacher=mainTeachers.find(teacher=>isTeacherHomeroomForStudent(teacher,card.student))
   const render = htmlOnly ? async (input: Parameters<typeof officialReportCardPdf>[0]) => ({...await officialReportCardDocument(input), buffer: Buffer.alloc(0)}) : officialReportCardPdf
-  const pdf=await render({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(missingAttendance.get(card.id)??card.attendanceSummary) as any,language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
+  const pdf=await render({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,periodEndDate:reportCardPeriodEndDate(parsed.academicYear,parsed.term,calendars),average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(missingAttendance.get(card.id)??card.attendanceSummary) as any,language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
   pdfByCard.set(card.id,pdf)
  }
  return pdfByCard
@@ -917,9 +921,10 @@ academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHand
    const pdf=pdfByCard.get(card.id)!
    const attachment=await tx.messageAttachment.create({data:{name:pdf.documentId+'.pdf',mime:'application/pdf',size:pdf.buffer.length,data:pdf.buffer},select:{id:true}})
    const ids=new Map(linked.map(({parent})=>[parent.id,randomUUID()]))
-   await tx.internalMessage.createMany({data:linked.map(({parent})=>({id:ids.get(parent.id)!,senderId:actorId,recipientId:parent.id,subject,body,priority:'high',attachmentName:pdf.documentId+'.pdf',attachmentMime:'application/pdf',attachmentSize:pdf.buffer.length,sharedAttachmentId:attachment.id}))})
-   await tx.notification.createMany({data:linked.map(({parent})=>({userId:parent.id,title:subject,message:body,type:'MESSAGE',link:'/portal/parent/grades'}))})
-   await tx.correspondenceLog.createMany({data:linked.map(({parent})=>({channel:'EMAIL',status:parent.email?'QUEUED':'FAILED',subject,body,senderId:actorId,recipientName:[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '),recipientEmail:parent.email,recipientPhone:parent.phone,studentId:card.studentId,reportCardId:card.id,failureReason:parent.email?null:'RECIPIENT_EMAIL_MISSING',metadata:{mailQueueVersion:1,internalMessageId:ids.get(parent.id)!,recipientId:parent.id,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH',language:payload.language}}))})
+   const parentBody=(parent:typeof linked[number]['parent'])=>personalizeParentCorrespondence(body,[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '),payload.language,batchId+':'+card.id+':'+parent.id)
+   await tx.internalMessage.createMany({data:linked.map(({parent})=>({id:ids.get(parent.id)!,senderId:actorId,recipientId:parent.id,subject,body:parentBody(parent),priority:'high',attachmentName:pdf.documentId+'.pdf',attachmentMime:'application/pdf',attachmentSize:pdf.buffer.length,sharedAttachmentId:attachment.id}))})
+   await tx.notification.createMany({data:linked.map(({parent})=>({userId:parent.id,title:subject,message:parentBody(parent),type:'MESSAGE',link:'/portal/parent/grades'}))})
+   await tx.correspondenceLog.createMany({data:linked.map(({parent})=>({channel:'EMAIL',status:parent.email?'QUEUED':'FAILED',subject,body:parentBody(parent),senderId:actorId,recipientName:[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '),recipientEmail:parent.email,recipientPhone:parent.phone,studentId:card.studentId,reportCardId:card.id,failureReason:parent.email?null:'RECIPIENT_EMAIL_MISSING',metadata:{mailQueueVersion:1,internalMessageId:ids.get(parent.id)!,recipientId:parent.id,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH',language:payload.language}}))})
    recipients+=linked.length
    await tx.reportCard.update({where:{id:card.id},data:{publicationStatus:'EMAILED',emailedAt:new Date(),portalPostedAt:card.portalPostedAt??new Date()}})
    await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:pdf.documentId,metadata:{fingerprint:pdf.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:'EMAILED',approvedAt:card.approvedAt?.toISOString()??null}}})

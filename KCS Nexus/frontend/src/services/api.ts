@@ -461,8 +461,8 @@ export const aiAPI = {
     task: 'dashboard-insights' | 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary',
     context?: string,
   ) => api.post('/ai/teacher-assistant', { task, context }, { timeout: 45000 }),
-  tutor: (subject: string, question: string, studentId?: string) =>
-    api.post('/ai/tutor', { subject, question, studentId }),
+  tutor: (subject: string, question: string, studentId?: string, options?: { language: 'fr' | 'en'; mode: 'coach' | 'practice' | 'review'; history: { role: 'user' | 'assistant'; content: string }[] }) =>
+    api.post('/ai/tutor', { subject, question, studentId, ...options }, { timeout: 65000, headers: { 'x-silent-feedback': 'true' } }),
   generateQuiz: (subject: string, topic: string, difficulty: string) =>
     api.post('/ai/quiz', { subject, topic, difficulty }),
   getRecommendations: (studentId: string) =>
@@ -525,10 +525,10 @@ export const messagesAPI = {
   },
   getContacts: () => api.get('/messages/contacts'),
   getParentContacts: () => api.get('/messages/parent-contacts', { timeout: 15_000 }),
-  deliverToParents: (data: FormData) => api.post('/messages/parent-delivery', data, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180_000 }),
+  deliverToParents: (data: FormData) => { if (!data.has('language')) data.set('language', useUIStore.getState().language); return api.post('/messages/parent-delivery', data, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180_000 }) },
   attachment: (id: string) => api.get(`/messages/${id}/attachment`, { responseType: 'blob' }),
-  send: (data: FormData | { recipientId: string; subject: string; body: string }) => api.post('/messages', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined),
-  broadcast: (data: { audience: 'ALL' | 'PARENTS' | 'STUDENTS' | 'TEACHERS' | 'STAFF' | 'GRADE_9_12_FAMILIES'; subject: string; body: string }) => api.post('/messages/broadcast', data),
+  send: (data: FormData | { recipientId: string; subject: string; body: string; language?: 'fr' | 'en' }) => { if (data instanceof FormData) { if (!data.has('language')) data.set('language', useUIStore.getState().language); return api.post('/messages', data, { headers: { 'Content-Type': 'multipart/form-data' } }) }; return api.post('/messages', { language: useUIStore.getState().language, ...data }) },
+  broadcast: (data: { audience: 'ALL' | 'PARENTS' | 'STUDENTS' | 'TEACHERS' | 'STAFF' | 'GRADE_9_12_FAMILIES'; subject: string; body: string; language?: 'fr' | 'en' }) => api.post('/messages/broadcast', { language: useUIStore.getState().language, ...data }),
   markRead: (id: string) => api.patch(`/messages/${id}/read`),
   deleteMany: (ids: string[]) => api.post('/messages/bulk-delete', { ids }),
 }

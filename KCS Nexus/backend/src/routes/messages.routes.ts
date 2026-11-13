@@ -1,3 +1,4 @@
+import { personalizeParentCorrespondence } from '../utils/parentCorrespondence.js'
 import { queueMessageBatch } from '../services/messageBatch.js'
 import { Router } from 'express'
 import multer from 'multer'
@@ -22,12 +23,12 @@ messagesRouter.get('/tracking/email/:id.gif', asyncHandler(async (req, res) => {
 }))
 messagesRouter.use(authenticate)
 
-const messageSchema = z.object({ recipientId: z.string().min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
+const messageSchema = z.object({ recipientId: z.string().min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), language: z.enum(['fr','en']).optional() })
 const jsonArray = (value: unknown) => typeof value === 'string' ? JSON.parse(value) : value
 const parentDeliverySchema = z.object({ recipientIds: z.preprocess(jsonArray, z.array(z.string().min(1)).min(1).max(10000)), channels: z.preprocess(jsonArray, z.array(z.enum(['email','sms'])).min(1)), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), requestId: z.string().min(8).max(128).optional(), language: z.enum(['fr','en']).optional() })
 const attachmentTypes = new Set(['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/plain','text/csv','image/jpeg','image/png','image/webp','audio/mpeg','audio/mp4','audio/ogg','audio/webm','audio/wav','audio/x-wav','video/mp4','video/webm','video/quicktime','video/ogg'])
 const attachmentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 26214400, files: 1 }, fileFilter: (_req, file, cb) => attachmentTypes.has(file.mimetype) ? cb(null, true) : cb(new ApiError(400, 'Unsupported attachment type')) })
-const broadcastSchema = z.object({ requestId: z.string().min(8).max(128).optional(), audience: z.enum(['ALL','PARENTS','STUDENTS','TEACHERS','STAFF','GRADE_9_12_FAMILIES']), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
+const broadcastSchema = z.object({ requestId: z.string().min(8).max(128).optional(), audience: z.enum(['ALL','PARENTS','STUDENTS','TEACHERS','STAFF','GRADE_9_12_FAMILIES']), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), language: z.enum(['fr','en']).optional() })
 const messageLink = (role: string) => role === 'PARENT' ? '/portal/parent/messages' : role === 'STUDENT' ? '/portal/student/messages' : role === 'TEACHER' ? '/portal/teacher/messages' : role === 'STAFF' ? '/portal/staff/messages' : '/admin/communications'
 
 const resolveMessageActorId = async (req: AuthenticatedRequest) => {
@@ -253,26 +254,30 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
       allTargets.push({ userId: parent.id, name: [mother.lastName, mother.middleName, mother.firstName].filter(Boolean).join(' ') || 'Mother / Mère', email: mother.email || null, phone: mother.phone || null, relationship: 'MOTHER' })
     }
   }
-  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients: deliveryParents.map((parent) => ({ id: parent.id, role: parent.role, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') })), targets: allTargets, channels: data.channels, attachment: req.file, requestId: data.requestId, language: data.language, intent: { recipientIds: [...recipientIds].sort() } })
+  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients: deliveryParents.map((parent) => ({ id: parent.id, role: parent.role, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') })), targets: allTargets, channels: data.channels, attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: req.user!.sub === 'configured-superadmin', intent: { recipientIds: [...recipientIds].sort() } })
   return success(res, { ...result, requestedRecipients: recipientIds.length, skippedRecipients: skippedRecipientIds.length }, 'Parent communication recorded for every valid recipient; external delivery safely queued', 201)
 }))
 
 messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const data = messageSchema.parse(req.body)
   const senderId = await resolveMessageActorId(req)
-  const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true, email: true, phone: true } })
+  const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true, email: true, phone: true, firstName: true, middleName: true, lastName: true } })
   if (!recipient) throw new ApiError(404, 'Recipient not found')
   if ((req.user!.role === 'parent' || req.user!.role === 'student') && !['ADMIN', 'STAFF', 'TEACHER'].includes(recipient.role)) {
     throw new ApiError(403, 'Parents and students may only contact authorized school staff.')
   }
+  const { language = 'fr', ...messageData } = data
+  const emailBody = req.user!.sub === 'configured-superadmin' && recipient.role === 'PARENT'
+    ? personalizeParentCorrespondence(data.body, [recipient.lastName, recipient.middleName, recipient.firstName].filter(Boolean).join(' '), language, `${senderId}:${data.recipientId}:${Date.now()}`)
+    : data.body
   const message = await prisma.$transaction(async (tx) => {
-    const created = await tx.internalMessage.create({ data: { ...data, senderId, attachmentName: req.file?.originalname, attachmentMime: req.file?.mimetype, attachmentSize: req.file?.size, attachmentData: req.file?.buffer }, include: { sender: true, recipient: true } })
+    const created = await tx.internalMessage.create({ data: { ...messageData, body: emailBody, senderId, attachmentName: req.file?.originalname, attachmentMime: req.file?.mimetype, attachmentSize: req.file?.size, attachmentData: req.file?.buffer }, include: { sender: true, recipient: true } })
     await tx.notification.create({ data: { userId: data.recipientId, title: data.subject, message: data.body, type: 'MESSAGE', link: messageLink(recipient.role) } })
     return created
   })
   const delivery = req.user!.sub === 'configured-superadmin'
     ? await Promise.all([
-        sendSchoolMail({ to: recipient.email, replyTo: env.SCHOOL_EMAIL, subject: data.subject, text: data.body, branded: true }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
+        sendSchoolMail({ to: recipient.email, replyTo: env.SCHOOL_EMAIL, subject: data.subject, text: emailBody, language, attachments: req.file ? [{ filename: req.file.originalname, content: req.file.buffer, contentType: req.file.mimetype }] : undefined, branded: true }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
         sendSchoolSms(recipient.phone, `${data.subject}\n\n${data.body}`, { brand: false }).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
       ])
     : []
@@ -293,7 +298,7 @@ messagesRouter.post('/broadcast', attachmentUpload.single('attachment'), asyncHa
   })
   if (!users.length) return success(res, { recipients: 0, audience: data.audience, emailQueued: 0, emailMissing: 0 }, 'No matching recipients')
   const recipients = users.map((user) => ({ id: user.id, role: user.role, name: [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ') }))
-  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients, targets: users.map((user, index) => ({ userId: user.id, name: recipients[index].name, email: user.email, phone: user.phone })), channels: ['email'], attachment: req.file, requestId: data.requestId, intent: { audience: data.audience } })
+  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients, targets: users.map((user, index) => ({ userId: user.id, name: recipients[index].name, email: user.email, phone: user.phone })), channels: ['email'], attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: true, intent: { audience: data.audience } })
   return success(res, { ...result, recipients: users.length, audience: data.audience, emailMissing: users.length - result.emailQueued, estimatedMinutes: Math.ceil(result.emailQueued / 60) }, 'Communication recorded for every recipient and email delivery safely queued', 201)
 }))
 

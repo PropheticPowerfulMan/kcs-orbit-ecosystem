@@ -1,3 +1,4 @@
+import { personalizeParentCorrespondence } from '../utils/parentCorrespondence.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
@@ -15,21 +16,26 @@ const messageLink = (role: string) => role === 'PARENT' ? '/portal/parent/messag
 
 export async function queueMessageBatch(input: {
   senderId: string; subject: string; body: string; recipients: Recipient[]; targets: Target[];
-  channels: Channel[]; attachment?: Attachment; requestId?: string; intent: unknown; language?: 'fr' | 'en'
+  channels: Channel[]; attachment?: Attachment; requestId?: string; intent: unknown; language?: 'fr' | 'en'; personalizeParents?: boolean
 }): Promise<MessageBatchResult> {
   const requestId = input.requestId || randomUUID()
   const batchId = 'message-batch-' + createHash('sha256').update(input.senderId + ':' + requestId).digest('hex')
-  const requestHash = createHash('sha256').update(JSON.stringify({ intent: input.intent, subject: input.subject, body: input.body, channels: [...input.channels].sort(), attachment: input.attachment ? { name: input.attachment.originalname, mime: input.attachment.mimetype, hash: createHash('sha256').update(input.attachment.buffer).digest('hex') } : null })).digest('hex')
+  const requestHash = createHash('sha256').update(JSON.stringify({ intent: input.intent, subject: input.subject, body: input.body, language: input.language ?? 'en', personalizeParents: Boolean(input.personalizeParents), channels: [...input.channels].sort(), attachment: input.attachment ? { name: input.attachment.originalname, mime: input.attachment.mimetype, hash: createHash('sha256').update(input.attachment.buffer).digest('hex') } : null })).digest('hex')
+  const legacyRequestHash = createHash('sha256').update(JSON.stringify({ intent: input.intent, subject: input.subject, body: input.body, channels: [...input.channels].sort(), attachment: input.attachment ? { name: input.attachment.originalname, mime: input.attachment.mimetype, hash: createHash('sha256').update(input.attachment.buffer).digest('hex') } : null })).digest('hex')
   const replay = async () => {
     const record = await prisma.auditLog.findUnique({ where: { id: batchId }, select: { metadata: true } })
     if (!record) return null
-    const metadata = record.metadata as { requestHash?: string; result?: MessageBatchResult }
-    if (metadata.requestHash !== requestHash) throw new ApiError(409, 'This delivery request was already used for a different message.')
+    const metadata = record.metadata as { requestHash?: string; personalizationVersion?: number; result?: MessageBatchResult }
+    if (metadata.requestHash !== requestHash && (metadata.personalizationVersion === 1 || metadata.requestHash !== legacyRequestHash)) throw new ApiError(409, 'This delivery request was already used for a different message.')
     return metadata.result ?? null
   }
   const previous = await replay()
   if (previous) return previous
   const ids = new Map(input.recipients.map((recipient) => [recipient.id, randomUUID()]))
+  const parentIds = new Set(input.recipients.filter(recipient => recipient.role === 'PARENT').map(recipient => recipient.id))
+  const parentBody = (id: string, name: string) => input.personalizeParents && parentIds.has(id)
+    ? personalizeParentCorrespondence(input.body, name, input.language ?? 'en', batchId + ':' + id)
+    : input.body
   const now = new Date()
   const delivery: Delivery[] = input.targets.map((target) => {
     const row: Delivery = { userId: target.userId, name: target.name, ...(target.relationship ? { relationship: target.relationship } : {}) }
@@ -44,17 +50,17 @@ export async function queueMessageBatch(input: {
     await prisma.$transaction(async (tx) => {
       // This unique claim and every delivery row commit together. A retried click
       // returns the original batch instead of creating duplicate communications.
-      await tx.auditLog.create({ data: { id: batchId, actorId: input.senderId, action: 'MESSAGE_BATCH_QUEUED', targetType: 'MessageBatch', targetId: batchId, metadata: { requestHash, result } as unknown as Prisma.InputJsonValue } })
+      await tx.auditLog.create({ data: { id: batchId, actorId: input.senderId, action: 'MESSAGE_BATCH_QUEUED', targetType: 'MessageBatch', targetId: batchId, metadata: { requestHash, personalizationVersion: 1, result } as unknown as Prisma.InputJsonValue } })
       const attachment = input.attachment ? await tx.messageAttachment.create({ data: { name: input.attachment.originalname, mime: input.attachment.mimetype, size: input.attachment.size, data: input.attachment.buffer }, select: { id: true } }) : null
       for (let start = 0; start < input.recipients.length; start += 400) {
         const recipients = input.recipients.slice(start, start + 400)
-        const created = await tx.internalMessage.createMany({ data: recipients.map((recipient) => ({ id: ids.get(recipient.id)!, senderId: input.senderId, recipientId: recipient.id, subject: input.subject, body: input.body, ...(input.attachment && attachment ? { attachmentName: input.attachment.originalname, attachmentMime: input.attachment.mimetype, attachmentSize: input.attachment.size, sharedAttachmentId: attachment.id } : {}) })) })
+        const created = await tx.internalMessage.createMany({ data: recipients.map((recipient) => ({ id: ids.get(recipient.id)!, senderId: input.senderId, recipientId: recipient.id, subject: input.subject, body: parentBody(recipient.id, recipient.name), ...(input.attachment && attachment ? { attachmentName: input.attachment.originalname, attachmentMime: input.attachment.mimetype, attachmentSize: input.attachment.size, sharedAttachmentId: attachment.id } : {}) })) })
         if (created.count !== recipients.length) throw new ApiError(500, 'The complete recipient batch could not be recorded.')
-        await tx.notification.createMany({ data: recipients.map((recipient) => ({ userId: recipient.id, title: input.subject, message: input.body, type: 'MESSAGE', link: messageLink(recipient.role) })) })
+        await tx.notification.createMany({ data: recipients.map((recipient) => ({ userId: recipient.id, title: input.subject, message: parentBody(recipient.id, recipient.name), type: 'MESSAGE', link: messageLink(recipient.role) })) })
       }
       const logs = input.targets.flatMap((target, index) => input.channels.map((channel) => {
         const queued = Boolean(delivery[index][channel]?.queued)
-        return { channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const, status: queued ? 'QUEUED' as const : 'FAILED' as const, subject: input.subject, body: input.body, senderId: input.senderId, recipientName: target.name, recipientEmail: target.email, recipientPhone: target.phone, failureReason: queued ? null : delivery[index][channel]?.reason ?? 'CONTACT_MISSING', metadata: { internalMessageId: ids.get(target.userId), recipientId: target.userId, batchId, relationship: target.relationship ?? 'PRIMARY', ...(channel === 'email' ? { mailQueueVersion: 1 } : { smsQueueVersion: 1 }), attempts: 0, nextAttemptAt: now.toISOString(), priority: input.recipients.length <= 10 ? 'HIGH' : 'BULK', language: input.language ?? 'en' } }
+        return { channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const, status: queued ? 'QUEUED' as const : 'FAILED' as const, subject: input.subject, body: channel === 'email' ? parentBody(target.userId, target.name) : input.body, senderId: input.senderId, recipientName: target.name, recipientEmail: target.email, recipientPhone: target.phone, failureReason: queued ? null : delivery[index][channel]?.reason ?? 'CONTACT_MISSING', metadata: { internalMessageId: ids.get(target.userId), recipientId: target.userId, batchId, relationship: target.relationship ?? 'PRIMARY', ...(channel === 'email' ? { mailQueueVersion: 1 } : { smsQueueVersion: 1 }), attempts: 0, nextAttemptAt: now.toISOString(), priority: input.recipients.length <= 10 ? 'HIGH' : 'BULK', language: input.language ?? 'en' } }
       }))
       for (let start = 0; start < logs.length; start += 400) await tx.correspondenceLog.createMany({ data: logs.slice(start, start + 400) })
     }, { maxWait: 10_000, timeout: 60_000 })

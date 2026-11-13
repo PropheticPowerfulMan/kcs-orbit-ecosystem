@@ -1,3 +1,4 @@
+import { personalizeParentCorrespondence } from "../utils/parentCorrespondence.js";
 import { Router } from "express";
 import { Prisma } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
@@ -474,13 +475,14 @@ certificateDeliveryRouter.post(
             const ids = new Map(
               parents.map((parent) => [parent.id, randomUUID()]),
             );
+            const parentBody = (parent: typeof parents[number]) => personalizeParentCorrespondence(body, fullName(parent), payload.language, batchId + ':' + student.id + ':' + parent.id);
             await tx.internalMessage.createMany({
               data: parents.map((parent) => ({
                 id: ids.get(parent.id)!,
                 senderId: actorId,
                 recipientId: parent.id,
                 subject,
-                body,
+                body: parentBody(parent),
                 priority: "high",
                 attachmentName: pdf.documentId + ".pdf",
                 attachmentMime: "application/pdf",
@@ -492,7 +494,7 @@ certificateDeliveryRouter.post(
               data: parents.map((parent) => ({
                 userId: parent.id,
                 title: subject,
-                message: body,
+                message: parentBody(parent),
                 type: "MESSAGE",
                 link: "/portal/parent/messages",
               })),
@@ -502,7 +504,7 @@ certificateDeliveryRouter.post(
                 channel: "EMAIL",
                 status: "QUEUED",
                 subject,
-                body,
+                body: parentBody(parent),
                 senderId: actorId,
                 recipientName: fullName(parent),
                 recipientEmail: parent.email,

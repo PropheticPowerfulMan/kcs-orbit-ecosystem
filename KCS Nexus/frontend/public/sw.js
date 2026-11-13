@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-calendar-visibility-20261113-v18'
+const CACHE_NAME = 'kcs-nexus-visibility-polish-20261113-v19'
 const SHELL = ['./', './manifest.webmanifest', './icons/nexus-192.png', './icons/nexus-512.png', './icons/nexus-apple-180.png']
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 

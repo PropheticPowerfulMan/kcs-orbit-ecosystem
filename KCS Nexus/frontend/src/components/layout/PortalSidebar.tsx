@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BookOpen, FileText, Calendar, Brain,
   Users, Settings, Bell, ChevronLeft, ChevronRight,
   GraduationCap, BarChart3, MessageSquare, LogOut,
-  Shield, Home, UserCheck, UserPlus, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Ban, Archive, Moon, Sun, Globe, BookOpenCheck, GripHorizontal
+  Shield, Home, UserCheck, UserPlus, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Ban, Archive, Moon, Sun, Globe, BookOpenCheck, GripHorizontal, SlidersHorizontal
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { academyAPI, authAPI, lessonPlanAPI } from '@/services/api'
@@ -161,7 +161,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/admin/attendance', label: t('portalNav.staffAttendance'), icon: ClipboardCheck },
         { to: '/admin/transcripts', label: t('portalNav.transcripts'), icon: FileSpreadsheet },
         { to: '/admin/report-cards', label: t('portalNav.reportCards'), icon: GraduationCap },
-        { to: '/admin/academic-visibility', label: language === 'fr' ? 'Visibilité des résultats' : 'Results visibility', icon: Shield },
+        { to: '/admin/academic-visibility', label: language === 'fr' ? 'Visibilité des résultats' : 'Results visibility', icon: SlidersHorizontal },
         { to: '/admin/certificates', label: language === 'fr' ? 'Certificats' : 'Certificates', icon: Shield },
         { to: '/admin/diagnostics', label: t('portalNav.diagnosticControl'), icon: ClipboardCheck },
         { to: '/admin/communications', label: t('portalNav.communications'), icon: Megaphone },
@@ -376,13 +376,13 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
               }
             }}
             className={({ isActive }) =>
-              `sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} ${isActive ? 'active' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''} ${!isMobile && index === 0 ? 'sticky top-0 z-10 bg-white/95 shadow-sm backdrop-blur dark:bg-kcs-blue-950/95' : ''}`
+              `sidebar-link ${to === '/admin/academic-visibility' ? '!py-2.5 ring-1 ring-inset ring-indigo-300/20 shadow-sm transition-all duration-200 hover:ring-sky-300/40' : ''} ${isMobile ? 'sidebar-link-mobile' : ''} ${isActive ? 'active' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''} ${!isMobile && index === 0 ? 'sticky top-0 z-10 bg-white/95 shadow-sm backdrop-blur dark:bg-kcs-blue-950/95' : ''}`
             }
             title={!isMobile && sidebarCollapsed ? label : undefined}
           >
-            <Icon size={18} className="flex-shrink-0" />
+            {to === '/admin/academic-visibility' ? <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-400/25 to-sky-300/20 ring-1 ring-indigo-200/20"><Icon size={18} strokeWidth={2.25} className="text-current"/></span> : <Icon size={18} className="flex-shrink-0" />}
             {(isMobile || !sidebarCollapsed) && (
-              <span className="min-w-0 flex-1 truncate">{label}</span>
+              <span className="min-w-0 flex-1 truncate">{label}{to === '/admin/academic-visibility' && <small className="mt-0.5 block truncate text-[10px] font-medium leading-tight opacity-75">{language === 'fr' ? 'Contrôle des accès académiques' : 'Academic access controls'}</small>}</span>
             )}
             {badge && badge > 0 && (
               <span className="flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
