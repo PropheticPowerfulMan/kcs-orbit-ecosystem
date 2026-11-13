@@ -1,3 +1,5 @@
+import {academicVisibilityResponseGuard} from '../middleware/academicVisibility.js'
+import {academicVisibilityRouter} from './academic-visibility.routes.js'
 import { Router } from 'express'
 import { academyRouter } from './academy.routes.js'
 import { adminRouter } from './admin.routes.js'
@@ -36,6 +38,8 @@ import { studentGovernmentRouter } from './student-government.routes.js'
 import { sentinelNotificationsRouter } from './sentinel-notifications.routes.js'
 
 export const router = Router()
+router.use(academicVisibilityResponseGuard)
+router.use('/academic-visibility',academicVisibilityRouter)
 
 router.use('/auth', authRouter)
 router.use('/academy', academyRouter)

@@ -1,3 +1,4 @@
+import {reportCardAttendanceSummaries} from '../services/reportCardAttendanceSnapshot.service.js'
 import { studentReportAverage } from '../services/studentReportAverage.service.js'
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
@@ -608,6 +609,7 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
     res.setHeader('Cache-Control','private, no-store')
   return success(res, { profile: null, grades: [], assignments: [], timetable: [], attendance: [], reportCards: [], transcripts: [] }, 'Academic profile synchronization pending')
   }
+  const liveAttendance=await reportCardAttendanceSummaries(student.reportCards)
   const summaryCards = await prisma.reportCard.findMany({ where: { studentId: student.id }, select: { term: true, average: true, publicationStatus: true, updatedAt: true, academicCorrections: true } })
   const reportAverage = studentReportAverage(student.grades, summaryCards)
   const average = reportAverage.average
@@ -647,8 +649,8 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
     assignments: student.submissions,
     timetable,
     attendance: student.attendanceRecords,
-    reportCards: student.reportCards,
-    transcripts: student.transcriptVisible ? student.transcripts : [],
+    reportCards: student.reportCards.map(card=>({...card,attendanceSummary:liveAttendance.get(card.id)??card.attendanceSummary})),
+    transcripts: student.transcripts,
     transcriptVisible: student.transcriptVisible,
   }, 'Student dashboard loaded')
 }))
