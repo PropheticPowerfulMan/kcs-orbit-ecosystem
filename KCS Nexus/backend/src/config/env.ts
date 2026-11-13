@@ -42,6 +42,8 @@ const envSchema = z.object({
   AFRICASTALKING_API_KEY: z.string().optional(),
   AFRICASTALKING_USERNAME: z.string().optional(),
   AFRICASTALKING_SENDER: z.string().optional(),
+  SENTINEL_API_URL: z.string().url().default('http://sentinel_api:4000'),
+  SENTINEL_ATTENDANCE_SYNC_KEY: z.string().min(32).optional(),
   KCS_ORBIT_API_URL: z.string().optional(),
   KCS_ORBIT_API_KEY: z.string().optional(),
   KCS_ORBIT_ORGANIZATION_ID: z.string().optional(),

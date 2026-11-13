@@ -1,3 +1,5 @@
+import {loadOfficialTranscript, transcriptSource} from '../services/officialTranscript.service.js'
+import {officialTranscriptPdf} from '../utils/officialTranscriptPdf.js'
 import { personalizeParentCorrespondence } from "../utils/parentCorrespondence.js";
 import { Router } from "express";
 import { Prisma } from "@prisma/client";
@@ -39,7 +41,7 @@ const fullName = (user: {
 
 type CertificateOptions = {
   academicYear: string;
-  documentType: "completion" | "attendance";
+  documentType: "completion" | "attendance" | "transcript";
   language: "fr" | "en";
   includeAuthentication: boolean;
 };
@@ -51,6 +53,15 @@ async function buildDocuments(
   options: CertificateOptions,
   actorId: string,
 ) {
+  if (options.documentType === 'transcript') {
+    const documents = new Map<string, Awaited<ReturnType<typeof officialCertificatePdf>> & {sourceVersion?:string;activeAcademicYear?:string|null}>()
+    for (const student of students) {
+      const transcript = await loadOfficialTranscript(student.id)
+      if (!transcript.rows.length) throw new ApiError(409, `No approved or verified Grade 9–12 record is available for ${student.studentNumber}.`)
+      documents.set(student.id, await officialTranscriptPdf(transcript))
+    }
+    return documents
+  }
   const [account, leadership] = await Promise.all([
     prisma.user.findUnique({
       where: { id: actorId },
@@ -95,7 +106,7 @@ async function buildDocuments(
   );
   const documents = new Map<
     string,
-    Awaited<ReturnType<typeof officialCertificatePdf>>
+    Awaited<ReturnType<typeof officialCertificatePdf>> & {sourceVersion?:string;activeAcademicYear?:string|null}
   >();
   for (const student of students)
     documents.set(
@@ -284,14 +295,12 @@ certificateDeliveryRouter.post(
   }),
 );
 
-certificateDeliveryRouter.post(
-  "/deliver",
-  asyncHandler(async (req: AuthenticatedRequest, res) => {
+export const deliverOfficialDocuments = asyncHandler(async (req: AuthenticatedRequest, res) => {
     const payload = z
       .object({
         requestId: z.string().min(8).max(128),
         academicYear: z.string().refine(isSequentialAcademicYear),
-        documentType: z.enum(["completion", "attendance"]),
+        documentType: z.enum(["completion", "attendance", "transcript"]),
         language: z.enum(["fr", "en"]),
         includeAuthentication: z.boolean(),
         deliveries: z
@@ -363,7 +372,7 @@ certificateDeliveryRouter.post(
         tr("Envoi déjà enregistré.", "Delivery already recorded."),
       );
     const students = await prisma.studentProfile.findMany({
-      where: { id: { in: [...deliveries.keys()] }, archive: null },
+      where: { id: { in: [...deliveries.keys()] }, ...(payload.documentType === "transcript" ? {} : { archive: null }) },
       select: selection,
       orderBy: { id: "asc" },
     });
@@ -403,7 +412,8 @@ certificateDeliveryRouter.post(
           );
       }
     }
-    const documents = await buildDocuments(students, payload, actorId);
+    // Delivery language controls the email only. The attached official PDF is always English.
+    const documents = await buildDocuments(students, { ...payload, language: "en" }, actorId);
     const recipients = normalized.reduce((sum, [, ids]) => sum + ids.length, 0);
     try {
       await prisma.$transaction(
@@ -433,7 +443,7 @@ certificateDeliveryRouter.post(
               Prisma.sql`SELECT id FROM "User" WHERE id IN (${Prisma.join([...parentIds, student.user.id])}) FOR SHARE`,
             );
             const current = await tx.studentProfile.findFirst({
-              where: { id: student.id, archive: null },
+              where: { id: student.id, ...(payload.documentType === "transcript" ? {} : { archive: null }) },
               select: selection,
             });
             if (JSON.stringify(current) !== JSON.stringify(student))
@@ -445,8 +455,12 @@ certificateDeliveryRouter.post(
                 ),
               );
             const pdf = documents.get(student.id)!;
+            if (payload.documentType === 'transcript' && pdf.sourceVersion) {
+              const currentSource = await transcriptSource(student.id, pdf.activeAcademicYear ?? null, tx)
+              if (currentSource.sourceVersion !== pdf.sourceVersion) throw new ApiError(409, tr('Le dossier académique a changé pendant la préparation. Actualisez puis réessayez.', 'The academic record changed during preparation. Reload and retry.'))
+            }
             const documentTitle =
-              payload.documentType === "completion"
+              payload.documentType === "transcript" ? tr("Relevé académique officiel", "Official academic transcript") : payload.documentType === "completion"
                 ? tr(
                     "Certificat officiel de réussite",
                     "Official certificate of completion",
@@ -456,7 +470,7 @@ certificateDeliveryRouter.post(
                     "Certificate of attendance",
                   );
             const subject = `KCS · ${documentTitle} · ${fullName(student.user)}`;
-            const body = tr(
+            const body = payload.documentType === "transcript" ? tr(`Veuillez trouver en pièce jointe le relevé académique officiel de ${fullName(student.user)}, matricule ${student.studentNumber}. Il présente les résultats approuvés et les archives vérifiées de Grade 9 à Grade 12 disponibles dans son dossier. Son code QR permet de vérifier son authenticité.`, `Please find attached the official academic transcript for ${fullName(student.user)}, student ID ${student.studentNumber}. It presents the approved results and verified historical records from Grade 9 through Grade 12 available in the learner’s file. Its QR code verifies its authenticity.`) : tr(
               `Bonjour,\n\nVeuillez trouver en pièce jointe le document « ${documentTitle} » de ${fullName(student.user)}, matricule ${student.studentNumber}, pour l’année scolaire ${payload.academicYear}.\n\nSon code QR permet de vérifier son authenticité. Le document reste disponible dans votre messagerie Nexus.\n\nCordialement,\nKinshasa Christian School`,
               `Dear Parent/Guardian,\n\nPlease find attached the ${documentTitle.toLowerCase()} for ${fullName(student.user)}, student ID ${student.studentNumber}, for academic year ${payload.academicYear}.\n\nIts QR code verifies its authenticity. The document also remains available in your Nexus inbox.\n\nSincerely,\nKinshasa Christian School`,
             );
@@ -519,14 +533,15 @@ certificateDeliveryRouter.post(
                   priority: "HIGH",
                   language: payload.language,
                   documentId: pdf.documentId,
+                  documentLanguage: "en",
                 },
               })),
             });
             await tx.auditLog.create({
               data: {
                 actorId,
-                action: "CERTIFICATE_VERIFICATION_ISSUED",
-                targetType: "OfficialCompletionCertificate",
+                action: payload.documentType === "transcript" ? "TRANSCRIPT_VERIFICATION_ISSUED" : "CERTIFICATE_VERIFICATION_ISSUED",
+                targetType: payload.documentType === "transcript" ? "OfficialTranscript" : "OfficialCompletionCertificate",
                 targetId: pdf.documentId,
                 metadata: {
                   fingerprint: pdf.fingerprint,
@@ -536,7 +551,10 @@ certificateDeliveryRouter.post(
                   grade: student.grade,
                   academicYear: payload.academicYear,
                   documentType: payload.documentType,
-                  language: payload.language,
+                  language: "en",
+                  sourceVersion: pdf.sourceVersion ?? null,
+                  documentLanguage: "en",
+                  emailLanguage: payload.language,
                   deliveryRecorded: true,
                 },
               },
@@ -564,9 +582,9 @@ certificateDeliveryRouter.post(
       res,
       { certificates: students.length, recipients },
       tr(
-        "Certificats placés dans la file d’envoi sécurisée et disponibles dans la messagerie des parents.",
-        "Certificates safely queued for email delivery and available in parents’ inboxes.",
+        "Documents placés dans la file d’envoi sécurisée et disponibles dans la messagerie des parents.",
+        "Documents safely queued for email delivery and available in parents’ inboxes.",
       ),
     );
-  }),
-);
+  });
+certificateDeliveryRouter.post("/deliver", deliverOfficialDocuments);

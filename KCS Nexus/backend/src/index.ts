@@ -1,3 +1,4 @@
+import {startSentinelStaffAttendanceSync} from './services/sentinelStaffAttendance.service.js'
 import { startOutboundSmsQueue } from './services/outboundSmsQueue.js'
 import { env } from './config/env.js'
 import { prisma } from './config/prisma.js'
@@ -15,6 +16,7 @@ const start = async () => {
     startOutboundMailQueue()
     startOutboundSmsQueue()
     startEventReminderWorker()
+    startSentinelStaffAttendanceSync()
   } catch (error) {
     setDatabaseReady(false)
     console.error('KCS Nexus database unavailable; starting API in degraded mode.', error)

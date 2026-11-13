@@ -1,9 +1,11 @@
+import {loadOfficialTranscript} from '../services/officialTranscript.service.js'
+import {officialTranscriptDocument} from '../utils/officialTranscriptPdf.js'
 import { reportCardPeriodEndDate } from '../utils/reportCardPeriodEndDate.js'
 import { personalizeParentCorrespondence } from '../utils/parentCorrespondence.js'
 import {reportCardAttendanceSummaries,splitReportCardTerm} from '../services/reportCardAttendanceSnapshot.service.js'
 import {canViewAcademic} from '../utils/academicVisibilityPolicy.js'
 import {assertAcademicVisible,academicVisibilityPolicy,setIndividualTranscriptVisibility} from '../services/academicVisibility.service.js'
-import { certificateDeliveryRouter } from './certificateDelivery.routes.js'
+import { certificateDeliveryRouter, deliverOfficialDocuments } from './certificateDelivery.routes.js'
 import { officialStudentPortrait } from '../services/officialPortrait.service.js'
 import { databaseActorId } from '../utils/databaseActor.js'
 import { academicPeriodAccess, assertAcademicPeriodOpen, protectAcademicPeriod } from '../services/academicPeriodAccess.service.js'
@@ -41,7 +43,7 @@ const cycleSchema=z.object({academicYear:academicYearSchema,term:academicTermSch
 const teacherReportDraftSchema=cycleSchema.extend({
  teacherComment:z.string().trim().max(1500).default(''),
  conduct:z.string().trim().max(500).default(''),
- hiddenCourseIds:z.array(z.string().min(1)).max(100).default([]),
+ hiddenCourseIds:z.array(z.string().min(1)).max(100).optional(),
 })
 const teacherReportVisibilityBulkSchema=cycleSchema.extend({
  action:z.enum(['HIDE','RESTORE']),
@@ -139,7 +141,7 @@ academicRecordsRouter.get('/transcripts/verify', asyncHandler(async (req, res) =
  const record = await prisma.auditLog.findFirst({ where: { action: 'TRANSCRIPT_VERIFICATION_ISSUED', targetType: 'OfficialTranscript', targetId: documentId }, orderBy: { createdAt: 'desc' } })
  const metadata = (record?.metadata ?? {}) as Record<string, unknown>
  if (!record || metadata.fingerprint !== fingerprint) throw new ApiError(404, 'Transcript authenticity record not found')
- return success(res, { valid: true, documentType: 'TRANSCRIPT', documentId, issuedAt: record.createdAt }, 'Authentic KCS transcript verified')
+ return success(res, { valid: true, documentType: 'TRANSCRIPT', documentId, issuedAt: record.createdAt, issuer: 'Kinshasa Christian School', verificationMethod: 'KCS_REGISTER', fingerprintAlgorithm: 'SHA-256', qrStandard: 'ISO/IEC 18004', externalAccreditation: false }, 'Authentic KCS transcript verified')
 }))
 academicRecordsRouter.get('/certificates/verify',asyncHandler(async(req,res)=>{
  const documentId=z.string().regex(new RegExp('^KCS-(?:CERT|ATT)-[0-9]{8}-[A-Z0-9-]+$','i')).parse(req.query.document)
@@ -181,6 +183,12 @@ academicRecordsRouter.get('/report-card-analytics/verify', asyncHandler(async (r
 
 academicRecordsRouter.use(authenticate)
 academicRecordsRouter.use('/certificates', certificateDeliveryRouter)
+academicRecordsRouter.get('/transcripts/recipients',requireSuperAdmin(),asyncHandler(async(_req,res)=>{
+ const students=await prisma.studentProfile.findMany({where:{OR:[{grade:{in:['Grade 9','Grade 10','Grade 11','Grade 12']}},{legacyTranscriptRecords:{some:{verificationStatus:'VERIFIED'}}}]},select:{id:true,studentNumber:true,grade:true,section:true,user:{select:{id:true,firstName:true,middleName:true,lastName:true}},parentLinks:{select:{parent:{select:{id:true,firstName:true,middleName:true,lastName:true,email:true,phone:true}}}}},orderBy:{user:{lastName:'asc'}}})
+ res.setHeader('Cache-Control','private, no-store');return success(res,students,'Transcript parent recipients loaded')
+}))
+academicRecordsRouter.post('/transcripts/deliver',requireSuperAdmin(),(req,res,next)=>{req.body={...req.body,documentType:'transcript'};next()},deliverOfficialDocuments)
+
 
 academicRecordsRouter.post('/report-card-analytics/verification', requireRoles('admin','staff','teacher'), asyncHandler(async (req:AuthenticatedRequest,res)=>{
  const payload=cycleSchema.extend({documentId:z.string().regex(/^KCS-RA-[0-9]{8}-[A-Z0-9-]+$/i),fingerprint:z.string().regex(/^[A-F0-9]{64}$/i),studentIds:z.array(z.string().min(1)).min(1).max(5000),rankedCount:z.number().int().min(1).max(5000)}).parse(req.body)
@@ -513,7 +521,7 @@ academicRecordsRouter.put('/report-cards/teacher-draft/:studentId',requireRoles(
  const termLabel=reportCardTerm(payload.academicYear,payload.term)
  const current=await tx.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
  if(current&&['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus))throw new ApiError(409,'This report card is approved or published and is now read-only for the main teacher')
- const visibility=reportCardVisibility(context.enrollments.map(item=>item.courseId),payload.hiddenCourseIds)
+ const visibility=reportCardVisibility(context.enrollments.map(item=>item.courseId),payload.hiddenCourseIds??academicCorrections(current?.academicCorrections).hiddenCourseIds??[])
  const visibleGrades=context.grades.filter(item=>visibility.visibleCourseIds.includes(item.courseId))
  const visibleAverage=weightedCourseAverage(visibleGrades)
  const corrections={...academicCorrections(current?.academicCorrections),hiddenCourseIds:visibility.hiddenCourseIds,attendanceOverride:false}
@@ -576,7 +584,10 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
  await protectAcademicPeriod(tx,payload.academicYear,payload.term)
  await tx.$queryRaw(Prisma.sql`SELECT id FROM "StudentProfile" WHERE id = ${studentId} FOR UPDATE`)
  const context=await homeroomReportContext(req.user!.sub,studentId,payload.academicYear,payload.term,tx)
- const visibility=reportCardVisibility(context.enrollments.map(item=>item.courseId),payload.hiddenCourseIds)
+ const termLabel=reportCardTerm(payload.academicYear,payload.term)
+ const existing=await tx.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
+ const current=existing?await lockedReportCard(tx,existing.id):null
+ const visibility=reportCardVisibility(context.enrollments.map(item=>item.courseId),payload.hiddenCourseIds??academicCorrections(current?.academicCorrections).hiddenCourseIds??[])
  const expectedCourseIds=visibility.visibleCourseIds
  const submittedCourseIds=new Set(context.grades.map(item=>item.courseId))
  const missingCourseIds=expectedCourseIds.filter(courseId=>!submittedCourseIds.has(courseId))
@@ -585,9 +596,6 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
   const missingCourses=context.enrollments.filter(item=>missingCourseIds.includes(item.courseId)).map(item=>item.course.code||item.course.name)
   throw new ApiError(409,`Submission blocked: final grades are still missing for ${missingCourses.join(', ')}`)
  }
- const termLabel=reportCardTerm(payload.academicYear,payload.term)
- const existing=await tx.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
- const current=existing?await lockedReportCard(tx,existing.id):null
  const replacesPreviousSubmission=Boolean(current&&current.publicationStatus!=='DRAFT')
  const visibleGrades=context.grades.filter(item=>visibility.visibleCourseIds.includes(item.courseId))
  const visibleAverage=weightedCourseAverage(visibleGrades)
@@ -970,7 +978,8 @@ academicRecordsRouter.patch('/report-cards/:id/approve',requireRoles('admin'),as
   await synchronizeStudentAcademicMetrics(tx,[current.studentId])
   const attendanceSummary=(await reportCardAttendanceSummaries([current])).get(id)??current.attendanceSummary
   const updated=await tx.reportCard.update({where:{id},data:{principalStatus:'APPROVED',publicationStatus:'APPROVED',approvedById:actorId,approvedAt:new Date(),attendanceSummary:attendanceSummary as any}})
-  await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_APPROVED',targetType:'ReportCard',targetId:id,metadata:{previousStatus:current.publicationStatus,academicYear,term,hiddenCourseIds:[...hiddenCourseIds],sourceGrades:source.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:x.letterGrade})),frozenGrades:frozen.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:letter(x.percentage)})),superAdminCorrectionsApplied:corrections.size}}})
+  const approvedStudent=await tx.studentProfile.findUnique({where:{id:current.studentId},select:{grade:true}})
+  await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_APPROVED',targetType:'ReportCard',targetId:id,metadata:{studentId:current.studentId,studentGrade:approvedStudent?.grade??null,previousStatus:current.publicationStatus,academicYear,term,hiddenCourseIds:[...hiddenCourseIds],sourceGrades:source.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:x.letterGrade})),frozenGrades:frozen.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:letter(x.percentage)})),superAdminCorrectionsApplied:corrections.size}}})
   return updated
  },{maxWait:10000,timeout:60000})
  return success(res,card,'Report card approved and official grades frozen')
@@ -994,20 +1003,21 @@ academicRecordsRouter.patch('/transcripts/:studentId/visibility', requireSuperAd
  return success(res,student,student.centralVisibilityEnabled?'Individual transcript release updated':'Individual transcript release saved. Central Results visibility is still closed.')
 }))
 
-academicRecordsRouter.get('/transcripts/:studentId',requireRoles('admin','staff','teacher','student','parent'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+async function authorizedTranscript(req:AuthenticatedRequest,res:any){
  if(req.user!.role==='student'||req.user!.role==='parent'){await assertAcademicVisible(req.user!.sub,req.user!.role,getRouteParam(req.params.studentId),'transcripts');res.locals.academicDocumentReleased=true}
 
  const studentId=getRouteParam(req.params.studentId)
  const student=await prisma.studentProfile.findUnique({where:{id:studentId},include:{user:true}});if(!student)throw new ApiError(404,'Student not found')
  if(req.user!.role==='student'){const own=await prisma.studentProfile.findUnique({where:{userId:req.user!.sub},select:{id:true}});if(own?.id!==studentId)throw new ApiError(403,'Transcript access denied');}
  if(req.user!.role==='parent'){const link=await prisma.parentStudentLink.findUnique({where:{parentId_studentId:{parentId:req.user!.sub,studentId}}});if(!link)throw new ApiError(403,'Transcript access denied');const clearance=await getParentAcademicClearance(req.user!.sub);if(!clearance.allowed)throw new ApiError(402,clearance.reason)}
- const [grades,legacy]=await Promise.all([
-  prisma.grade.findMany({where:{studentId,assignmentId:null,period:{endsWith:'::APPROVED'}},include:{course:true},orderBy:{period:'asc'}}),
-  prisma.legacyTranscriptRecord.findMany({where:{studentId,verificationStatus:'VERIFIED'},orderBy:[{academicYear:'asc'},{term:'asc'},{courseCode:'asc'}]})
- ])
- const currentRows=grades.map(item=>({...item,cycle:parsePeriod(item.period),credits:item.course.credits,qualityPoints:(item.percentage>=90?4:item.percentage>=80?3:item.percentage>=70?2:item.percentage>=60?1:0)*item.course.credits,source:'NEXUS_APPROVED'}))
- const legacyRows=legacy.map(item=>({id:item.id,studentId:item.studentId,percentage:item.percentage,letterGrade:item.letterGrade,cycle:{academicYear:item.academicYear,term:item.term,status:'VERIFIED_LEGACY'},credits:item.credits,qualityPoints:(item.percentage>=90?4:item.percentage>=80?3:item.percentage>=70?2:item.percentage>=60?1:0)*item.credits,course:{id:'legacy-'+item.id,code:item.courseCode,name:item.courseName,credits:item.credits},source:'QUICKSCHOOLS_VERIFIED',gradeLevel:item.gradeLevel,sourceSchool:item.sourceSchool,sourceDocument:item.sourceDocument}))
- const rows=[...legacyRows,...currentRows].sort((left,right)=>left.cycle.academicYear.localeCompare(right.cycle.academicYear)||left.cycle.term.localeCompare(right.cycle.term)||left.course.code.localeCompare(right.course.code))
- const credits=rows.reduce((sum,item)=>sum+item.credits,0),points=rows.reduce((sum,item)=>sum+item.qualityPoints,0)
- return success(res,{student:{id:student.id,studentNumber:student.studentNumber,name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),grade:student.grade,photoUrl:await officialStudentPortrait(student),transcriptVisible:['student','parent'].includes(req.user!.role)?true:student.transcriptVisible},rows,summary:{credits,cumulativeGpa:credits?Number((points/credits).toFixed(2)):null,officialRecords:rows.length,legacyRecords:legacyRows.length},generatedAt:new Date().toISOString(),dataPolicy:rows.length?'APPROVED_AND_VERIFIED_LEGACY_RECORDS_ONLY':'NO_OFFICIAL_DATA'})
+ return loadOfficialTranscript(studentId)
+}
+academicRecordsRouter.get('/transcripts/:studentId/document',requireRoles('admin','staff','teacher','student','parent'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const data=await authorizedTranscript(req,res);if(!data.rows.length)throw new ApiError(409,'No approved or verified Grade 9–12 academic records are available for this learner.')
+ const document=await officialTranscriptDocument(data)
+ await prisma.auditLog.create({data:{actorId:await databaseActorId(req.user!.sub),action:'TRANSCRIPT_VERIFICATION_ISSUED',targetType:'OfficialTranscript',targetId:document.documentId,metadata:{fingerprint:document.fingerprint,studentId:data.student.id,studentNumber:data.student.studentNumber,studentName:data.student.name,sourceVersion:data.sourceVersion,language:'en'}}})
+ res.setHeader('Cache-Control','private, no-store');return success(res,document,'Official English transcript prepared')
+}))
+academicRecordsRouter.get('/transcripts/:studentId',requireRoles('admin','staff','teacher','student','parent'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const data=await authorizedTranscript(req,res);res.setHeader('Cache-Control','private, no-store');return success(res,data,'Verified Grade 9–12 academic record loaded')
 }))
