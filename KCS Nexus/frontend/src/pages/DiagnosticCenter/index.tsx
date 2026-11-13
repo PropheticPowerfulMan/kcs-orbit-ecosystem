@@ -103,7 +103,7 @@ const printReport = (submission: DiagnosticSubmission) => {
         <tr><th>Final comment</th><td>${submission.finalComment ?? ''}</td></tr>
       </tbody></table>
       <p class="muted">Academic Office visa / signature: ______________________</p>
-      <footer class="muted">Official KCS Nexus AI diagnostic report</footer>
+      <footer class="muted">Official KCS Nexus AI diagnostic report · www.kinshasachristianschool.org</footer>
     </body></html>`
   const win = window.open('', '_blank')
   if (!win) return

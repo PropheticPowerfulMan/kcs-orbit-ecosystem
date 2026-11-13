@@ -64,16 +64,44 @@ export async function attendanceWindow(year: string, term: string) {
   return attendanceWindowForCalendar(year, term, (await academicCalendars()).find(item => item.name === year))
 }
 
-export const attendanceWithSuspensions=(records:Array<{status:string;date:Date}>,suspensions:Array<{suspensionStart:Date|null;suspensionEnd:Date|null}>,window:{gte:Date;lte:Date})=>{
- const effective=[...records],registeredDays=new Set(records.map(item=>item.date.toISOString().slice(0,10)))
- for(const suspension of suspensions){
-  if(!suspension.suspensionStart||!suspension.suspensionEnd)continue
-  const cursor=new Date(Math.max(window.gte.getTime(),suspension.suspensionStart.getTime())),end=new Date(Math.min(window.lte.getTime(),suspension.suspensionEnd.getTime()))
-  cursor.setUTCHours(0,0,0,0)
-  for(;cursor<=end;cursor.setUTCDate(cursor.getUTCDate()+1)){
-   const weekday=cursor.getUTCDay(),key=cursor.toISOString().slice(0,10)
-   if(weekday!==0&&weekday!==6&&!registeredDays.has(key)){effective.push({status:'SUSPENDED',date:new Date(cursor)});registeredDays.add(key)}
+type ReportAttendanceRecord = { status: string; date: Date; period?: string | null; createdAt?: Date; updatedAt?: Date }
+
+// One official school day is counted once, even after a section transfer or a corrected register.
+export const attendanceWithSuspensions = (records: ReportAttendanceRecord[], suspensions: Array<{suspensionStart: Date | null; suspensionEnd: Date | null}>, window: Window) => {
+ const days = new Map<string, ReportAttendanceRecord>()
+ const timestamp = (row: ReportAttendanceRecord) => (row.updatedAt ?? row.createdAt ?? row.date).getTime()
+ const daily = (row: ReportAttendanceRecord) => !row.period || row.period.toLowerCase() === 'daily'
+ for (const row of records) {
+  if (row.date < window.gte || row.date > window.lte) continue
+  const day = row.date.toISOString().slice(0, 10), previous = days.get(day)
+  if (!previous || (daily(row) && !daily(previous)) || (daily(row) === daily(previous) && timestamp(row) >= timestamp(previous))) days.set(day, row)
+ }
+ for (const suspension of suspensions) {
+  if (!suspension.suspensionStart || !suspension.suspensionEnd) continue
+  const cursor = new Date(Math.max(window.gte.getTime(), suspension.suspensionStart.getTime()))
+  const end = new Date(Math.min(window.lte.getTime(), suspension.suspensionEnd.getTime()))
+  cursor.setUTCHours(0, 0, 0, 0)
+  for (; cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+   const weekday = cursor.getUTCDay(), day = cursor.toISOString().slice(0, 10)
+   if (weekday !== 0 && weekday !== 6) days.set(day, { ...days.get(day), date: new Date(cursor), status: 'SUSPENDED' })
   }
  }
- return effective
+ return [...days.values()].sort((left, right) => left.date.getTime() - right.date.getTime())
+}
+
+export function shouldRefreshReportCardAttendance(card: {attendanceSummary: unknown; publicationStatus?: string; academicCorrections?: unknown}) {
+ if (!card.attendanceSummary) return true
+ if (['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(card.publicationStatus ?? '')) return false
+ return !hasReportCardAttendanceOverride(card)
+}
+
+export function hasReportCardAttendanceOverride(card: {academicCorrections?: unknown}) {
+ const corrections = card.academicCorrections && typeof card.academicCorrections === 'object' && !Array.isArray(card.academicCorrections) ? card.academicCorrections as Record<string, unknown> : {}
+ // Legacy polished records retain their saved summary; explicit new teacher submissions reset this choice.
+ return corrections.attendanceOverride === true || (corrections.attendanceOverride === undefined && typeof corrections.correctedBy === 'string')
+}
+
+export function attendanceSummarySnapshotKey(value: unknown) {
+ const summary = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+ return JSON.stringify(['total','present','absent','late','excused','sick','suspended','attendanceRate'].map(key => summary[key] ?? null))
 }

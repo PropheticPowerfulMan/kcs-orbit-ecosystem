@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-report-print-parity-20261112-v15'
+const CACHE_NAME = 'kcs-nexus-report-comment-preview-20261113-v16'
 const SHELL = ['./', './manifest.webmanifest', './icons/nexus-192.png', './icons/nexus-512.png', './icons/nexus-apple-180.png']
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
