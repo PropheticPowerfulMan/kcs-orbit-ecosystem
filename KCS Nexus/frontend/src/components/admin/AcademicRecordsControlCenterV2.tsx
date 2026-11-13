@@ -367,14 +367,16 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
     setTranscriptLoadingId(studentId)
     try {
       const response = await academicRecordsAPI.transcript(studentId)
-      const data = response.data.data as Transcript
+      const received = response.data.data as Transcript
+      if (!received?.student || (received.student.id && received.student.id !== studentId)) throw new Error('Transcript identity mismatch')
+      const data = { ...received, student: { ...received.student, id: studentId } }
       setTranscript(data)
       sessionStorage.setItem(transcriptCacheKey(studentId), JSON.stringify({ data, savedAt: new Date().toISOString() }))
     } catch (error: any) {
       try {
         const cached = JSON.parse(sessionStorage.getItem(transcriptCacheKey(studentId)) || '{}')
-        if (!cached.data) throw new Error('no cache')
-        setTranscript(cached.data)
+        if (!cached.data?.student || (cached.data.student.id && cached.data.student.id !== studentId)) throw new Error('no matching cache')
+        setTranscript({ ...cached.data, student: { ...cached.data.student, id: studentId } })
         setNotice(tr('La synchronisation en direct du relevé est indisponible. Une copie sécurisée en lecture seule du ', 'Live transcript synchronization is unavailable. A secure read-only copy from ') + new Date(cached.savedAt).toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US') + tr(' est affichée ; les approbations et publications restent désactivées jusqu’à la reconnexion.', ' is displayed; approvals and publications remain disabled until reconnection.'))
       } catch {
         setNotice(error?.response?.data?.message ?? tr('Relevé indisponible.', 'Transcript unavailable.'))
