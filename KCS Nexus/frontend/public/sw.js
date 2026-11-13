@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-report-comment-preview-20261113-v16'
+const CACHE_NAME = 'kcs-nexus-homeroom-counter-20261113-v17'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
