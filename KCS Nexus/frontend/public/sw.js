@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-visibility-target-search-20261113-v20'
+const CACHE_NAME = 'kcs-nexus-visibility-target-search-20261113-v21'
 const SHELL = ['./', './manifest.webmanifest', './icons/nexus-192.png', './icons/nexus-512.png', './icons/nexus-apple-180.png']
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
