@@ -218,10 +218,11 @@ export default function TeacherWholeSchoolReportCards() {
   useEffect(() => {
     setTeacherComment(selected?.reportCard?.teacherComment ?? '');
     setConduct(selected?.reportCard?.conduct ?? '');
-    setHiddenCourseIds(selected?.reportCard?.hiddenCourseIds ?? []);
     setNotice('');
     setError('');
-  }, [selected?.id, term]);
+  }, [selected?.id, academicYear, term]);
+  const savedVisibilityKey=JSON.stringify(selected?.reportCard?.hiddenCourseIds??[]);
+  useEffect(()=>{setHiddenCourseIds(JSON.parse(savedVisibilityKey))},[selected?.id,academicYear,term,savedVisibilityKey]);
 
   const locked = periodReadOnly;
   const finalized = Boolean(selected?.reportCard && ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(selected.reportCard.publicationStatus));
@@ -271,7 +272,7 @@ export default function TeacherWholeSchoolReportCards() {
       const count = Number(response.data?.data?.updatedLearners ?? visibilityStudentIds.length);
       setVisibilityOpen(false);
       await load();
-      setNotice(`${visibilityAction === 'HIDE' ? 'Course visibility removed from' : 'Course visibility restored for'} ${count} learner(s). Official averages were recalculated.`);
+      setNotice(tr(`${count} élève(s) mis à jour. Les cours ${visibilityAction==='HIDE'?'masqués sont exclus':'restaurés sont réintégrés'} dans la moyenne officielle.`,`${count} learner(s) updated. ${visibilityAction==='HIDE'?'Hidden courses are excluded from':'Restored courses are included in'} the official average.`));
     } catch (reason: any) {
       setError(reason?.response?.data?.message ?? reason?.message ?? 'The course-visibility operation failed.');
     } finally {
@@ -312,9 +313,11 @@ export default function TeacherWholeSchoolReportCards() {
       }
       setSaveStep('verifying');
       const verification = await academicRecordsAPI.teacherReportDashboard({ academicYear, term });
-      const confirmed = (verification.data?.data as Dashboard)?.learners?.find(item => item.id === selected.id)?.reportCard;
+      const confirmedLearner=(verification.data?.data as Dashboard)?.learners?.find(item=>item.id===selected.id);
+      const confirmed=confirmedLearner?.reportCard;
       const expected = submission ?? draft;
       if (confirmed?.id !== expected?.id || confirmed?.publicationStatus !== expected?.publicationStatus || confirmed?.teacherComment !== teacherComment.trim() || confirmed?.conduct !== conduct.trim()) throw new Error('The server readback did not confirm this report-card save. Reload the selected period before retrying.');
+      if(JSON.stringify([...(confirmed?.hiddenCourseIds??[])].sort())!==JSON.stringify([...hiddenCourseIds].sort())||(visibleAverage!==null&&(!Number.isFinite(confirmedLearner?.average)||Math.abs(Number(confirmedLearner?.average)-visibleAverage)>0.005)))throw new Error(tr('La vérification ne confirme pas les cours masqués et la moyenne recalculée. Actualisez avant de réessayer.','Readback did not confirm hidden courses and the recalculated average. Refresh before retrying.'));
       const savedCard = expected;
       setDashboard((current) => {
         if (!current || !savedCard) return current;
@@ -745,6 +748,7 @@ export default function TeacherWholeSchoolReportCards() {
                     Conduct and learning habits
                     <input disabled={!selected.isHomeroomStudent || locked} className={`${field} disabled:cursor-not-allowed disabled:opacity-60`} maxLength={500} value={conduct} onChange={(event) => setConduct(event.target.value)} placeholder="Conduct, responsibility, collaboration, punctuality..." />
                   </label>
+                  {selected.isHomeroomStudent && allVisibleSubmitted && hiddenCourseIds.length>0 && <p data-report-visibility-summary role="status" className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-100">{tr('Bulletin prêt : seuls les cours visibles seront soumis.','Report card ready: only visible courses will be submitted.')} {visibleSubjects.length} {tr('cours inclus','included course(s)')} · {hiddenCourseIds.length} {tr('cours masqué(s)','hidden course(s)')} · {tr('Moyenne recalculée : ','Recalculated average: ')}<b>{visibleAverage?.toFixed(2)}%</b></p>}
                   {selected.isHomeroomStudent && !allVisibleSubmitted && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">Submission remains locked: {visibleSubjects.length - visibleSubmittedCount} visible subject teacher(s) still need to submit final grades.</p>}
                   {selected.isHomeroomStudent && finalized && <p className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-kcs-blue-900 dark:border-sky-700 dark:bg-kcs-blue-900 dark:text-sky-100">{language === 'fr' ? 'Une nouvelle soumission remplace ce bulletin et le remet en attente de validation par la Super Administration.' : 'A new submission replaces this report card and returns it to Super Administration for approval.'}</p>}
                   {selected.isHomeroomStudent && (
