@@ -39,7 +39,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   try {
     const token = header.replace("Bearer ", "");
     const payload = verifyToken(token);
-    if (payload.role === 'STUDENT' && !await studentUserAccess(payload.userId,payload.organizationId)) return res.status(403).json({message:'Student account is inactive or archived'});
+    if (payload.organizationId && !await studentUserAccess(payload.userId,payload.organizationId)) return res.status(403).json({message:'Student account is inactive or archived'});
     req.user = payload;
     next();
   } catch {

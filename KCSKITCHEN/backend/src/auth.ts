@@ -1,7 +1,10 @@
 import type { NextFunction, Request, Response } from 'express'
+import {createAccessVerifier} from './ecosystemAccessVerifier.js'
 import jwt from 'jsonwebtoken'
 import type { KitchenRole, PersonType } from '@prisma/client'
 import { env } from './config.js'
+
+const verifyEcosystemAccess=createAccessVerifier({url:env.ORBIT_API_URL,key:env.ORBIT_API_KEY,organization:env.ORBIT_ORGANIZATION_ID,app:'KCS_KITCHEN'})
 
 export type KitchenIdentity = {
   userId: string
@@ -25,6 +28,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
   if (!header?.startsWith('Bearer ')) return res.status(401).json({ message: 'Authentication required' })
   try {
     req.kitchenUser = jwt.verify(header.slice(7), env.JWT_SECRET, { issuer: 'kcs-kitchen' }) as KitchenIdentity
+    await verifyEcosystemAccess([req.kitchenUser.userId,req.kitchenUser.orbitPersonId,req.kitchenUser.email])
     if (req.kitchenUser.personType === 'STUDENT') {
       const url = new URL('/api/integration/read/identity-access/'+encodeURIComponent(req.kitchenUser.orbitPersonId),env.ORBIT_API_URL)
       url.searchParams.set('organizationId',env.ORBIT_ORGANIZATION_ID)
@@ -33,7 +37,8 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       if (!(await response.json() as {allowed?:boolean}).allowed) return res.status(403).json({message:'Student account is inactive or archived'})
     }
     next()
-  } catch {
+  } catch(error:any) {
+    if(error?.status===403||error?.status===503)return res.status(error.status).json({message:error.message})
     res.status(401).json({ message: 'Invalid or expired session' })
   }
 }

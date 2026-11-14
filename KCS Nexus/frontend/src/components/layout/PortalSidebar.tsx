@@ -156,6 +156,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
     case 'admin':
       return [
         ...base,
+        { to: '/admin/account-access', label: language === 'fr' ? 'Accès à l’écosystème' : 'Ecosystem access', icon: Ban },
         { to: '/admin/students', label: t('portalNav.students'), icon: GraduationCap },
         { to: '/admin/parents', label: t('portalNav.parents'), icon: Users },
         { to: '/admin/attendance', label: t('portalNav.staffAttendance'), icon: ClipboardCheck },
@@ -172,7 +173,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/admin/pre-enrollments', label: language === 'fr' ? 'Préinscriptions' : 'Pre-enrollment', icon: UserPlus },
         { to: '/admin/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
         { to: '/admin/teacher-reports', label: language === 'fr' ? 'Rapports des enseignants' : 'Teacher reports', icon: FileSpreadsheet },
-        { to: '/admin/news', label: t('portalNav.newsEvents'), icon: FileText },
+        { to: '/admin/site', label: language === 'fr' ? 'Gestion du site web' : 'Website management', icon: FileText },
         { to: '/admin/forum-insights', label: t('portalNav.parentAiReport'), icon: Brain },
         { to: '/admin/student-forum-insights', label: t('portalNav.studentAiReport'), icon: Shield },
         { to: '/portal/parent/forum', label: t('portalNav.parentForum'), icon: MessageSquare },

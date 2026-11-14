@@ -5,8 +5,17 @@ import { readKcsNexusFamilies, readSharedDirectory } from "../controllers/integr
 import { asyncHandler } from "../middleware/async-handler";
 import { requireAnyIntegrationAccess, requireIntegrationAccess } from "../middleware/auth";
 
+import {accessSnapshot,saveAccessPolicy} from '../services/ecosystem-access';
+import {z} from 'zod';
 import { identityAccess } from '../services/student-access';
 const router = Router();
+router.get('/account-access/snapshot',requireAnyIntegrationAccess(AppSlug.KCS_NEXUS,AppSlug.KCS_KITCHEN,AppSlug.KCS_SENTINEL,AppSlug.EDUPAY,AppSlug.EDUSYNCAI,AppSlug.SAVANEX),asyncHandler(async(req,res)=>{
+ const organizationId=z.string().trim().min(1).parse(req.query.organizationId);res.setHeader('Cache-Control','private, no-store');return res.json(await accessSnapshot(organizationId));
+}));
+router.put('/account-access',requireIntegrationAccess(AppSlug.KCS_NEXUS),asyncHandler(async(req,res)=>{
+ const payload=z.object({organizationId:z.string().min(1),identityId:z.string().min(1).max(180),identifiers:z.array(z.string().trim().min(1).max(254)).min(1).max(25),blocked:z.boolean(),reason:z.string().trim().min(3).max(500),actor:z.string().min(1).max(180),expectedBlocked:z.boolean().optional()}).strict().parse(req.body);
+ try{return res.json(await saveAccessPolicy(payload))}catch(error:any){if(error?.code==='ACCESS_POLICY_STALE')return res.status(409).json({message:'Access policy changed. Reload before retrying.'});throw error};
+}));
 router.get('/identity-access/:id', requireAnyIntegrationAccess(AppSlug.KCS_NEXUS,AppSlug.KCS_KITCHEN,AppSlug.KCS_SENTINEL), asyncHandler(async(req,res)=>{
   const organizationId = typeof req.query.organizationId === 'string' ? req.query.organizationId : '';
   if (!organizationId) return res.status(400).json({message:'Organization is required'});

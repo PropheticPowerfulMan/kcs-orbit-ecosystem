@@ -38,7 +38,7 @@ export async function register(req: Request, res: Response) {
     }
   });
 
-  if (user.role === 'STUDENT' && !await studentUserAccess(user.id,user.organizationId)) return res.status(403).json({message:'Student account is inactive or archived'});
+  if (user.organizationId && !await studentUserAccess(user.id,user.organizationId)) return res.status(403).json({message:'Student account is inactive or archived'});
   const token = signToken({ userId: user.id, role: user.role, organizationId: user.organizationId });
   return res.status(201).json({ user, token });
 }
@@ -52,7 +52,7 @@ export async function login(req: Request, res: Response) {
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) return res.status(401).json({ message: "Invalid credentials" });
 
-  if (user.role === 'STUDENT' && !await studentUserAccess(user.id,user.organizationId)) return res.status(403).json({message:'Student account is inactive or archived'});
+  if (user.organizationId && !await studentUserAccess(user.id,user.organizationId)) return res.status(403).json({message:'Student account is inactive or archived'});
   const token = signToken({ userId: user.id, role: user.role, organizationId: user.organizationId });
 
   return res.json({

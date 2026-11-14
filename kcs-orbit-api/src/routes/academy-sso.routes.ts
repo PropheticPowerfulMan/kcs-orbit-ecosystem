@@ -74,7 +74,7 @@ router.post("/service-tickets", async (req, res, next) => {
     if (!user.organizationId) return res.status(404).json({ message: "Orbit organization not found" });
     const role = user.role === "STUDENT" ? "STUDENT" : user.role === "TEACHER" ? "TEACHER" : user.role === "ADMIN" ? "ADMIN" : user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : null;
     if (!role || !isAcademyRole(role)) return res.status(403).json({ message: "Academy role denied" });
-    if (user.role === 'STUDENT' && user.id === parsed.data.userId && !await studentUserAccess(user.id,user.organizationId)) return res.status(403).json({message:'Student account is archived or inactive'});
+    if (user.id === parsed.data.userId && !await studentUserAccess(user.id,user.organizationId)) return res.status(403).json({message:'Student account is archived or inactive'});
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
     if (requiredOrganization && user.organizationId !== requiredOrganization) return res.status(403).json({ message: "Academy organization denied" });
     const ticket = randomBytes(32).toString("base64url"); const expiresAt = new Date(Date.now() + 60_000);
@@ -90,7 +90,7 @@ router.post("/exchange", async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ message: "Invalid launch ticket" });
     const record = await prisma.academyLaunchTicket.findUnique({ where: { tokenHash: hashToken(parsed.data.ticket) }, include: { user: { select: { fullName: true, email: true } } } });
     if (!record || record.usedAt || record.expiresAt <= new Date()) return res.status(401).json({ message: "Launch ticket expired or already used" });
-    if (record.role === 'STUDENT' && !await studentUserAccess(record.userId,record.organizationId)) return res.status(403).json({message:'Student account is archived or inactive'});
+    if (!await studentUserAccess(record.userId,record.organizationId)) return res.status(403).json({message:'Student account is archived or inactive'});
     if (!isAcademyRole(record.role)) return res.status(403).json({ message: "Academy role denied" });
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
     if (requiredOrganization && record.organizationId !== requiredOrganization) return res.status(403).json({ message: "Academy organization denied" });
@@ -109,7 +109,7 @@ router.post("/validate", async (req, res, next) => {
     if (!parsed.success) return res.status(401).json({ message: "Invalid Academy session" });
     const session = await prisma.academySession.findUnique({ where: { tokenHash: hashToken(parsed.data.token) }, include: { user: { select: { fullName: true, email: true } } } });
     if (!session || session.revokedAt || session.expiresAt <= new Date()) return res.status(401).json({ message: "Academy session expired or revoked" });
-    if (session.role === 'STUDENT' && !await studentUserAccess(session.userId,session.organizationId)) return res.status(403).json({message:'Student account is archived or inactive'});
+    if (!await studentUserAccess(session.userId,session.organizationId)) return res.status(403).json({message:'Student account is archived or inactive'});
     if (!isAcademyRole(session.role)) return res.status(403).json({ message: "Academy role denied" });
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
     if (requiredOrganization && session.organizationId !== requiredOrganization) return res.status(403).json({ message: "Academy organization denied" });

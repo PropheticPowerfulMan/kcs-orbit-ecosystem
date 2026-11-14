@@ -8,6 +8,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.ecosystem_access import ensure_ecosystem_access
 from app.core.security import create_access_token, get_current_user, get_password_hash, verify_password
 from app.db.session import get_db
 from app.models.analytics import ActivityLog
@@ -317,6 +318,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     is_federated_user = bool(user) and is_shared_orbit_identity(identifier)
 
     if user and not is_federated_user and verify_password(payload.password, user.hashed_password):
+        ensure_ecosystem_access([user.email,user.access_code])
         token = create_access_token(subject=str(user.id))
         db.add(ActivityLog(actor_id=user.id, event_type="user_login", department=user.department))
         db.commit()
@@ -336,6 +338,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     user = upsert_external_user(db, external_user, payload.password)
 
+    ensure_ecosystem_access([user.email,user.access_code])
     token = create_access_token(subject=str(user.id))
     db.add(ActivityLog(actor_id=user.id, event_type="user_login", department=user.department))
     db.commit()
