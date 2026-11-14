@@ -272,11 +272,11 @@ const NewsPage = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Posts Grid */}
-            <div className="lg:col-span-2">
+            <div data-site-exclude className="lg:col-span-2">
               <AnimSection>
                 <div className="grid sm:grid-cols-2 gap-5">
                   {filtered.slice(1).map((post) => (
-                    <motion.article
+                    <motion.article data-site-exclude
                       key={post.id}
                       variants={fadeUp}
                       whileHover={{ y: -5 }}

@@ -53,7 +53,7 @@ const sendJson = (response, status, body, origin) => {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": origin || appUrl,
     "Access-Control-Allow-Methods": "POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Vary": "Origin",
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": "no-store"
@@ -222,6 +222,33 @@ const server = http.createServer(async (request, response) => {
   const corsOrigin = allowedOrigins.has(origin) ? origin : appUrl;
   const pathname = new URL(request.url || "/", "http://lesson-plan.local").pathname;
   if (request.method === "OPTIONS") return sendJson(response, 204, {}, corsOrigin);
+  if (request.method === 'POST' && pathname === '/api/ecosystem/account-access') {
+    try {
+      const bearer=String(request.headers.authorization||'');
+      if(!bearer.startsWith('Bearer '))return sendJson(response,401,{error:'Super Administration authorization required.'},corsOrigin);
+      const verified=await fetch(new URL('/api/auth/me',process.env.NEXUS_API_URL),{headers:{authorization:bearer},signal:AbortSignal.timeout(8000)}),identity=await verified.json().catch(()=>null);
+      if(!verified.ok||identity?.data?.id!=='configured-superadmin')return sendJson(response,403,{error:'Super Administration authorization required.'},corsOrigin);
+      const body=await readJson(request),email=String(body.email||'').trim().toLowerCase();
+      if(!email||typeof body.blocked!=='boolean')return sendJson(response,400,{error:'Exact email and blocked flag required.'},corsOrigin);
+      const admin=requireSupabaseAdmin(),user=await findAuthUserByEmail(email);
+      if(!user)return sendJson(response,200,{matched:false,changed:false},corsOrigin);
+      const previous=user.app_metadata?.kcs_orbit_access;
+      const readiness=await admin.rpc('kcs_orbit_access_policy_ready');const databasePolicyReady=readiness.error===null&&readiness.data===true;
+      if(!body.blocked&&!previous?.blocked){if(user.banned_until&&Date.parse(user.banned_until)>Date.now())return sendJson(response,409,{error:'An existing source ban is not owned by this workflow.'},corsOrigin);return sendJson(response,200,{matched:true,blocked:false,changed:false,databasePolicyReady},corsOrigin)}
+      const {data:profiles,error:profileError}=await admin.from('profiles').select('id,status').eq('id',user.id);
+      if(profileError)throw profileError;
+      const initialStatus=previous?.previousStatus??profiles?.[0]?.status??'inactive';
+      const previousBanUntil=previous?.previousBanUntil??user.banned_until??null;const restoredBan=previousBanUntil&&Date.parse(previousBanUntil)>Date.now()?Math.ceil((Date.parse(previousBanUntil)-Date.now())/3600000)+'h':'none';
+      const {error:banError}=await admin.auth.admin.updateUserById(user.id,{ban_duration:body.blocked?'876000h':restoredBan,app_metadata:{...user.app_metadata,kcs_orbit_access:{blocked:body.blocked,previousStatus:initialStatus,previousBanUntil,updatedAt:new Date().toISOString()}}});
+      if(banError)throw banError;
+      const {error:updateError}=await admin.from('profiles').update({status:body.blocked?'inactive':initialStatus,updated_at:new Date().toISOString()}).eq('id',user.id);
+      if(updateError)throw updateError;
+      return sendJson(response,200,{matched:true,blocked:body.blocked,passwordUnchanged:true,databasePolicyReady},corsOrigin);
+    }catch(error){return sendJson(response,error.status||503,{error:'Institutional access synchronization could not be confirmed.'},corsOrigin)}
+  }
+  if(request.method==='POST'&&pathname==='/api/ecosystem/session-check'){
+    try{const bearer=String(request.headers.authorization||'').replace(/^Bearer /,'');if(!bearer)return sendJson(response,401,{allowed:false},corsOrigin);const admin=requireSupabaseAdmin();const {data,error}=await admin.auth.getUser(bearer);if(error||!data.user)return sendJson(response,401,{allowed:false},corsOrigin);const {data:identity,error:lookupError}=await admin.auth.admin.getUserById(data.user.id);if(lookupError)throw lookupError;const blocked=Boolean(identity.user?.app_metadata?.kcs_orbit_access?.blocked)||Boolean(identity.user?.banned_until&&Date.parse(identity.user.banned_until)>Date.now());return sendJson(response,blocked?403:200,{allowed:!blocked},corsOrigin)}catch{return sendJson(response,503,{error:'Institutional verification temporarily unavailable.'},corsOrigin)}
+  }
   if (request.method === "GET" && pathname === "/api/health") {
     return sendJson(response, 200, {
       status: "ok",

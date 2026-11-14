@@ -7,6 +7,7 @@ from jwt import PyJWTError
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
+from app.core.ecosystem_access import ensure_ecosystem_access
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import Role, User
@@ -50,6 +51,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(User).filter(User.id == int(user_id)).first()
     if not user:
         raise credentials_exception
+    ensure_ecosystem_access([user.email,user.access_code])
     return user
 
 

@@ -1,3 +1,4 @@
+import AdminWorkspaceTheme from '@/components/admin/AdminWorkspaceTheme'
 import PortalDialogTheme from '@/components/shared/PortalDialogTheme'
 import ParentMeetingVerification from '@/components/shared/ParentMeetingVerification'
 import { useUIStore } from '@/store/uiStore'
@@ -190,7 +191,7 @@ const App = () => {
   const location = useLocation()
   return (
     <>
-      <PortalDialogTheme />
+      <AdminWorkspaceTheme/><PortalDialogTheme />
       <RouteScrollReset />
       <GlobalTextTranslator />
       <RouteErrorBoundary routeKey={location.pathname}>

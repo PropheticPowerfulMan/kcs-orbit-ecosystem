@@ -28,7 +28,7 @@ type Schedule = {
 const iso = (date: Date) => date.toISOString().slice(0, 10)
 const addDays = (days: number) => { const date = new Date(); date.setUTCDate(date.getUTCDate() + days); return iso(date) }
 const fullName = (user: Schedule['student']['user']) => [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')
-const card = 'rounded-2xl border border-sky-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/55'
+const card = 'nexus-workspace-card rounded-2xl border border-sky-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/55'
 
 export default function ShiningStudentsPage() {
   const user = useAuthStore((state) => state.user)
@@ -112,7 +112,7 @@ export default function ShiningStudentsPage() {
     EXCUSED: tr('Excusé / à reprogrammer', 'Excused / reschedule'),
   }[status])
 
-  return <div className="portal-shell flex"><PortalSidebar/><main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 px-4 py-6 pt-20 dark:bg-kcs-blue-950 sm:px-6 lg:px-8 lg:pt-8">
+  return <div className="portal-shell flex" data-portal-workspace="shining-students"><PortalSidebar/><main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 px-4 py-6 pt-20 dark:bg-kcs-blue-950 sm:px-6 lg:px-8 lg:pt-8">
     <div className="portal-edge-header w-full min-w-0 max-w-none space-y-6">
       {ordinaryAdministrator ? <AdministratorPortalHeader/> : <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -121,13 +121,13 @@ export default function ShiningStudentsPage() {
               {getLocalizedGreeting(language)}, {user?.firstName || 'Super'}
             </h1>
             <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
-              {getLocalizedPortalDate(language)} - {language === 'fr' ? 'Vue d’ensemble des études, admissions, équipes et alertes institutionnelles.' : 'A high-level view of academics, admissions, staff and institutional alerts.'}
+              {getLocalizedPortalDate(language)} · {language === 'fr' ? 'Shining Student : valoriser les talents, les progrès et la participation de chaque élève.' : 'Shining Student: celebrating each learner’s talents, progress and participation.'}
             </p>
           </div>
           <div className="w-fit rounded-2xl border border-white/60 bg-white/65 px-4 py-2 text-sm font-semibold text-kcs-blue-800 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100">{language === 'fr' ? 'Vue institutionnelle en direct' : 'Live production snapshot'}</div>
         </div>
       </div>}
-            <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-800 to-sky-700 p-6 text-white shadow-xl">
+            <header className="nexus-shining-hero overflow-hidden rounded-3xl bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-800 to-sky-700 p-6 text-white shadow-xl">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div><p className="text-xs font-black uppercase tracking-[0.2em] text-kcs-gold-300">KCS · Shining Student</p><h1 className="mt-2 text-3xl font-black">{tr('Prendre la parole, inspirer toute l’école', 'Speak up and inspire the whole school')}</h1><p className="mt-2 max-w-3xl text-sm text-sky-100">{tr('Deux élèves par jour scolaire : un du Lower School et un du Middle/Upper School. La rotation est équitable, vérifiable et exclut les week-ends ainsi que les dates fermées.', 'Two students per school day: one from Lower School and one from Middle/Upper School. Selection is fair, auditable and excludes weekends and closed dates.')}</p></div>
           <div className="rounded-2xl bg-white/10 px-5 py-4 backdrop-blur"><p className="text-xs uppercase text-sky-200">{tr('Passages à venir', 'Upcoming presentations')}</p><p className="mt-1 text-4xl font-black">{upcoming.length}</p></div>

@@ -690,7 +690,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   if (user?.passwordHash && !isFederatedUser) {
     const isValid = await bcrypt.compare(payload.password, user.passwordHash)
     if (isValid) {
-      if (user.role === 'PARENT' && user.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
+      if (user.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
       if (user.twoFactorEnabled) {
         if (!user.twoFactorSecret || !payload.twoFactorCode || !verifyTotp(user.twoFactorSecret, payload.twoFactorCode)) {
           throw new ApiError(428, payload.twoFactorCode ? 'Invalid two-factor authentication code' : 'Two-factor authentication code required')
@@ -737,7 +737,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   await assertAccountAccess(effectiveUser.id)
   await recordSuccessfulLogin(effectiveUser)
 
-  if (effectiveUser.role === 'PARENT' && effectiveUser.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
+  if (effectiveUser.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
 
   const token = signAccessToken(effectiveUser)
   const refreshToken = signRefreshToken(effectiveUser)
@@ -785,7 +785,7 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
   }
 
   const synchronizedUser = await refreshCanonicalIdentity(storedToken.user)
-  if (synchronizedUser.role === 'PARENT' && synchronizedUser.accountBlockedAt) {
+  if (synchronizedUser.accountBlockedAt) {
     await prisma.refreshToken.deleteMany({ where: { userId: synchronizedUser.id } })
     throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
   }

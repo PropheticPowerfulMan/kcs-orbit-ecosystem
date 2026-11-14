@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
+import PublicSiteContent from '@/components/shared/PublicSiteContent'
 import Header from './Header'
 import Footer from './Footer'
 import AIChat from '@/components/shared/AIChat'
@@ -26,7 +27,8 @@ const Layout = () => {
         <Outlet />
       </main>
       <Footer />
-      <AIChat />
+      <div data-site-exclude><AIChat /></div>
+      <PublicSiteContent/>
     </div>
   )
 }

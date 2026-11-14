@@ -390,3 +390,51 @@ def archive_student_access_view(request):
         user.save(update_fields=['is_active'])
         Student.objects.filter(user=user).update(is_active=False)
     return Response({'archived': 1})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def ecosystem_account_access_view(request):
+    import secrets
+    from django.db import transaction
+    key = str(request.headers.get('x-api-key', ''))
+    expected = str(settings.KCS_NEXUS_AUTH_KEY or '')
+    if not key or not expected or not secrets.compare_digest(key, expected):
+        return Response({'detail': 'Unauthorized access policy request.'}, status=401)
+    identifiers = request.data.get('identifiers')
+    blocked = request.data.get('blocked')
+    if not isinstance(identifiers, list) or not 1 <= len(identifiers) <= 10 or not isinstance(blocked, bool) or any(not isinstance(v, str) or not v.strip() or len(v) > 254 for v in identifiers):
+        return Response({'detail': 'Explicit identifiers and blocked flag are required.'}, status=400)
+    query = Q(pk__isnull=True)
+    for identifier in identifiers:
+        query |= Q(email__iexact=identifier.strip()) | Q(access_code__iexact=identifier.strip()) | Q(username__iexact=identifier.strip()) | Q(kcs_card_id__iexact=identifier.strip())
+    with transaction.atomic():
+        matches = list(User.objects.select_for_update().filter(query)[:2])
+        if not matches:
+            return Response({'matched': False, 'changed': False})
+        if len(matches) != 1:
+            return Response({'detail': 'Ambiguous source account; no access was changed.'}, status=409)
+        user = matches[0]
+        if user.is_superuser:
+            return Response({'detail': 'The source superuser is protected.'}, status=409)
+        if not blocked and ((hasattr(user, 'student_profile') and not user.student_profile.is_active) or (hasattr(user, 'teacher_profile') and not user.teacher_profile.is_active)):
+            return Response({'detail': 'An archived or inactive school profile cannot be reactivated through an access toggle.'}, status=409)
+        import json
+        from django.contrib.admin.models import LogEntry, CHANGE
+        from django.contrib.contenttypes.models import ContentType
+        content_type = ContentType.objects.get_for_model(User)
+        previous_log = LogEntry.objects.filter(content_type=content_type, object_id=str(user.pk), change_message__startswith='KCS_ORBIT_ACCESS:').order_by('-action_time', '-id').first()
+        previous = json.loads(previous_log.change_message.split(':', 1)[1]) if previous_log else None
+        if not blocked and not previous:
+            return Response({'matched': True, 'changed': False, 'blocked': not user.is_active})
+        original_active = previous['previousActive'] if previous else user.is_active
+        desired_active = False if blocked else original_active
+        changed = user.is_active != desired_active
+        actor = User.objects.filter(is_superuser=True, is_active=True).first() or User.objects.filter(role=User.ROLE_ADMIN, is_active=True).first()
+        if not actor:
+            return Response({'detail': 'Source audit authority unavailable; no changes made.'}, status=503)
+        if changed:
+            user.is_active = desired_active
+            user.save(update_fields=['is_active', 'updated_at'])
+        LogEntry.objects.create(user=actor, content_type=content_type, object_id=str(user.pk), object_repr=str(user)[:200], action_flag=CHANGE, change_message='KCS_ORBIT_ACCESS:' + json.dumps({'blocked': blocked, 'previousActive': original_active}))
+    return Response({'matched': True, 'blocked': blocked, 'changed': changed, 'passwordUnchanged': True, 'previousStatePreserved': True})

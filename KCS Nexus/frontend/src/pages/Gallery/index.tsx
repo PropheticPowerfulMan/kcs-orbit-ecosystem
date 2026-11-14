@@ -181,7 +181,7 @@ const GalleryPage = () => {
         <div className="absolute inset-0 grid grid-cols-3 gap-3 p-3 opacity-25">
           {featuredItems.map((item) => (
             <div
-              key={item.id}
+              data-site-exclude key={item.id}
               className="rounded-3xl bg-cover bg-center"
               style={{ backgroundImage: `url(${item.image})` }}
             />
@@ -260,7 +260,7 @@ const GalleryPage = () => {
             <motion.div variants={stagger} className="columns-1 md:columns-2 xl:columns-3 gap-6 space-y-6">
               {filteredItems.map((item) => (
                 <motion.button
-                  key={item.id}
+                  data-site-exclude key={item.id}
                   variants={fadeUp}
                   whileHover={{ y: -6 }}
                   onClick={() => setSelectedItem(item)}
@@ -307,7 +307,7 @@ const GalleryPage = () => {
                 .filter((item) => item.type === 'video')
                 .map((item) => (
                   <motion.button
-                    key={item.id}
+                    data-site-exclude key={item.id}
                     variants={fadeUp}
                     onClick={() => setSelectedItem(item)}
                     className="group overflow-hidden rounded-3xl bg-white dark:bg-kcs-blue-900/50 border border-gray-100 dark:border-kcs-blue-800 text-left hover:shadow-kcs transition-all"
