@@ -21,7 +21,7 @@ const escapeHtml = (value: unknown) =>
 
 const safeImage = (value?: string | null) => /^data:image\/(?:png|jpeg|jpg|webp);base64,[a-zA-Z0-9+/=\s]+$/.test(value || '') ? value! : ''
 let artwork: Promise<{ logo: string; fontCss: string }> | undefined
-async function documentArtwork() {
+export async function documentArtwork() {
   artwork ??= Promise.all([readFile(join(process.cwd(), 'assets', 'kcs-watermark.jpg')), ...['selawk.ttf', 'selawkb.ttf'].map(file => readFile(join(process.cwd(), 'assets', 'report-fonts', file)))]).then(([logo, regular, bold]) => ({
     logo: 'data:image/jpeg;base64,' + logo.toString('base64'),
     fontCss: `@font-face{font-family:"KCS Report";font-style:normal;font-weight:100 599;src:url(data:font/ttf;base64,${regular.toString('base64')}) format('truetype')}@font-face{font-family:"KCS Report";font-style:normal;font-weight:600 1000;src:url(data:font/ttf;base64,${bold.toString('base64')}) format('truetype')}`,

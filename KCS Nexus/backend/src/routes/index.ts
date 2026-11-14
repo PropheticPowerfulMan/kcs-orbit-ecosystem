@@ -1,3 +1,4 @@
+import { documentDownloadRouter } from './document-download.routes.js'
 import {academicVisibilityResponseGuard} from '../middleware/academicVisibility.js'
 import {academicVisibilityRouter} from './academic-visibility.routes.js'
 import { Router } from 'express'
@@ -42,6 +43,7 @@ router.use(academicVisibilityResponseGuard)
 router.use('/academic-visibility',academicVisibilityRouter)
 
 router.use('/auth', authRouter)
+router.use('/documents', documentDownloadRouter)
 router.use('/academy', academyRouter)
 router.use('/lesson-plan', lessonPlanRouter)
 router.use('/student-government', studentGovernmentRouter)

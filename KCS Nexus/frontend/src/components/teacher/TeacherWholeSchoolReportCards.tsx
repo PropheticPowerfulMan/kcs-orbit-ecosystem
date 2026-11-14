@@ -57,6 +57,7 @@ type LearnerRecord = {
     principalStatus: string;
     publicationStatus: string;
     hiddenCourseIds?: string[];
+    submissionHistory?: { count:number; firstSubmittedAt:string|null; lastSubmittedAt:string|null; receipts:Array<{id:string;submittedAt:string}> };
   } | null;
 };
 
@@ -97,7 +98,8 @@ const workflowLabel = (learner: LearnerRecord) => {
   if (status === 'DRAFT') return 'Main-teacher draft';
   return learner.allSubjectsSubmitted ? 'Ready for main teacher' : 'Waiting for subject grades';
 };
-const reportDashboardCacheKey = (userId: string, academicYear: string, term: string) => 'kcs:nexus:teacher-report-card:v2:' + userId + ':' + academicYear + ':' + term;
+const traceDate = (value:string|null|undefined,language:string) => value ? new Date(value).toLocaleString(language==='fr'?'fr-FR':'en-GB',{timeZone:'Africa/Kinshasa'}) : '—';
+const reportDashboardCacheKey = (userId: string, academicYear: string, term: string) => 'kcs:nexus:teacher-report-card:v3:' + userId + ':' + academicYear + ':' + term;
 
 const readReportDashboardCache = (userId: string, academicYear: string, term: string): Dashboard | null => {
   if (typeof window === 'undefined' || !userId) return null;
@@ -318,6 +320,7 @@ export default function TeacherWholeSchoolReportCards() {
       const expected = submission ?? draft;
       if (confirmed?.id !== expected?.id || confirmed?.publicationStatus !== expected?.publicationStatus || confirmed?.teacherComment !== teacherComment.trim() || confirmed?.conduct !== conduct.trim()) throw new Error('The server readback did not confirm this report-card save. Reload the selected period before retrying.');
       if(JSON.stringify([...(confirmed?.hiddenCourseIds??[])].sort())!==JSON.stringify([...hiddenCourseIds].sort())||(visibleAverage!==null&&(!Number.isFinite(confirmedLearner?.average)||Math.abs(Number(confirmedLearner?.average)-visibleAverage)>0.005)))throw new Error(tr('La vérification ne confirme pas les cours masqués et la moyenne recalculée. Actualisez avant de réessayer.','Readback did not confirm hidden courses and the recalculated average. Refresh before retrying.'));
+      if(submit&&(!confirmed?.submissionHistory||confirmed.submissionHistory.count<1||confirmed.submissionHistory.count<(expected.submissionHistory?.count??1)))throw new Error(tr('La trace de réception n’est pas encore confirmée. Actualisez ce bulletin avant de réessayer.','The submission receipt has not been confirmed. Refresh this report card before retrying.'));
       const savedCard = expected;
       setDashboard((current) => {
         if (!current || !savedCard) return current;
@@ -334,6 +337,7 @@ export default function TeacherWholeSchoolReportCards() {
                     principalStatus: savedCard.principalStatus,
                     publicationStatus: savedCard.publicationStatus,
                     hiddenCourseIds,
+                    submissionHistory: confirmed?.submissionHistory,
                   },
                   average: visibleAverage,
                   expectedSubjectCount: visibleSubjects.length,
@@ -347,8 +351,9 @@ export default function TeacherWholeSchoolReportCards() {
         return next;
       });
       const confirmation = submit ? submission?.replacesPreviousSubmission ? tr('La soumission précédente a été remplacée dans la file de contrôle de la Super Administration.', 'The previous submission was replaced in the Super Administration review queue.') : tr('La réception du bulletin complet est confirmée dans la file de contrôle de la Super Administration.', 'The complete report card is confirmed in the Super Administration review queue.') : tr('Le brouillon est enregistré et confirmé dans le registre officiel Nexus.', 'The main-teacher draft is saved and confirmed in the official Nexus register.');
-      setNotice(confirmation);
-      window.dispatchEvent(new CustomEvent('ecosystem:mutation-success', { detail: { message: confirmation } }));
+      const receiptMessage=submit?confirmation+' '+tr('Envoi n° ','Submission #')+String(confirmed?.submissionHistory?.count??''):confirmation;
+      setNotice(receiptMessage);
+      window.dispatchEvent(new CustomEvent('ecosystem:mutation-success', { detail: { message: receiptMessage } }));
     } catch (reason: any) {
       const message = reason?.response?.data?.message ?? reason?.message ?? tr('L’opération sur le bulletin a échoué. Réessayez après vérification.', 'The report-card operation failed. Please check and retry.');
       setError(message);
@@ -593,6 +598,7 @@ export default function TeacherWholeSchoolReportCards() {
                     {learner.submittedSubjectCount}/{learner.expectedSubjectCount} subjects
                   </span>
                   <span className="text-kcs-blue-600 dark:text-kcs-blue-300">{workflowLabel(learner)}</span>
+                  {(learner.reportCard?.submissionHistory?.count??0)>0&&<span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-900 dark:bg-sky-900 dark:text-sky-100">{tr('Envoyé ','Sent ')}{learner.reportCard!.submissionHistory!.count} ×</span>}
                 </div>
               </button>
             ))}
@@ -631,6 +637,14 @@ export default function TeacherWholeSchoolReportCards() {
                 </div>
               </div>
 
+              <section data-submission-trace className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-kcs-blue-950">
+                <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-black text-kcs-blue-950 dark:text-sky-100">{tr('Envois à la Super Administration','Submissions to Super Administration')}</h4><span data-submission-count className="rounded-full bg-kcs-blue-700 px-3 py-1 text-xs font-black text-white">{selected.reportCard?.submissionHistory ? tr('Envois réussis : ','Successful submissions: ')+selected.reportCard.submissionHistory.count : selected.reportCard ? tr('Historique en cours de chargement','Submission history loading') : tr('Aucun envoi','Not yet submitted')}</span></div>
+                {selected.reportCard?.submissionHistory?.count ? <>
+                  <dl className="mt-2 grid gap-2 text-xs text-slate-700 dark:text-slate-200 sm:grid-cols-2"><div><dt className="font-bold">{tr('Premier envoi','First submission')}</dt><dd>{traceDate(selected.reportCard.submissionHistory.firstSubmittedAt,language)}</dd></div><div><dt className="font-bold">{tr('Dernier envoi','Latest submission')}</dt><dd>{traceDate(selected.reportCard.submissionHistory.lastSubmittedAt,language)}</dd></div></dl>
+                  {selected.reportCard.publicationStatus==='DRAFT'&&<p className="mt-2 text-xs font-semibold text-amber-900 dark:text-amber-200">{tr('Déjà envoyé. Des modifications sont en brouillon : renvoyez le bulletin pour actualiser la file de contrôle.','Previously submitted. Changes are now in draft: submit again to update the review queue.')}</p>}
+                  <details className="mt-2 text-xs text-kcs-blue-900 dark:text-sky-100"><summary className="cursor-pointer font-bold">{tr('Voir les reçus d’envoi','View submission receipts')}</summary><ol className="mt-2 space-y-2">{selected.reportCard.submissionHistory.receipts.map((receipt,index)=><li key={receipt.id} className="break-words rounded-lg bg-white p-2 dark:bg-kcs-blue-900"><b>#{index+1} · {traceDate(receipt.submittedAt,language)}</b><span className="mt-1 block break-all text-[11px]">{tr('Référence : ','Reference: ')}{receipt.id}</span></li>)}</ol></details>
+                </> : null}
+              </section>
               <div className="mt-4 grid gap-3 sm:grid-cols-4">
                 <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950">
                   <p className="text-xs text-gray-500">Weighted average</p>
@@ -763,7 +777,7 @@ export default function TeacherWholeSchoolReportCards() {
                         {savingAction === 'submit' && <span aria-hidden="true" className="pointer-events-none absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/20 to-transparent motion-reduce:animate-none"/>}
                         <span className="relative inline-flex items-center justify-center gap-2">
                           {savingAction === 'submit' ? <Loader2 size={18} className="animate-spin motion-reduce:animate-none"/> : <Send size={17}/>}
-                          <span>{savingAction === 'submit' ? saveStep === 'verifying' ? tr('Vérification de la réception…', 'Verifying receipt…') : tr('Envoi sécurisé…', 'Sending securely…') : (awaitingReview || finalized) ? tr('Remplacer la soumission à la Super Administration', 'Replace submission to Super Administration') : tr('Soumettre à la Super Administration', 'Submit to Super Administration')}</span>
+                          <span>{savingAction === 'submit' ? saveStep === 'verifying' ? tr('Vérification de la réception…', 'Verifying receipt…') : tr('Envoi sécurisé…', 'Sending securely…') : (awaitingReview || finalized || (selected.reportCard?.submissionHistory?.count??0)>0) ? tr('Remplacer la soumission à la Super Administration', 'Replace submission to Super Administration') : tr('Soumettre à la Super Administration', 'Submit to Super Administration')}</span>
                           {savingAction === 'submit' && <span aria-hidden="true" className="flex gap-1"><i className="size-1.5 animate-bounce rounded-full bg-white motion-reduce:animate-none"/><i className="size-1.5 animate-bounce rounded-full bg-white [animation-delay:120ms] motion-reduce:animate-none"/><i className="size-1.5 animate-bounce rounded-full bg-white [animation-delay:240ms] motion-reduce:animate-none"/></span>}
                         </span>
                       </button>

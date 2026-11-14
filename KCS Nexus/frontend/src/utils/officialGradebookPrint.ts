@@ -1,3 +1,4 @@
+import { showOfficialDocument } from './officialDocumentPreview'
 import { renderGradebookMatrix, gradebookMatrixStyles, type MatrixAssessment } from './gradebookMatrixPrint'
 import QRCode from 'qrcode'
 import { rankGradebookRows } from './gradebookRanking'
@@ -29,5 +30,5 @@ export async function printOfficialGradebook(payload:OfficialGradebookPayload,on
    const sheets = renderGradebookMatrix({ ...payload, assessments: payload.assessments, origin: location.origin, documentId, fingerprint, qr, verificationUrl: url, issuedAt: issued.toISOString(), french: fr });
    html = html.replace('</style>', gradebookMatrixStyles + '</style>').replace(/<body>[\s\S]*<script>/, '<body>' + sheets + '<script>');
  }
- const blob=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));win.location.replace(blob);setTimeout(()=>URL.revokeObjectURL(blob),60_000);return true
+ await showOfficialDocument(win, html, { filename: documentId, language: fr?'fr':'en', onError });return true
 }

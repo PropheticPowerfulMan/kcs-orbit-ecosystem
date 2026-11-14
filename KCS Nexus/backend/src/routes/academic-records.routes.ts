@@ -1,3 +1,4 @@
+import {reportCardSubmissionHistories,emptyReportCardSubmissionHistory} from '../services/reportCardSubmissionHistory.js'
 import {loadOfficialTranscript} from '../services/officialTranscript.service.js'
 import {officialTranscriptDocument} from '../utils/officialTranscriptPdf.js'
 import { reportCardPeriodEndDate } from '../utils/reportCardPeriodEndDate.js'
@@ -136,12 +137,14 @@ const homeroomReportContext=async(userId:string,studentId:string,academicYear:st
 export const academicRecordsRouter=Router()
 const legacyUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:MAX_IMPORT_BYTES,files:1}})
 academicRecordsRouter.get('/transcripts/verify', asyncHandler(async (req, res) => {
- const documentId = z.string().regex(new RegExp('^KCS-TR-[0-9]{8}-[A-Z0-9-]+$','i')).parse(req.query.document)
+ const documentId = z.string().regex(/^KCS-TR-(?:PREVIEW-)?[0-9]{8}-[A-Z0-9-]+$/i).parse(req.query.document)
  const fingerprint = z.string().min(6).max(100).parse(req.query.fingerprint)
- const record = await prisma.auditLog.findFirst({ where: { action: 'TRANSCRIPT_VERIFICATION_ISSUED', targetType: 'OfficialTranscript', targetId: documentId }, orderBy: { createdAt: 'desc' } })
+ const preview=/^KCS-TR-PREVIEW-/i.test(documentId)
+ const record = await prisma.auditLog.findFirst({ where: { action: preview?'TRANSCRIPT_PREVIEW_GENERATED':'TRANSCRIPT_VERIFICATION_ISSUED', targetType: preview?'TranscriptPreview':'OfficialTranscript', targetId: documentId }, orderBy: { createdAt: 'desc' } })
  const metadata = (record?.metadata ?? {}) as Record<string, unknown>
  if (!record || metadata.fingerprint !== fingerprint) throw new ApiError(404, 'Transcript authenticity record not found')
- return success(res, { valid: true, documentType: 'TRANSCRIPT', documentId, issuedAt: record.createdAt, issuer: 'Kinshasa Christian School', verificationMethod: 'KCS_REGISTER', fingerprintAlgorithm: 'SHA-256', qrStandard: 'ISO/IEC 18004', externalAccreditation: false }, 'Authentic KCS transcript verified')
+ // An authentic origin does not make an administrative preview an official academic record.
+ return success(res, { valid: !preview, registered: true, preview, official: !preview, documentStatus:preview?'PREVIEW':'OFFICIAL', documentType: 'TRANSCRIPT', documentId, issuedAt: record.createdAt, issuer: 'Kinshasa Christian School', verificationMethod: 'KCS_REGISTER', fingerprintAlgorithm: 'SHA-256', qrStandard: 'ISO/IEC 18004', externalAccreditation: false }, preview?'Registered KCS preview verified — not an issued academic transcript':'Authentic KCS transcript verified')
 }))
 academicRecordsRouter.get('/certificates/verify',asyncHandler(async(req,res)=>{
  const documentId=z.string().regex(new RegExp('^KCS-(?:CERT|ATT)-[0-9]{8}-[A-Z0-9-]+$','i')).parse(req.query.document)
@@ -409,6 +412,7 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
   }),
  ]):[[],[]]
 
+ const submissionHistories=await reportCardSubmissionHistories(students.flatMap(student=>student.reportCards.map(card=>card.id)))
  const resultByEnrollment=aggregateReportCardResults(submittedGrades,cycle.academicYear,cycle.term)
  const sourceGradeByEnrollment=new Map<string,(typeof submittedGrades)[number]>()
  for(const item of submittedGrades){const key=item.studentId+':'+item.courseId;if(!sourceGradeByEnrollment.has(key))sourceGradeByEnrollment.set(key,item)}
@@ -466,7 +470,7 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
    allSubjectsSubmitted:visibleSubjects.length>0&&visibleSubmitted.length===visibleSubjects.length,
    average:visibleWeightedGrades.length?weightedCourseAverage(visibleWeightedGrades):null,
    attendance:summarizeAttendance(attendanceWithSuspensions(student.attendanceRecords,student.disciplineCases,window)),
-   reportCard:reportCard?{...reportCard,hiddenCourseIds}:null,
+   reportCard:reportCard?{...reportCard,hiddenCourseIds,submissionHistory:submissionHistories.get(reportCard.id)??emptyReportCardSubmissionHistory()}:null,
   }
  })
  res.setHeader('Cache-Control','private, no-store')
@@ -531,7 +535,7 @@ academicRecordsRouter.put('/report-cards/teacher-draft/:studentId',requireRoles(
    update:{average:visibleAverage,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,academicCorrections:corrections,principalStatus:'DRAFT',publicationStatus:'DRAFT',approvedById:null,approvedAt:null,portalPostedAt:null,emailedAt:null},
   })
   await tx.auditLog.create({data:{actorId:req.user!.sub,action:'MAIN_TEACHER_REPORT_CARD_DRAFT_SAVED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,submittedCourseGrades:visibleGrades.length,hiddenCourseIds:visibility.hiddenCourseIds,withdrawnPreviousSubmission:current?.publicationStatus==='READY_FOR_REVIEW'}}})
-  return saved
+  return{...saved,submissionHistory:(await reportCardSubmissionHistories([saved.id],tx)).get(saved.id)??emptyReportCardSubmissionHistory()}
  },{maxWait:10000,timeout:60000})
  return success(res,card,'Main-teacher report-card draft saved')
 }))
@@ -596,7 +600,8 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
   const missingCourses=context.enrollments.filter(item=>missingCourseIds.includes(item.courseId)).map(item=>item.course.code||item.course.name)
   throw new ApiError(409,`Submission blocked: final grades are still missing for ${missingCourses.join(', ')}`)
  }
- const replacesPreviousSubmission=Boolean(current&&current.publicationStatus!=='DRAFT')
+ const previousHistory=current?(await reportCardSubmissionHistories([current.id],tx)).get(current.id):null
+ const replacesPreviousSubmission=Boolean((previousHistory?.count??0)>0||(current&&current.publicationStatus!=='DRAFT'))
  const visibleGrades=context.grades.filter(item=>visibility.visibleCourseIds.includes(item.courseId))
  const visibleAverage=weightedCourseAverage(visibleGrades)
  const corrections={hiddenCourseIds:visibility.hiddenCourseIds,attendanceOverride:false}
@@ -613,7 +618,8 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
   if(current)await synchronizeStudentAcademicMetrics(tx,[studentId])
   const recipients=await tx.user.findMany({where:{OR:[{role:'ADMIN'},{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'}]},select:{id:true}})
   if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:replacesPreviousSubmission?'Updated report card ready for review':'Report card ready for review',message:`A main teacher ${replacesPreviousSubmission?'replaced the previous submission':'submitted the complete report card'} for ${context.student.studentNumber}.`,type:'INFO',link:'/admin/report-cards'}))})
-  return{saved,notified:recipients.length,replacesPreviousSubmission}
+  const submissionHistory=(await reportCardSubmissionHistories([saved.id],tx)).get(saved.id)??emptyReportCardSubmissionHistory()
+  return{saved:{...saved,submissionHistory},notified:recipients.length,replacesPreviousSubmission}
  },{maxWait:10000,timeout:60000})
   const replacesPreviousSubmission=result.replacesPreviousSubmission
   const confirmed=await prisma.reportCard.findUnique({where:{id:result.saved.id},select:{id:true,publicationStatus:true,principalStatus:true}})

@@ -1,3 +1,5 @@
+import { parentMeetingsRouter } from './parent-meetings.routes.js'
+import {allowsTeacherCourseCredits} from '../utils/courseCreditHours.js'
 import { academicEntryPeriod, futureGradebookChanged } from '../utils/academicPeriodPolicy.js'
 import { isKcsAcademicTerm } from '../utils/academicCycle.js'
 import { academicPeriodAccess, academicCycleForDate, lockAcademicYears, protectAcademicPeriod, protectGradebookEntry, assertAcademicPeriodOpen } from '../services/academicPeriodAccess.service.js'
@@ -22,6 +24,7 @@ import { academicCycleFromDate, mergeAssignmentIntoGradebookCycle } from '../ser
 import { attendanceRateFromStatuses } from '../utils/attendancePolicy.js'
 
 export const teachersRouter = Router()
+teachersRouter.use('/parent-meetings', parentMeetingsRouter)
 
 type OrbitDirectoryStudent = {
   id: string
@@ -246,7 +249,7 @@ const teacherCourseSyncSchema = z.object({
   abbreviation: z.string().trim().max(30).optional().default(''),
   description: z.string().trim().max(5000).optional(),
   grade: z.string().trim().min(1).max(80),
-  credits: z.coerce.number().int().min(1).max(20).optional(),
+  credits: z.coerce.number().int().safe().min(1).optional(),
   room: z.string().trim().max(80).optional().default(''),
   studentIds: z.array(z.string().min(1)).max(1000).default([]),
   studentNumbers: z.array(z.string().min(1).max(100)).max(1000).default([]),
@@ -324,7 +327,8 @@ teachersRouter.post('/me/activity-reports/generate', authenticate, requireRoles(
 
 teachersRouter.get('/me/activity-reports', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const reports = await prisma.teacherActivityReport.findMany({ where: { teacher: { userId: req.user!.sub } }, orderBy: { createdAt: 'desc' } })
-  return success(res, reports, 'Teacher activity reports loaded.')
+  // Older reports have no kind key; preserve them instead of using SQL NOT on a missing JSON path.
+  return success(res, reports.filter(report => (report.evidence as any)?.kind !== 'PARENT_PERIOD_MEETING'), 'Teacher activity reports loaded.')
 }))
 
 teachersRouter.patch('/me/activity-reports/:reportId', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -332,6 +336,7 @@ teachersRouter.patch('/me/activity-reports/:reportId', authenticate, requireRole
   const payload = activityReportEditSchema.parse(req.body)
   const existing = await prisma.teacherActivityReport.findFirst({ where: { id: reportId, teacher: { userId: req.user!.sub } } })
   if (!existing) throw new ApiError(404, 'Activity report not found.')
+  if ((existing.evidence as any)?.kind === 'PARENT_PERIOD_MEETING') throw new ApiError(409, 'Use the parent-meeting workflow to edit or submit this report.')
   if (existing.status !== 'DRAFT' && existing.status !== 'RETURNED') throw new ApiError(409, 'A submitted report can no longer be edited unless it is returned for revision.')
   const report = await prisma.teacherActivityReport.update({ where: { id: reportId }, data: payload })
   return success(res, report, 'Activity report draft saved.')
@@ -341,6 +346,7 @@ teachersRouter.post('/me/activity-reports/:reportId/submit', authenticate, requi
   const reportId = getRouteParam(req.params.reportId)
   const existing = await prisma.teacherActivityReport.findFirst({ where: { id: reportId, teacher: { userId: req.user!.sub } }, include: { teacher: { include: { user: true } } } })
   if (!existing) throw new ApiError(404, 'Activity report not found.')
+  if ((existing.evidence as any)?.kind === 'PARENT_PERIOD_MEETING') throw new ApiError(409, 'Use the parent-meeting workflow to edit or submit this report.')
   if (existing.status !== 'DRAFT' && existing.status !== 'RETURNED') throw new ApiError(409, 'This report has already been submitted.')
   const report = await prisma.$transaction(async (tx) => {
     const saved = await tx.teacherActivityReport.update({ where: { id: reportId }, data: { status: 'SUBMITTED', submittedAt: new Date() } })
@@ -459,10 +465,12 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   const payload = teacherCourseSyncSchema.parse(req.body)
   if (new Set(payload.studentIds).size !== payload.studentIds.length) throw new ApiError(400, 'Duplicate learner in course enrollment')
   const teacher = await ensureTeacherProfile(req.user!.sub)
-  const requestedExisting = await prisma.course.findUnique({ where: { id: payload.id }, select: { id: true, teacherId: true, code: true } })
+  const requestedExisting = await prisma.course.findUnique({ where: { id: payload.id }, select: { id: true, teacherId: true, code: true, credits: true } })
   if (requestedExisting && requestedExisting.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
-  const naturalExisting = requestedExisting ? null : await prisma.course.findFirst({ where: { teacherId: teacher.id, name: { equals: payload.name, mode: 'insensitive' }, grade: { equals: payload.grade, mode: 'insensitive' } }, select: { id: true, teacherId: true, code: true } })
+  const naturalExisting = requestedExisting ? null : await prisma.course.findFirst({ where: { teacherId: teacher.id, name: { equals: payload.name, mode: 'insensitive' }, grade: { equals: payload.grade, mode: 'insensitive' } }, select: { id: true, teacherId: true, code: true, credits: true } })
   const existing = requestedExisting ?? naturalExisting
+  const isSubmissionPreflight = payload.description?.includes('verified before') === true
+  if(!allowsTeacherCourseCredits(payload.credits,existing?.credits,isSubmissionPreflight))throw new ApiError(400,'Credit hours must be 1 or 2. Existing historical weights may only be preserved unchanged.')
   const normalizedStudentNumbers = [...new Set(payload.studentNumbers.map((value) => value.trim().toLowerCase()).filter(Boolean))]
   const uniqueStudentIds = [...new Set(payload.studentIds)]
   if (uniqueStudentIds.length || normalizedStudentNumbers.length) {
@@ -497,7 +505,6 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   let code = codeBase
   const collision = await prisma.course.findFirst({ where: { code, id: { not: existing?.id ?? payload.id } }, select: { id: true } })
   if (collision) code = `${codeBase}-${classCode || 'CUSTOM'}-${payload.id.slice(-6).toUpperCase()}`
-  const isSubmissionPreflight = payload.description?.includes('verified before') === true
   const course = await prisma.$transaction(async (tx) => {
     const saved = existing
     ? await tx.course.update({

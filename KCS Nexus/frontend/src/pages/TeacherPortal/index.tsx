@@ -392,8 +392,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     enrollmentMode: 'class' as 'class' | 'custom',
   })
   const [courseAbbreviationManual, setCourseAbbreviationManual] = useState(false)
-  const [courseErrors, setCourseErrors] = useState<{ name?: string; grade?: string }>({})
+  const [courseErrors, setCourseErrors] = useState<{ name?: string; grade?: string; credits?:string }>({})
   const courseNameRef = useRef<HTMLInputElement>(null)
+  const courseCreditsRef = useRef<HTMLSelectElement>(null)
   const courseGradeRef = useRef<HTMLDivElement>(null)
   const workspaceLoadedUserRef = useRef('')
   const workspaceRequestTokenRef = useRef(0)
@@ -972,12 +973,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const customRoster = courseDraft.enrollmentMode === 'custom'
     const selectedGrade = customRoster ? 'Multi-class' : canonicalClassLabel(courseDraft.gradeLevels[0] ?? courseDraft.className)
     const resolvedClass = customRoster ? selectedGrade : resolveRosterClass(courseDraft.className || selectedGrade)
-    const errors: { name?: string; grade?: string } = {}
+    const errors: { name?: string; grade?: string; credits?:string } = {}
     if (!courseDraft.name.trim()) errors.name = 'Enter the subject name.'
     if (!customRoster && !courseDraft.gradeLevels[0]) errors.grade = 'Select the class taught for this subject.'
-    if (errors.name || errors.grade) {
+    if(!['1','2'].includes(courseDraft.creditHours))errors.credits=tr('Choisissez 1 ou 2 crédits.','Choose 1 or 2 credit hours.')
+    if (errors.name || errors.grade || errors.credits) {
       setCourseErrors(errors)
-      window.requestAnimationFrame(() => errors.name ? courseNameRef.current?.focus() : courseGradeRef.current?.focus())
+      window.requestAnimationFrame(() => errors.name ? courseNameRef.current?.focus() : errors.grade ? courseGradeRef.current?.focus() : courseCreditsRef.current?.focus())
       return
     }
     setCourseErrors({})
@@ -1064,7 +1066,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setCourseDraft({
       name: course.name,
       abbreviation: course.abbreviation,
-      creditHours: String(normalizeCreditHours(course.creditHours)),
+      creditHours: [1,2].includes(Number(course.creditHours)) ? String(course.creditHours) : '',
       className: canonicalClassLabel(course.className || course.gradeLevels[0]),
       room: course.room,
       gradeLevels: course.enrollmentMode === 'custom' ? course.gradeLevels : [canonicalClassLabel(course.className || course.gradeLevels[0])],
@@ -1574,7 +1576,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" data-teacher-save-primary disabled={workspaceStatus === 'saving'} onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>
+            {segment !== 'settings' && (<button type="button" data-teacher-save-primary disabled={workspaceStatus === 'saving'} onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>)}
             <button onClick={exportWorkspacePdf} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
           </div>
         </div>
@@ -1645,19 +1647,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                         <span className="flex items-center justify-between gap-2 text-[11px] font-normal text-gray-400"><span>{tr('Générée automatiquement, puis modifiable librement.', 'Generated automatically, then freely editable.')}</span><button type="button" className="font-bold text-kcs-blue-700 hover:underline dark:text-kcs-gold-300" onClick={() => { setCourseAbbreviationManual(false); setCourseDraft((draft) => ({ ...draft, abbreviation: generateCourseAbbreviation(draft.name) })) }}>{tr('Régénérer', 'Regenerate')}</button></span>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
-                        Credit Hours
-                        <input
-                          className={`${inputClass} h-10 text-center font-bold`}
-                          type='number'
-                          min={1}
-                          max={60}
-                          value={courseDraft.creditHours}
-                          onChange={(event) => {
-                            const normalized = event.target.value.replace(/^0+(?=\d)/, '')
-                            setCourseDraft((draft) => ({ ...draft, creditHours: normalized }))
-                          }}
-                          onBlur={() => setCourseDraft((draft) => ({ ...draft, creditHours: String(normalizeCreditHours(draft.creditHours)) }))}
-                        />
+                        {tr('Crédits','Credit hours')}
+                        <select ref={courseCreditsRef} aria-label={tr('Crédits','Credit hours')} aria-invalid={Boolean(courseErrors.credits)} className={inputClass+' h-10 text-center font-bold'} value={courseDraft.creditHours} onChange={event=>{setCourseDraft(draft=>({...draft,creditHours:event.target.value}));setCourseErrors(current=>({...current,credits:undefined}))}}>
+                          {!['1','2'].includes(courseDraft.creditHours)&&<option value="" disabled>{tr('Choisir 1 ou 2','Choose 1 or 2')}</option>}<option value="1">1</option><option value="2">2</option>
+                        </select>
+                        {courseErrors.credits&&<p role="alert" className="field-error">{courseErrors.credits}</p>}
                       </label>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -1843,7 +1837,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold text-kcs-blue-900 dark:text-blue-100">
                   {tr('Crédits', 'Credit hours')}
-                  <input className={inputClass} type="number" min={1} max={60} value={courseDraft.creditHours} onChange={(event) => setCourseDraft((draft) => ({ ...draft, creditHours: event.target.value.replace(/^0+(?=\d)/, '') }))} onBlur={() => setCourseDraft((draft) => ({ ...draft, creditHours: String(normalizeCreditHours(draft.creditHours)) }))} />
+                  <select ref={courseCreditsRef} aria-label={tr('Crédits','Credit hours')} aria-invalid={Boolean(courseErrors.credits)} className={inputClass} value={courseDraft.creditHours} onChange={event=>{setCourseDraft(draft=>({...draft,creditHours:event.target.value}));setCourseErrors(current=>({...current,credits:undefined}))}}>{!['1','2'].includes(courseDraft.creditHours)&&<option value="" disabled>{tr('Choisir 1 ou 2','Choose 1 or 2')}</option>}<option value="1">1</option><option value="2">2</option></select>
+                  {courseErrors.credits&&<p role="alert" className="field-error">{courseErrors.credits}</p>}
+                  {editingCourseId&&!['1','2'].includes(courseDraft.creditHours)&&<p className="text-xs font-normal text-amber-800 dark:text-amber-200">{tr('Valeur historique conservée : ','Historical value preserved: ')}{courses.find(course=>course.id===editingCourseId)?.creditHours}{tr('. Choisissez 1 ou 2 avant d’enregistrer cette modification.','. Choose 1 or 2 before saving this edit.')}</p>}
                 </label>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">

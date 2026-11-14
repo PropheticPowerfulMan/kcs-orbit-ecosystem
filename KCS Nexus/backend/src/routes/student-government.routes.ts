@@ -132,7 +132,7 @@ studentGovernmentRouter.post('/candidacy', authenticate, requireRoles('student')
       grade: student.grade,
       section: student.section || null,
       manifesto: payload.manifesto,
-      photoUrl: student.user.avatar || student.officialAvatar || null,
+      photoUrl: student.officialAvatar || null,
       status: 'PENDING',
       active: false,
     } })
@@ -248,7 +248,7 @@ studentGovernmentRouter.post('/admin/elections/:electionId/candidates', ...admin
       grade: student.grade,
       section: student.section || null,
       manifesto: payload.manifesto || null,
-      photoUrl: student.user.avatar || student.officialAvatar || null,
+      photoUrl: student.officialAvatar || null,
       status: 'APPROVED',
       active: true,
     },

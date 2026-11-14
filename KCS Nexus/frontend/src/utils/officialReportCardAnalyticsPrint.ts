@@ -1,3 +1,4 @@
+import { showOfficialDocument } from './officialDocumentPreview'
 import QRCode from "qrcode";
 import { academicRecordsAPI } from "@/services/api";
 import { rankGradebookRows } from "./gradebookRanking";
@@ -180,11 +181,7 @@ export async function printReportCardAnalytics(
     <p class="methods">${tr("Méthode : moyenne arithmétique, écart-type population (division par N), quartiles par interpolation linéaire. Les moyennes générales proviennent des bulletins et conservent la pondération des crédits. Les ex æquo partagent le même rang. Les statistiques portent sur tout le périmètre choisi, tandis que le tableau affiche les N premiers.", "Method: arithmetic mean, population standard deviation (division by N), and linearly interpolated quartiles. Overall averages come from report cards and retain credit weighting. Ties share the same rank. Statistics describe the entire selected cohort; the table lists the top N learners.")}</p>
     <section class="auth"><img src="${qr}" alt="QR verification"><div><b>${tr("Authentification numérique KCS", "KCS digital authentication")}</b><br>${esc(documentId)}<br>SHA-256 ${fingerprint}<br>UTC ${esc(generatedAt.toISOString())} · QR ISO/IEC 18004 · ECC H</div></section>
     <footer><b>Kinshasa Christian School</b><br>Avenue de la République n° 1 · Macampagne, Ngaliema · Kinshasa, RDC · Réf. 80 jours<br>+243 895 326 011 · +243 994 645 735 · kinshasachristianschool@gmail.com · www.kinshasachristianschool.org</footer></main><script>addEventListener('load',()=>Promise.all(Array.from(document.images).map(image=>image.complete?Promise.resolve():new Promise(resolve=>{image.onload=resolve;image.onerror=resolve}))).then(()=>setTimeout(()=>window.print(),250)));<\/script></body></html>`;
-    const blob = URL.createObjectURL(
-      new Blob([html], { type: "text/html;charset=utf-8" }),
-    );
-    printWindow.location.replace(blob);
-    window.setTimeout(() => URL.revokeObjectURL(blob), 60_000);
+  await showOfficialDocument(printWindow, html, { filename: documentId, language: input.language, onError });
   } catch (error: any) {
     printWindow.close();
     onError(
