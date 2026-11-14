@@ -326,8 +326,9 @@ teachersRouter.post('/me/activity-reports/generate', authenticate, requireRoles(
 }))
 
 teachersRouter.get('/me/activity-reports', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const reports = await prisma.teacherActivityReport.findMany({ where: { teacher: { userId: req.user!.sub }, NOT: { evidence: { path: ['kind'], equals: 'PARENT_PERIOD_MEETING' } } }, orderBy: { createdAt: 'desc' } })
-  return success(res, reports, 'Teacher activity reports loaded.')
+  const reports = await prisma.teacherActivityReport.findMany({ where: { teacher: { userId: req.user!.sub } }, orderBy: { createdAt: 'desc' } })
+  // Older reports have no kind key; preserve them instead of using SQL NOT on a missing JSON path.
+  return success(res, reports.filter(report => (report.evidence as any)?.kind !== 'PARENT_PERIOD_MEETING'), 'Teacher activity reports loaded.')
 }))
 
 teachersRouter.patch('/me/activity-reports/:reportId', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
