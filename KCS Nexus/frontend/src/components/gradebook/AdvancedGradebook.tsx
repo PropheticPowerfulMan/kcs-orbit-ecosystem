@@ -1032,7 +1032,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         })}</div>
       </section>
       <div className={`grid gap-4 ${commandCenterOpen ? 'xl:grid-cols-[1fr_0.9fr]' : ''}`}>
-        <div className={`rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${commandCenterOpen ? 'p-5' : 'p-3'}`}>
+        <div className={`nexus-workspace-card rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${commandCenterOpen ? 'p-5' : 'p-3'}`}>
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">AI Gradebook Command Center</p>
@@ -1081,7 +1081,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           ].map((item) => {
             const Icon = item.icon
             return (
-              <div key={item.label} className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+              <div key={item.label} className="nexus-workspace-card rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
                 <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${item.tone}`}><Icon size={18} /></div>
                 <div className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{item.value}</div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{item.label}</p>
@@ -1112,7 +1112,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         </section>
       )}
       <div className={`grid gap-4 transition-all ${configurationGridClass}`}>
-        <div className={`rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${taskPanelOpen ? 'p-5' : 'p-3'}`}>
+        <div className={`nexus-workspace-card rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${taskPanelOpen ? 'p-5' : 'p-3'}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <h4 className="font-bold text-kcs-blue-900 dark:text-white">Create an assessment task</h4>
@@ -1168,7 +1168,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </div>}
         </div>
 
-        <div className={`rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${weightPanelOpen ? 'p-5' : 'p-3'}`}>
+        <div className={`nexus-workspace-card rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${weightPanelOpen ? 'p-5' : 'p-3'}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h4 className="font-bold text-kcs-blue-900 dark:text-white">Category weighting</h4>
@@ -1400,7 +1400,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       {editingAssignment && createPortal(<div className="fixed inset-0 z-[10010] flex items-center justify-center bg-kcs-blue-950/75 p-4" role="dialog" data-gradebook-overlay aria-modal="true"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><p className="text-xs font-black uppercase tracking-widest text-kcs-blue-600 dark:text-sky-300">{tr('Modifier la colonne','Edit grade column')}</p><h3 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{editingAssignment.title}</h3><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Titre','Title')}<input className="input-kcs" value={editingAssignment.title} onChange={(event) => setEditingAssignment({...editingAssignment,title:event.target.value})}/></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Date','Date')}<DateSelect className="input-kcs" value={editingAssignment.date} onChange={(event) => setEditingAssignment({...editingAssignment,date:event.target.value})}/></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Type','Type')}<select className="input-kcs" value={editingAssignment.type} onChange={(event) => {const type=event.target.value as AssignmentType;setEditingAssignment({...editingAssignment,type,category:type})}}>{assignmentTypes.map((item)=><option key={item} value={item}>{assignmentTypeLabels[item].name}</option>)}</select></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Maximum de points','Maximum points')}<input className="input-kcs" type="number" min={1} value={editingAssignment.maxPoints} onChange={(event)=>setEditingAssignment({...editingAssignment,maxPoints:Math.max(1,Number(event.target.value)||1)})}/></label></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={()=>setEditingAssignment(null)} className="rounded-xl border px-4 py-2.5 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">{tr('Annuler','Cancel')}</button><button type="button" onClick={saveAssignmentEdit} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white"><Pencil size={15} className="mr-2 inline"/>{tr('Enregistrer','Save changes')}</button></div></div></div>, document.body)}
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="nexus-workspace-card rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <h4 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white"><BarChart3 size={18} /> Class distribution</h4>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={distribution}>
@@ -1415,7 +1415,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             </ResponsiveContainer>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="nexus-workspace-card rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <h4 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white"><TrendingUp size={18} /> Performance trend</h4>
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={trendData}>
@@ -1429,7 +1429,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+        <div className="nexus-workspace-card rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h4 className="flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white"><Brain size={18} /> AI insights dashboard</h4>
           <div className="mt-4 space-y-3">
             <div className="rounded-xl bg-kcs-blue-50 p-4 text-sm text-kcs-blue-900 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-100">
@@ -1467,7 +1467,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         ].map((item) => {
           const Icon = item.icon
           return (
-            <div key={item.title} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+            <div key={item.title} className="nexus-workspace-card rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <Icon size={20} className="text-kcs-blue-600 dark:text-kcs-blue-300" />
               <p className="mt-3 font-bold text-kcs-blue-900 dark:text-white">{item.title}</p>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{item.text}</p>

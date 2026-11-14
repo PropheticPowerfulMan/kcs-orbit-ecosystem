@@ -1,3 +1,5 @@
+import PortalWorkspaceHeading from '@/components/shared/PortalWorkspaceHeading'
+import PublishedCalendarStrip from '@/components/shared/PublishedCalendarStrip'
 import WeeklyTimetable from '@/components/shared/WeeklyTimetable'
 import ReleasedReportCardsPanel from '@/components/shared/ReleasedReportCardsPanel'
 import {academicPortalAPI} from '@/services/api'
@@ -12,7 +14,8 @@ import AudioRecorder from '@/components/shared/AudioRecorder'
 import OfficialTranscriptPanel from '@/components/shared/OfficialTranscriptPanel'
 import ParentNotificationsPanel from './ParentNotificationsPanel'
 import ParentFinancePanel from './ParentFinancePanel'
-import { schoolCalendarEvents2026_2027 } from '@/data/schoolCalendar2026_2027'
+import { usePublishedAcademicCalendar } from '@/hooks/usePublishedAcademicCalendar'
+import { academicPeriodLabel } from '@/constants/academicPeriods'
 import { eventsAPI, messagesAPI, notificationsAPI, studentsAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -59,7 +62,7 @@ type Notice = { id: string; title: string; message: string; type: string; isRead
 type Contact = { id: string; firstName: string; middleName?: string | null; lastName: string; role: string; accessCode?: string | null; staffProfile?: { function?: string | null; department?: string | null } | null; teacherProfile?: { department?: string | null } | null }
 type InternalMessage = { id: string; subject: string; body: string; createdAt: string; readAt?: string | null; senderId: string; recipientId?: string; sender?: Contact; recipient?: Contact; attachmentName?: string | null; attachmentMime?: string | null; attachmentSize?: number | null; hasAttachment?: boolean }
 
-const card = 'rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
+const card = 'nexus-workspace-card rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
 const button = 'rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-50'
 const field = 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
 const empty = (text: string) => <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-kcs-blue-800/30 dark:text-gray-300">{text}</p>
@@ -80,7 +83,7 @@ const contactRoleLabel = (person?: Contact, language: "fr" | "en" = "fr") => {
   return person.role
 }
 const personLabel = (person?: Contact) => person ? `${personName(person)} — ${contactRoleLabel(person)}` : "KCS — École"
-const officialCalendarEvents: EventItem[] = schoolCalendarEvents2026_2027.map((event, index) => ({ id: `official-${event.date}-${index}`, title: event.title, description: event.description, startDate: event.date, endDate: event.endDate ?? event.date, location: event.location, type: event.type }))
+
 
 function downloadCalendarEvent(event: EventItem) {
   const stamp = (value: string) => new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
@@ -107,6 +110,8 @@ export default function ParentPortal() {
   const [attendance, setAttendance] = useState<Attendance[]>([])
   const [timetable, setTimetable] = useState<Schedule[]>([])
   const [events, setEvents] = useState<EventItem[]>([])
+  const { calendar: publishedCalendar } = usePublishedAcademicCalendar()
+  const officialCalendarEvents: EventItem[] = (publishedCalendar?.periods || []).map(period => ({id: `official-${publishedCalendar!.name}-${period.code}`, title: academicPeriodLabel((period.type === 'SEMESTER' ? 'Semester ' : 'Quarter ') + period.sequence, language), description: tr('Période du calendrier officiel de l’école.', 'Period from the official school calendar.'), startDate: period.startDate, endDate: period.endDate, location: 'KCS', type: period.type}))
   const [notices, setNotices] = useState<Notice[]>([])
   const [messages, setMessages] = useState<InternalMessage[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -132,7 +137,7 @@ export default function ParentPortal() {
     officialCalendarEvents.forEach((event) => merged.set(`${event.startDate.slice(0, 10)}:${event.title.toLocaleLowerCase()}`, event))
     events.forEach((event) => merged.set(`${event.startDate.slice(0, 10)}:${event.title.toLocaleLowerCase()}`, event))
     return [...merged.values()].sort((left, right) => left.startDate.localeCompare(right.startDate))
-  }, [events])
+  }, [events, publishedCalendar, language])
   const upcoming = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
     return calendarEvents.filter((event) => event.endDate.slice(0, 10) >= today)
@@ -268,5 +273,5 @@ export default function ParentPortal() {
 
   const overviewDescription = language === 'fr' ? 'Une vue familiale sécurisée des résultats, présences, finances et communications scolaires.' : 'A secure family view of academics, attendance, finance, and school communications.'
 
-  return <div className="portal-shell parent-portal-shell flex min-h-screen bg-sky-50 dark:bg-kcs-blue-950"><PortalSidebar badges={{ '/portal/parent/messages': unreadMessages }}/><main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"><div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0"><h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}{user?.firstName ? `, ${user.firstName}` : ''}</h1><p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} - {overviewDescription}</p></div>{children.length > 0 && <label className="min-w-64 text-xs font-bold uppercase text-kcs-blue-700 dark:text-kcs-blue-200">{language === 'fr' ? 'Élève actif' : 'Active child'}<select className={`${field} mt-1 normal-case`} value={selectedChild?.id ?? ''} onChange={(event) => setSelectedId(event.target.value)}>{children.map((child) => <option key={child.id} value={child.id}>{child.name} - {child.grade}</option>)}</select></label>}</div></div><div className="w-full max-w-none p-4 sm:p-6 lg:p-8">{segment !== 'dashboard' && <h2 className="mb-6 font-display text-3xl font-bold text-kcs-blue-950 dark:text-white">{title}</h2>}{error && <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}{!loading && academicAccess?.exempt && <p className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200">Accès académique autorisé selon la politique institutionnelle.</p>}{!loading && academicLocked && segment === 'dashboard' ? <div className="mb-6">{financialLockCard}</div> : null}{loading ? <div className={card}><div className="flex items-center gap-3 text-gray-500"><Clock className="animate-spin" size={20}/>Loading the secure family workspace…</div></div> : children.length === 0 ? <div className={card}><UserRound className="text-kcs-blue-500"/><h2 className="mt-3 text-xl font-bold dark:text-white">No child is linked to this parent account</h2><p className="mt-2 text-sm text-gray-500">Please contact the school registry. The portal does not infer or expose unverified family links.</p></div> : content}<div className="mt-8"><SuggestionBox/></div></div></main></div>
+  return <div className="portal-shell parent-portal-shell flex min-h-screen bg-sky-50 dark:bg-kcs-blue-950"><PortalSidebar badges={{ '/portal/parent/messages': unreadMessages }}/><main data-portal-workspace={`parent-${segment}`} className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"><div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0"><h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}{user?.firstName ? `, ${user.firstName}` : ''}</h1><p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} - {overviewDescription}</p></div>{children.length > 0 && <label className="min-w-64 text-xs font-bold uppercase text-kcs-blue-700 dark:text-kcs-blue-200">{language === 'fr' ? 'Élève actif' : 'Active child'}<select className={`${field} mt-1 normal-case`} value={selectedChild?.id ?? ''} onChange={(event) => setSelectedId(event.target.value)}>{children.map((child) => <option key={child.id} value={child.id}>{child.name} - {child.grade}</option>)}</select></label>}</div></div><div className="w-full max-w-none p-4 sm:p-6 lg:p-8"><PublishedCalendarStrip/>{segment !== 'dashboard' && <PortalWorkspaceHeading title={title} audience="parent"/>}{error && <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}{!loading && academicAccess?.exempt && <p className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200">Accès académique autorisé selon la politique institutionnelle.</p>}{!loading && academicLocked && segment === 'dashboard' ? <div className="mb-6">{financialLockCard}</div> : null}{loading ? <div className={card}><div className="flex items-center gap-3 text-gray-500"><Clock className="animate-spin" size={20}/>Loading the secure family workspace…</div></div> : children.length === 0 ? <div className={card}><UserRound className="text-kcs-blue-500"/><h2 className="mt-3 text-xl font-bold dark:text-white">No child is linked to this parent account</h2><p className="mt-2 text-sm text-gray-500">Please contact the school registry. The portal does not infer or expose unverified family links.</p></div> : content}<div className="mt-8"><SuggestionBox/></div></div></main></div>
 }

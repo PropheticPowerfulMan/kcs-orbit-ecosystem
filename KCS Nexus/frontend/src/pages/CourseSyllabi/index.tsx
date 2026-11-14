@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BookOpen, CheckCircle2, Download, FileText, Loader2, Pencil, RefreshCw, Trash2, Upload, X } from 'lucide-react';
+import PublishedCalendarStrip from '@/components/shared/PublishedCalendarStrip';
+import { usePublishedAcademicCalendar } from '@/hooks/usePublishedAcademicCalendar';
 import PortalSidebar from '@/components/layout/PortalSidebar';
 import { syllabiAPI } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
@@ -51,7 +53,7 @@ type EcosystemRecipient = {
   role: string;
   detail?: string;
 };
-const card = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900';
+const card = 'nexus-workspace-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900';
 const field = 'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white';
 
 export default function CourseSyllabi() {
@@ -59,13 +61,14 @@ export default function CourseSyllabi() {
   const language = useUIStore((s) => s.language);
   const fr = language === 'fr';
   const teacher = user?.role === 'teacher';
+  const { calendar: publishedCalendar } = usePublishedAcademicCalendar();
   const [items, setItems] = useState<Item[]>([]),
     [courses, setCourses] = useState<Course[]>([]),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const [courseId, setCourseId] = useState(''),
-    [year, setYear] = useState('2026-2027'),
+    [year, setYear] = useState(''),
     [title, setTitle] = useState(''),
     [description, setDescription] = useState(''),
     [file, setFile] = useState<File | null>(null);
@@ -85,6 +88,7 @@ export default function CourseSyllabi() {
     [editDescription, setEditDescription] = useState(''),
     [editFile, setEditFile] = useState<File | null>(null);
   const tr = (a: string, b: string) => (fr ? a : b);
+  useEffect(() => { if (publishedCalendar?.name) setYear(current => current || publishedCalendar.name) }, [publishedCalendar?.name]);
   const load = async () => {
     setLoading(true);
     setError('');
@@ -239,7 +243,7 @@ export default function CourseSyllabi() {
   return (
     <div className="portal-shell flex min-h-screen bg-slate-50 dark:bg-kcs-blue-950">
       <PortalSidebar />
-      <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+      <main data-portal-workspace="syllabus" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
@@ -257,11 +261,12 @@ export default function CourseSyllabi() {
           </div>
         </div>
         <div className="w-full max-w-none p-4 sm:p-6 lg:p-8">
-          <div className="mb-6">
-            <p className="text-xs font-black uppercase tracking-[.2em] text-kcs-gold-600">KCS Nexus · Academic documents</p>
+          <PublishedCalendarStrip/>
+          <header className="nexus-workspace-heading nexus-syllabus-hero mb-6">
+            <p className="nexus-workspace-kicker">{tr('KCS Nexus · Documents académiques', 'KCS Nexus · Academic documents')}</p>
             <h1 className="mt-2 text-3xl font-bold text-kcs-blue-950 dark:text-white">{tr('Syllabus des cours', 'Course syllabi')}</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-600 dark:text-slate-300">{tr('Documents officiels publiés par chaque enseignant pour les élèves réellement inscrits à son cours.', 'Official documents published by each teacher for learners actually enrolled in the course.')}</p>
-          </div>
+          </header>
           {error && <p className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}
           {notice && (
             <p role="status" className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
@@ -294,7 +299,7 @@ export default function CourseSyllabi() {
                   <input className={field} value={year} onChange={(e) => setYear(e.target.value)} pattern="\d{4}-\d{4}" placeholder="2026-2027" />
                   <small className="font-normal text-slate-500 dark:text-slate-300">{tr('Exemple : 2026-2027. Cette année identifie la période scolaire couverte par le document.', 'Example: 2026-2027. This identifies the school year covered by the document.')}</small>
                 </label>
-                <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={tr('Titre du document', 'Document title')} />
+                <label className="grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{tr('Titre du document', 'Document title')}<input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={tr('Titre du document', 'Document title')} /></label>
                 <label className="grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">
                   {tr('Destinataires', 'Recipients')}
                   <select className={field} value={targetMode} onChange={(e) => setTargetMode(e.target.value as any)}>
@@ -478,7 +483,7 @@ export default function CourseSyllabi() {
             if (!busy) setEditing(null);
           }}
         >
-          <section role="dialog" aria-modal="true" aria-labelledby="syllabus-edit-title" className="max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-kcs-blue-200 bg-[#f4f9ff] shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950" onMouseDown={(event) => event.stopPropagation()}>
+          <section data-nexus-dialog-preserve role="dialog" aria-modal="true" aria-labelledby="syllabus-edit-title" className="max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-kcs-blue-200 bg-[#f4f9ff] shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950" onMouseDown={(event) => event.stopPropagation()}>
             <header className="sticky top-0 z-10 flex items-start justify-between gap-4 bg-gradient-to-r from-kcs-blue-950 to-kcs-blue-700 px-5 py-4 text-white sm:px-7">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[.18em] text-kcs-gold-300">
