@@ -6,7 +6,7 @@ import { useUIStore } from '@/store/uiStore'
 
 type Row = { id: string; percentage: number; letterGrade: string; credits: number; qualityPoints?: number; cycle?: { academicYear?: string; term?: string }; course?: { name?: string; code?: string } }
 type Transcript = { student: { studentNumber: string; name: string; grade: string; photoUrl?: string | null }; rows: Row[]; summary: { credits: number; cumulativeGpa: number | null; officialRecords: number }; generatedAt: string; dataPolicy: string }
-const panel = 'min-w-0 overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
+const panel = 'nexus-workspace-card min-w-0 overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
 const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character] ?? character))
 
 export default function OfficialTranscriptPanel({ studentId }: { studentId?: string | null }) {

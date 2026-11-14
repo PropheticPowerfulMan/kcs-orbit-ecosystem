@@ -139,7 +139,7 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
   ] as const
 
   return <div data-account-settings data-teacher-save-region className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-    <section className="rounded-3xl border border-kcs-blue-100 bg-gradient-to-br from-kcs-blue-50 to-cyan-50 p-5 shadow-sm dark:border-kcs-blue-800 dark:from-kcs-blue-900 dark:to-kcs-blue-950">
+    <section className="nexus-workspace-card rounded-3xl border border-kcs-blue-100 bg-gradient-to-br from-kcs-blue-50 to-cyan-50 p-5 shadow-sm dark:border-kcs-blue-800 dark:from-kcs-blue-900 dark:to-kcs-blue-950">
       <div className="flex items-center gap-4">
         <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-visible rounded-2xl bg-kcs-blue-100 text-2xl font-black text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">
           {profile.avatar ? <img src={profile.avatar} alt={displayName} className="h-full w-full rounded-2xl object-cover"/> : initials}
@@ -165,7 +165,7 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
       </div> : null}
     </section>
 
-    <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+    <section className="nexus-workspace-card rounded-3xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div><h2 className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{tr('Identifiants et profil', 'Credentials and profile')}</h2><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Le serveur vérifie votre mot de passe actuel sans jamais l’afficher ni le récupérer.', 'The server verifies your current password without ever displaying or retrieving it.')}</p></div>
         <button type="button" disabled={Boolean(savingAction)} onClick={() => void savePasswordOnly()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800 disabled:cursor-wait disabled:opacity-60">{savingAction === 'password' ? <Loader2 size={16} className="animate-spin"/> : <KeyRound size={16}/>} {savingAction === 'password' ? tr('Sécurisation…', 'Securing…') : tr('Enregistrer', 'Save')}</button>

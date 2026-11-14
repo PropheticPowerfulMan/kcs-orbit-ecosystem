@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowDownToLine, ArrowUpRight, BookOpen, ChevronRight, ExternalLink, FileText, Globe2, Search, X } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
@@ -9,6 +9,8 @@ import { getLocalizedGreeting, getLocalizedPortalDate, getUserDisplayName } from
 import documents from '@/data/schoolHandbook.json'
 import topics from '@/data/schoolHandbookTopics.json'
 import './schoolHandbook.css'
+
+const HandbookPdfReader = lazy(() => import('@/components/shared/HandbookPdfReader'))
 
 type Language = 'en' | 'fr'
 const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -53,8 +55,8 @@ export default function SchoolHandbook({ portal = false }: { portal?: boolean })
     {reader && opened && <section ref={readerRef} className="handbook-reader" aria-label={tr('Consultation du manuel', 'Handbook reader')}>
       <div className="handbook-reader-bar"><div><span className="handbook-eyebrow">{tr('LECTURE DU DOCUMENT', 'DOCUMENT READER')}</span><h2>{opened.title} <small>· {tr('page', 'page')} {reader.page}</small></h2></div><button type="button" className="handbook-icon-button" onClick={() => setReader(null)} aria-label={tr('Fermer le document', 'Close document')}><X size={20}/></button></div>
       <div className="handbook-reader-actions"><a className="handbook-primary" href={`${getAssetUrl(opened.file)}#page=${reader.page}`} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} aria-hidden="true"/>{tr('Ouvrir en plein écran', 'Open full screen')}</a><a className="handbook-secondary" href={getAssetUrl(opened.file)} download={opened.downloadName}><ArrowDownToLine size={16} aria-hidden="true"/>{tr('Télécharger le PDF', 'Download PDF')}</a></div>
-      <p className="handbook-reader-hint">{tr('Sur téléphone, ouvrez le document en plein écran ou téléchargez-le pour un meilleur confort de lecture.', 'On your phone, open the document full screen or download it for a more comfortable reading experience.')}</p>
-      <iframe key={`${reader.language}-${reader.page}`} src={`${getAssetUrl(opened.file)}#page=${reader.page}&view=FitH`} title={`${opened.title} · page ${reader.page}`} className="handbook-pdf-frame"/>
+      <p className="handbook-reader-hint">{tr('Consultez toutes les pages ici. Vous pouvez aussi ouvrir ou télécharger le document original.', 'Read every page here. You can also open or download the original document.')}</p>
+      <Suspense fallback={<p className="handbook-pdf-status" role="status">{tr('Ouverture du lecteur PDF…', 'Opening PDF reader…')}</p>}><HandbookPdfReader src={getAssetUrl(opened.file)} initialPage={reader.page} title={opened.title} language={language}/></Suspense>
     </section>}
     <section className="handbook-topics" aria-labelledby="handbook-topics-title">
       <div className="handbook-section-heading"><div><span className="handbook-eyebrow">{tr('TROUVER UNE INFORMATION', 'FIND WHAT YOU NEED')}</span><h2 id="handbook-topics-title">{tr('Votre guide de lecture', 'Your reading guide')}</h2><p>{tr('Choisissez un thème pour ouvrir sa première page. Les dispositions complètes figurent dans le PDF.', 'Choose a topic to open its first page. Refer to the PDF for the complete policies and conditions.')}</p></div><div className="handbook-language-switch" role="group" aria-label={tr('Langue du document à consulter', 'Reading language')}>{(['en', 'fr'] as const).map(lang => <button key={lang} type="button" aria-pressed={documentLanguage === lang} onClick={() => setDocumentLanguage(lang)}>{lang === 'en' ? 'English' : 'Français'}</button>)}</div></div>

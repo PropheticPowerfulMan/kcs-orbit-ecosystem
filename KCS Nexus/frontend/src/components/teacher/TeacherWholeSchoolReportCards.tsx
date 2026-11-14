@@ -1,3 +1,5 @@
+import { usePublishedAcademicCalendar } from '@/hooks/usePublishedAcademicCalendar';
+import { ACADEMIC_REPORT_PERIODS } from '@/constants/academicPeriods';
 import ReportCardAnalyticsPanel from '@/components/shared/ReportCardAnalyticsPanel';
 import { useUIStore } from '@/store/uiStore';
 import { useAcademicPeriodAccess } from '@/hooks/useAcademicPeriodAccess';
@@ -72,8 +74,8 @@ type Dashboard = {
   hierarchy: Record<string, string>;
 };
 
-const sessions = ['Semester 1 · Quarter 1', 'Semester 1 · Quarter 2', 'Semester 2 · Quarter 3', 'Semester 2 · Quarter 4', 'Semester 1', 'Semester 2', 'Annual final'];
-const panel = 'rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50';
+const sessions: readonly string[] = ACADEMIC_REPORT_PERIODS;
+const panel = 'nexus-workspace-card rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50';
 const field = 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white';
 
 const letterGrade = (value: number | null) => {
@@ -127,7 +129,10 @@ export default function TeacherWholeSchoolReportCards() {
   const language = useUIStore(state => state.language);
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en;
   const userId = useAuthStore((state) => state.user?.id ?? '');
+  const { calendar: publishedCalendar } = usePublishedAcademicCalendar();
+  const initializedYear = useRef(false);
   const [academicYear, setAcademicYear] = useState('2026-2027');
+  useEffect(() => { if (publishedCalendar?.name && !initializedYear.current) { initializedYear.current = true; setAcademicYear(publishedCalendar.name) } }, [publishedCalendar?.name]);
   const [term, setTerm] = useState(sessions[0]);
   const [dashboard, setDashboard] = useState<Dashboard | null>(() => readReportDashboardCache(userId, '2026-2027', sessions[0]));
   const [selectedId, setSelectedId] = useState('');
@@ -536,7 +541,7 @@ export default function TeacherWholeSchoolReportCards() {
         <div className="grid gap-3 lg:grid-cols-5">
           <label className="text-xs font-bold uppercase text-gray-400">
             Academic year
-            <input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} />
+            <input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => { initializedYear.current = true; setAcademicYear(event.target.value) }} />
           </label>
           <label className="text-xs font-bold uppercase text-gray-400">
             Report session

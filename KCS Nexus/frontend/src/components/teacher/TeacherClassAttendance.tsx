@@ -14,7 +14,7 @@ const labels: Record<Status, Record<'fr' | 'en', string>> = {
   LATE: { fr: 'Retard', en: 'Late' }, EXCUSED: { fr: 'Excusé', en: 'Excused' },
   SICK: { fr: 'Malade', en: 'Sick' }, SUSPENDED: { fr: 'Suspendu', en: 'Suspended' },
 }
-const panel = 'rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
+const panel = 'nexus-workspace-card rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
 const field = 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
 const classKey = (value: { grade: string; section: string }) => `${value.grade}::${value.section}`
 

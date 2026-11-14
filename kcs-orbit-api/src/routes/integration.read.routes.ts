@@ -1,3 +1,4 @@
+import { listAcademicCalendars } from '../services/academic-calendar.service';
 import { AppSlug } from "@prisma/client";
 import { Router } from "express";
 import { readKcsNexusFamilies, readSharedDirectory } from "../controllers/integration.read.controller";
@@ -15,5 +16,13 @@ router.get('/identity-access/:id', requireAnyIntegrationAccess(AppSlug.KCS_NEXUS
 
 router.get("/kcs-nexus/families", requireIntegrationAccess(AppSlug.KCS_NEXUS), asyncHandler(readKcsNexusFamilies));
 router.get("/shared-directory", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.KCS_KITCHEN, AppSlug.KCS_SENTINEL, AppSlug.EDUPAY, AppSlug.EDUSYNCAI, AppSlug.SAVANEX), asyncHandler(readSharedDirectory));
+
+// Read-only calendar access uses each application's existing scoped integration key.
+router.get('/academic-calendar', requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.KCS_KITCHEN, AppSlug.KCS_SENTINEL, AppSlug.EDUPAY, AppSlug.EDUSYNCAI, AppSlug.SAVANEX), asyncHandler(async(req,res)=>{
+ const organizationId = typeof req.query.organizationId === 'string' ? req.query.organizationId.trim() : '';
+ if (!organizationId) return res.status(400).json({message:'organizationId is required'});
+ res.setHeader('Cache-Control','private, no-store');
+ return res.json({calendars:await listAcademicCalendars(organizationId)});
+}));
 
 export default router;
