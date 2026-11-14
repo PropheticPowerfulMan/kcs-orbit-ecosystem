@@ -12,11 +12,14 @@ export async function officialTranscriptDocument(transcript:OfficialTranscript){
  const issueDate=new Date(transcript.generatedAt);const compactDate=issueDate.toISOString().slice(0,10).replace(/-/g,'')
  const fingerprint=createHash('sha256').update(transcript.sourceVersion+':'+createHash('sha256').update(transcript.student.photoUrl??'').digest('hex')+':'+compactDate+(preview?':en:transcript-preview-v1':':en:official-transcript-v2')).digest('hex').toUpperCase()
  const documentId=`KCS-TR-${preview?'PREVIEW-':''}${compactDate}-${fingerprint.slice(0,16)}`
- const verifyUrl=`https://kinshasachristianschool.org/verify/transcript?document=${encodeURIComponent(documentId)}&fingerprint=${fingerprint}`
- const qrCode=preview?'':await QRCode.toDataURL(verifyUrl,{errorCorrectionLevel:'H',width:800,margin:4})
+ const verificationUrl=new URL('/verify/transcript',process.env.FRONTEND_URL||'https://kinshasachristianschool.org')
+ if(!['https:','http:'].includes(verificationUrl.protocol))throw new Error('Invalid public document verification URL')
+ verificationUrl.searchParams.set('document',documentId);verificationUrl.searchParams.set('fingerprint',fingerprint)
+ const verifyUrl=verificationUrl.toString()
+ const qrCode=await QRCode.toDataURL(verifyUrl,{errorCorrectionLevel:'H',width:800,margin:4})
  const watermark='data:image/jpeg;base64,'+(await readFile(join(process.cwd(),'assets','kcs-watermark.jpg'))).toString('base64');const logo=watermark
  const photo=/^data:image\/(?:png|jpeg|jpg|webp);base64,/.test(transcript.student.photoUrl||'')?transcript.student.photoUrl!:''
- const html=await renderHtml();return{html,preview,documentId,fingerprint,sourceVersion:transcript.sourceVersion,activeAcademicYear:transcript.activeAcademicYear}
+ const html=await renderHtml();return{html,preview,documentId,fingerprint,verificationUrl:verifyUrl,sourceVersion:transcript.sourceVersion,activeAcademicYear:transcript.activeAcademicYear}
  async function renderHtml(){
   const rows = transcript.rows.map((row) => `
     <tr><td>${escapeHtml(row.cycle.academicYear)}<span>${escapeHtml(row.gradeLevel)}</span></td><td>${escapeHtml(localizedTerm(row.cycle.term))}</td>
@@ -43,10 +46,10 @@ export async function officialTranscriptDocument(transcript:OfficialTranscript){
   .records-title{display:flex;align-items:end;justify-content:space-between;margin:13px 0 7px}.records-title h3{margin:0;color:#073b70;font-size:13px;text-transform:uppercase}.records-title span{color:#6f8193;font-size:9px}
   table{width:100%;border-collapse:collapse;font-size:9.5px}thead{display:table-header-group}tr{break-inside:avoid}th{padding:8px 7px;text-align:left;background:#073b70;color:#fff;font-size:8px;letter-spacing:.05em;text-transform:uppercase}td{padding:8px 7px;border-bottom:1px solid #dce5ee;vertical-align:top}tbody tr:nth-child(even){background:#f4f8fb}td span{display:block;margin-top:2px;color:#62758a;font-size:8px}.number{text-align:center}.grade{text-align:center;color:#073b70;font-weight:900}
   .empty{padding:22px;text-align:center;color:#77611e;background:#fff8df;border:1px solid #ead99d;border-radius:8px;font-size:10px}.certification{margin-top:18px;padding:10px 12px;border:1px solid #c8ddec;border-radius:8px;color:#3f566d;font-size:9px;line-height:1.55}
-  .certification,footer,.signatures{break-inside:avoid}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:27px}.signature{padding-top:7px;border-top:1px solid #496178;text-align:center;color:#52677d;font-size:9px}
+  .preview .empty{padding:12px}.preview .academic-certification{display:none}.preview .signatures{margin-top:18px}.preview .certification{margin-top:12px}.certification,footer,.signatures{break-inside:avoid}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:27px}.signature{padding-top:7px;border-top:1px solid #496178;text-align:center;color:#52677d;font-size:9px}
   footer{display:flex;justify-content:space-between;gap:15px;margin-top:22px;padding-top:8px;border-top:2px solid #f1b82d;color:#5b7086;font-size:8px;line-height:1.45}footer strong{color:#073b70}
   @media print{body{background:#fff}.sheet{width:auto;min-height:0;margin:0;border:0;box-shadow:none}.content{padding:11mm 10mm 8mm}}
-  </style></head><body><main class="sheet"><div class="top-line"></div>
+  </style></head><body><main class="sheet ${preview?'preview':''}"><div class="top-line"></div>
   <div class="watermark-wrap" aria-hidden="true"><img class="watermark" src="${escapeHtml(watermark)}" alt=""></div><div class="content">
   <header class="masthead"><img class="school-logo" src="${escapeHtml(logo)}" alt="Kinshasa Christian School">
   <div class="document-title"><small>${tr('Bureau des dossiers académiques', 'Office of Academic Records')}</small><h1>${preview?'Academic Transcript · Preview':tr('Relevé académique officiel', 'Official Academic Transcript')}</h1><p>${tr('Document', 'Document')} ${escapeHtml(documentId)}</p></div></header>
@@ -58,9 +61,20 @@ export async function officialTranscriptDocument(transcript:OfficialTranscript){
   <div class="metric"><span>${tr('Crédits représentés', 'Credits represented')}</span><b>${transcript.summary.credits}</b></div><div class="metric"><span>${tr('Moyenne générale cumulative', 'Cumulative GPA')}</span><b>${transcript.summary.cumulativeGpa ?? '—'}</b></div></section>
   <div class="records-title"><h3>${tr('Dossier scolaire', 'Scholastic record')}</h3><span>${tr('Seules les notes finales approuvées sont incluses', 'Only approved final grades are included')}</span></div>
   ${rows ? `<table><thead><tr><th>${tr('Année scolaire', 'Academic year')}</th><th>${tr('Période', 'Term')}</th><th>${tr('Cours', 'Course')}</th><th>${tr('Crédit', 'Credit')}</th><th>${tr('Moyenne', 'Average')}</th><th>${tr('Note', 'Grade')}</th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="empty">${tr('Aucun résultat académique approuvé n’a encore été publié pour cet élève.', 'No approved academic result has been published for this learner yet.')}</div>`}
-  <div class="certification">${preview?'This administrative preview displays the learner identity and document layout only. It does not certify academic results and must not be used as an official transcript.':tr('Ce relevé est généré depuis le registre académique officiel de Kinshasa Christian School. Toute modification invalide le document. Les résultats provisoires, projetés ou non autorisés sont exclus.', 'This transcript is generated from the official Kinshasa Christian School academic register. Alteration invalidates the document. Provisional, projected or unauthorized results are excluded.')}</div>
+  <div class="certification academic-certification">${preview?'This administrative preview displays the learner identity and document layout only. It does not certify academic results and must not be used as an official transcript.':tr('Ce relevé est généré depuis le registre académique officiel de Kinshasa Christian School. Toute modification invalide le document. Les résultats provisoires, projetés ou non autorisés sont exclus.', 'This transcript is generated from the official Kinshasa Christian School academic register. Alteration invalidates the document. Provisional, projected or unauthorized results are excluded.')}</div>
   <div class="certification"><b>Academic summary method</b><br>Course credits are counted once per academic year. Approved annual results take precedence; otherwise the KCS quarter and semester rules apply. Missing periods are not scored as zero. GPA uses the KCS 4-point scale (90/80/70/60% thresholds).<br><br><b>Grade 9–12 coverage</b><br>${escapeHtml(transcript.summary.gradeCoverage.map(item=>item.gradeLevel+': '+item.records+' record(s)').join(' · '))}${transcript.summary.missingGradeLevels.length?'<br>Records not yet on file: '+escapeHtml(transcript.summary.missingGradeLevels.join(', ')):''}${transcript.summary.unclassifiedRecords?'<br>Historical records awaiting grade-level verification: '+transcript.summary.unclassifiedRecords:''}</div>
-  ${preview?'<section class="certification"><b>Preview only</b><br>No official verification QR has been issued for this preview.</section>':`<section class="certification" style="display:flex;align-items:center;gap:14px"><img src="${escapeHtml(qrCode)}" alt="Verification QR code" style="width:30mm;height:30mm"><div><b>Digital document verification</b><br>${escapeHtml(documentId)}<br>QR ISO/IEC 18004 · ECC H · KCS verification register<br>SHA-256: <span style="overflow-wrap:anywhere">${fingerprint}</span><br><span style="overflow-wrap:anywhere">${escapeHtml(verifyUrl)}</span></div></section>`}
+  <section class="certification document-identity" style="display:flex;align-items:center;gap:14px">
+  <img src="${escapeHtml(qrCode)}" alt="Verification QR code" style="width:30mm;height:30mm;flex-shrink:0">
+  <div style="min-width:0;overflow-wrap:anywhere"><b>Digital document identity</b><br>
+  <b>Document ID:</b> ${escapeHtml(documentId)}<br>
+  <b>Issuer:</b> Kinshasa Christian School<br>
+  <b>Status:</b> ${preview?'REGISTERED PREVIEW · NOT AN ISSUED TRANSCRIPT':'OFFICIAL · VERIFIED ACADEMIC RECORD'}<br>
+  <b>Generated (UTC):</b> ${escapeHtml(issueDate.toISOString())}<br>
+  <b>SHA-256:</b> ${fingerprint}<br>
+  QR ISO/IEC 18004 · ECC H · KCS verification register<br>
+  <a href="${escapeHtml(verifyUrl)}" style="color:#073b70;text-decoration:none">${escapeHtml(verifyUrl)}</a>
+  ${preview?'<br><b>This QR verifies the registered preview and its status; it does not certify academic results.</b>':''}
+  </div></section>
   <div class="signatures"><div class="signature">${tr('Responsable des dossiers académiques', 'Registrar / Academic Records Officer')}</div><div class="signature">${tr('Direction de l’école / Signature autorisée', 'School Director / Authorized signature')}</div></div>
   <footer><div><strong>Kinshasa Christian School</strong><br>Avenue de la République n° 1 · Macampagne, Ngaliema · Kinshasa, Democratic Republic of Congo · Réf. 80 jours<br>+243 895 326 011 · +243 994 645 735<br>kinshasachristianschool@gmail.com · www.kinshasachristianschool.org</div>
   <div style="text-align:right">KCS Nexus AI · ${tr('Dossier académique institutionnel', 'Institutional Academic Record')}<br>${escapeHtml(documentId)}</div></footer>

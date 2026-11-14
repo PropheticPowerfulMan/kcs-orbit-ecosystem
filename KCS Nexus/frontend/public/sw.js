@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-transcript-preview-20261114-v23'
+const CACHE_NAME = 'kcs-nexus-transcript-identity-20261114-v24'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
