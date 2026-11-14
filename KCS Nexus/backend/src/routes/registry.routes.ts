@@ -380,7 +380,8 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (req, res) => 
           middleName: link.parent.middleName,
           lastName: link.parent.lastName,
           phone: link.parent.phone,
-          photoData: link.parent.avatar,
+          // A personal Nexus avatar is not an official registry portrait.
+          photoData: null,
           email: link.parent.email,
           mustChangePassword: false,
           organizationId: null,
@@ -683,7 +684,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
           lastName: entity.lastName || localAccount.lastName,
           email: officialEmail && !emailOwner ? officialEmail : localAccount.email,
           phone: entity.phone || localAccount.phone,
-          avatar: entity.photoData || localAccount.avatar,
+          // Resetting institutional access must not overwrite the personal Nexus avatar.
         },
       })
     }

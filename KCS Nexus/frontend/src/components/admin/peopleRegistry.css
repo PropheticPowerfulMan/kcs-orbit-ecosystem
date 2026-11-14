@@ -1,0 +1,38 @@
+[data-people-metrics]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}@media(min-width:640px){[data-people-metrics][data-metric-count="3"]{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(min-width:1024px){[data-people-metrics][data-metric-count="4"]{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.admin-person-directory [data-registry-toolbar]{border-color:#d9e9f3;border-radius:1.25rem;box-shadow:0 3px 14px #082b4d05}
+.admin-person-directory [data-registry-toolbar] :is(input,select){min-width:0}
+.admin-person-directory [data-registry-toolbar] label:focus-within{border-color:#2589ba;box-shadow:0 0 0 3px #38bdf812}
+.admin-person-directory [data-registry-list]{overflow:hidden;border-color:#d9e9f3;border-radius:1.25rem;box-shadow:0 4px 18px #082b4d07}
+.admin-person-directory [data-registry-list] thead{background:#edf6fc;color:#31546d}
+.admin-person-directory [data-registry-list] th{font-size:.65rem;letter-spacing:.06em;padding-top:1rem;padding-bottom:1rem}
+.admin-person-directory [data-registry-list] tbody tr{transition:background-color 150ms ease}
+.admin-person-directory [data-registry-list] tbody tr:hover{background:#f0f8fd}
+.admin-person-directory [data-registry-list] button{transition:background-color 150ms ease,box-shadow 150ms ease,transform 150ms ease}
+.admin-person-directory [data-registry-list] button:hover{box-shadow:0 3px 10px #0834590c;transform:translateY(-1px)}
+.admin-person-directory [data-registry-list] button:active{transform:translateY(0)}
+.admin-person-directory [data-registry-list] button:focus-visible{outline:2px solid #1591bf;outline-offset:3px}
+.dark .admin-person-directory [data-registry-toolbar],.dark .admin-person-directory [data-registry-list]{border-color:#173e60}
+.dark .admin-person-directory [data-registry-list] thead{background:#082f50;color:#c0d9ec}
+.dark .admin-person-directory [data-registry-list] tbody tr:hover{background:#0c3657}
+@media(max-width:767px){
+ [data-people-metrics]{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:.5rem!important}
+ [data-people-metrics]>div:last-child:nth-child(3){grid-column:1/-1}
+ [data-people-metrics]>div{min-width:0;padding:.8rem}
+ .admin-person-directory [data-registry-list] .overflow-x-auto{overflow:visible}
+ .admin-person-directory [data-registry-list] table{display:block;min-width:0!important;width:100%}
+ .admin-person-directory [data-registry-list] thead{display:none}
+ .admin-person-directory [data-registry-list] tbody{display:block;padding:.6rem}
+ .admin-person-directory [data-registry-list] tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.25rem .75rem;margin-bottom:.65rem;padding:.85rem;border:1px solid #dcebf5!important;border-radius:1rem;background:#fff}
+ .admin-person-directory [data-registry-list] tbody tr:last-child{margin-bottom:0}
+ .admin-person-directory [data-registry-list] td{display:block;min-width:0;padding:.35rem 0;border:0;overflow-wrap:anywhere;white-space:normal}
+ .admin-person-directory [data-registry-list] td::before{content:attr(data-label);display:block;margin-bottom:.25rem;font-size:.6rem;font-weight:800;letter-spacing:.03em;color:#58778e}
+ .admin-person-directory [data-registry-list] td:first-child{grid-column:1/-1;padding-bottom:.65rem;border-bottom:1px solid #edf3f8}
+ .admin-person-directory [data-registry-list] td:first-child::before,.admin-person-directory [data-registry-list] td:last-child::before{display:none}
+ .admin-person-directory [data-registry-list] td:last-child{grid-column:1/-1;padding-top:.6rem}
+ .admin-person-directory [data-registry-list] td:last-child>div{flex-wrap:wrap;justify-content:flex-start;gap:.4rem}
+ .admin-person-directory [data-registry-list] td:last-child button{min-height:2.25rem}
+ .dark .admin-person-directory [data-registry-list] tbody tr{border-color:#164260!important;background:#082d4c}
+ .dark .admin-person-directory [data-registry-list] td:first-child{border-bottom-color:#174460}
+ .dark .admin-person-directory [data-registry-list] td::before{color:#a2c3da}
+}
+@media(prefers-reduced-motion:reduce){.admin-person-directory [data-registry-list] :is(button,tr){transition:none}.admin-person-directory [data-registry-list] button:hover{transform:none}}

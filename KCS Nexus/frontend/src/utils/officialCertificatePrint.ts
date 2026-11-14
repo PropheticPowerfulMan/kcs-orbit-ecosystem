@@ -1,3 +1,4 @@
+import { showOfficialDocument } from './officialDocumentPreview'
 import QRCode from "qrcode";
 import { academicRecordsAPI } from "@/services/api";
 
@@ -140,9 +141,5 @@ export async function printOfficialCertificate(
     "</style>",
     ".logo{width:27mm;height:27mm;max-height:none;border-radius:50%;object-fit:contain;filter:drop-shadow(0 5px 10px #052f5f25)}.qr img{display:block;width:29mm;height:29mm;margin:auto;image-rendering:auto}.sheet:before{content:'';position:absolute;inset:11mm;border:1px solid rgba(214,166,42,.34);pointer-events:none}</style>",
   );
-  const url = URL.createObjectURL(
-    new Blob([polishedHtml], { type: "text/html;charset=utf-8" }),
-  );
-  printWindow.location.replace(url);
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  await showOfficialDocument(printWindow, polishedHtml, { filename: documentId, language, onError: onBlocked });
 }

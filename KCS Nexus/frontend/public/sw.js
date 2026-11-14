@@ -1,45 +1,97 @@
-const CACHE_NAME = 'kcs-nexus-transcript-preview-20261114-v23'
-const SHELL = ['./', './manifest.webmanifest', './icons/nexus-192.png', './icons/nexus-512.png', './icons/nexus-apple-180.png']
+const CACHE_NAME = 'kcs-nexus-courses-people-20261114-v25'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()))
-})
+  self.skipWaiting();
+});
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key.startsWith('kcs-nexus-') && key !== CACHE_NAME).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim())
-  )
-})
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName.startsWith('kcs-nexus-shell-') && cacheName !== CACHE_NAME)
+          .map((cacheName) => caches.delete(cacheName))
+      )
+    ).then(() => self.clients.claim())
+  );
+});
 
 self.addEventListener('fetch', (event) => {
-  const request = event.request
-  if (request.method !== 'GET') return
-  const url = new URL(request.url)
-  // Nexus is installed from the domain root, but it must never serve its shell
-  // for another KCS application hosted under a dedicated path.
-  if (url.origin === self.location.origin && SIBLING_APP_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return
-  if (url.origin !== self.location.origin || url.pathname.includes('/api/')) return
+  const request = event.request;
 
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+
+  // Ne pas intercepter les applications indÃ©pendantes.
+  if (
+    url.origin === self.location.origin &&
+    SIBLING_APP_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
+  ) {
+    return;
+  }
+
+  // Ne jamais mettre les API en cache.
+  if (
+    url.origin !== self.location.origin ||
+    url.pathname.includes('/api/')
+  ) {
+    return;
+  }
+
+  // Navigation : toujours privilÃ©gier la version rÃ©seau.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put('./', copy))
-          return response
+          if (response.ok) {
+            const copy = response.clone();
+
+            event.waitUntil(
+              caches.open(CACHE_NAME)
+                .then((cache) => cache.put('./', copy))
+                .catch((error) => {
+                  console.error('[KCS SW] Navigation cache error:', error);
+                })
+            );
+          }
+
+          return response;
         })
-        .catch(() => caches.match('./'))
-    )
-    return
+        .catch(async () => {
+          return (await caches.match('./')) ||
+            new Response('Application temporairement indisponible.', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+            });
+        })
+    );
+
+    return;
   }
 
+  // Ressources statiques : cache prioritaire, puis rÃ©seau.
   event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()))
-      return response
-    }))
-  )
-})
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(request).then((response) => {
+        if (response.ok) {
+          // Cloner immÃ©diatement, avant toute opÃ©ration asynchrone.
+          const copy = response.clone();
+
+          event.waitUntil(
+            caches.open(CACHE_NAME)
+              .then((cache) => cache.put(request, copy))
+              .catch((error) => {
+                console.error('[KCS SW] Resource cache error:', error);
+              })
+          );
+        }
+
+        return response;
+      });
+    })
+  );
+});

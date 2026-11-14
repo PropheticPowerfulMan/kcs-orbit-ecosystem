@@ -78,6 +78,7 @@ const generateCourseAbbreviation = (name: string) => {
 
 const COURSE_SCOPE_CUSTOM = '[KCS_SCOPE:CUSTOM]'
 const COURSE_SCOPE_CLASS = '[KCS_SCOPE:CLASS]'
+const COURSE_DELETE_CONFIRM_KEY = 'kcs:nexus:teacher:skip-course-delete-confirmation'
 
 const courseScopeDescription = (name: string, scope: 'class' | 'custom', className: string) => (
   `${name} · ${scope === 'custom' ? 'Multi-class custom roster' : className} · synchronized from Teacher My Courses ${scope === 'custom' ? COURSE_SCOPE_CUSTOM : COURSE_SCOPE_CLASS}`
@@ -327,6 +328,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     }).slice(0, 0),
   )
   const [courseTab, setCourseTab] = useState<'setup' | 'enrollment'>('setup')
+  const [pendingDeleteCourse, setPendingDeleteCourse] = useState<{ id: string; name: string } | null>(null)
+  const [skipCourseDeleteConfirmation, setSkipCourseDeleteConfirmation] = useState(() => localStorage.getItem(COURSE_DELETE_CONFIRM_KEY) === 'true')
+  const [rememberCourseDeleteChoice, setRememberCourseDeleteChoice] = useState(false)
   const [courseSearch, setCourseSearch] = useState('')
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
   const [selectedEnrollmentCourseId, setSelectedEnrollmentCourseId] = useState('')
@@ -388,8 +392,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     enrollmentMode: 'class' as 'class' | 'custom',
   })
   const [courseAbbreviationManual, setCourseAbbreviationManual] = useState(false)
-  const [courseErrors, setCourseErrors] = useState<{ name?: string; grade?: string }>({})
+  const [courseErrors, setCourseErrors] = useState<{ name?: string; grade?: string; credits?:string }>({})
   const courseNameRef = useRef<HTMLInputElement>(null)
+  const courseCreditsRef = useRef<HTMLSelectElement>(null)
   const courseGradeRef = useRef<HTMLDivElement>(null)
   const workspaceLoadedUserRef = useRef('')
   const workspaceRequestTokenRef = useRef(0)
@@ -968,12 +973,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const customRoster = courseDraft.enrollmentMode === 'custom'
     const selectedGrade = customRoster ? 'Multi-class' : canonicalClassLabel(courseDraft.gradeLevels[0] ?? courseDraft.className)
     const resolvedClass = customRoster ? selectedGrade : resolveRosterClass(courseDraft.className || selectedGrade)
-    const errors: { name?: string; grade?: string } = {}
+    const errors: { name?: string; grade?: string; credits?:string } = {}
     if (!courseDraft.name.trim()) errors.name = 'Enter the subject name.'
     if (!customRoster && !courseDraft.gradeLevels[0]) errors.grade = 'Select the class taught for this subject.'
-    if (errors.name || errors.grade) {
+    if(!['1','2'].includes(courseDraft.creditHours))errors.credits=tr('Choisissez 1 ou 2 crédits.','Choose 1 or 2 credit hours.')
+    if (errors.name || errors.grade || errors.credits) {
       setCourseErrors(errors)
-      window.requestAnimationFrame(() => errors.name ? courseNameRef.current?.focus() : courseGradeRef.current?.focus())
+      window.requestAnimationFrame(() => errors.name ? courseNameRef.current?.focus() : errors.grade ? courseGradeRef.current?.focus() : courseCreditsRef.current?.focus())
       return
     }
     setCourseErrors({})
@@ -1060,7 +1066,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setCourseDraft({
       name: course.name,
       abbreviation: course.abbreviation,
-      creditHours: String(normalizeCreditHours(course.creditHours)),
+      creditHours: [1,2].includes(Number(course.creditHours)) ? String(course.creditHours) : '',
       className: canonicalClassLabel(course.className || course.gradeLevels[0]),
       room: course.room,
       gradeLevels: course.enrollmentMode === 'custom' ? course.gradeLevels : [canonicalClassLabel(course.className || course.gradeLevels[0])],
@@ -1070,7 +1076,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setCourseAbbreviationManual(course.abbreviation !== generateCourseAbbreviation(course.name))
   }
 
-  const deleteCourse = async (courseId: string) => {
+  const performDeleteCourse = async (courseId: string) => {
     const course = courses.find((item) => item.id === courseId)
     if (!course) return
     const nextCourses = courses.filter((item) => item.id !== courseId)
@@ -1097,6 +1103,25 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     if (editingCourseId === courseId) resetCourseDraft()
     if (selectedEnrollmentCourseId === courseId) setSelectedEnrollmentCourseId(nextCourses[0]?.id ?? '')
     if (selectedGradebookCourseId === courseId) setSelectedGradebookCourseId(nextCourses[0]?.id ?? '')
+  }
+
+  const deleteCourse = (courseId: string) => {
+    const course = courses.find((item) => item.id === courseId)
+    if (!course) return
+    if (skipCourseDeleteConfirmation) { void performDeleteCourse(courseId); return }
+    setRememberCourseDeleteChoice(false)
+    setPendingDeleteCourse({ id: course.id, name: course.name })
+  }
+
+  const confirmCourseDelete = () => {
+    if (!pendingDeleteCourse) return
+    if (rememberCourseDeleteChoice) {
+      localStorage.setItem(COURSE_DELETE_CONFIRM_KEY, 'true')
+      setSkipCourseDeleteConfirmation(true)
+    }
+    const id = pendingDeleteCourse.id
+    setPendingDeleteCourse(null)
+    void performDeleteCourse(id)
   }
 
   const filteredCourses = courses.filter((course) => {
@@ -1551,7 +1576,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" data-teacher-save-primary disabled={workspaceStatus === 'saving'} onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>
+            {segment !== 'settings' && (<button type="button" data-teacher-save-primary disabled={workspaceStatus === 'saving'} onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>)}
             <button onClick={exportWorkspacePdf} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
           </div>
         </div>
@@ -1622,19 +1647,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                         <span className="flex items-center justify-between gap-2 text-[11px] font-normal text-gray-400"><span>{tr('Générée automatiquement, puis modifiable librement.', 'Generated automatically, then freely editable.')}</span><button type="button" className="font-bold text-kcs-blue-700 hover:underline dark:text-kcs-gold-300" onClick={() => { setCourseAbbreviationManual(false); setCourseDraft((draft) => ({ ...draft, abbreviation: generateCourseAbbreviation(draft.name) })) }}>{tr('Régénérer', 'Regenerate')}</button></span>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
-                        Credit Hours
-                        <input
-                          className={`${inputClass} h-10 text-center font-bold`}
-                          type='number'
-                          min={1}
-                          max={60}
-                          value={courseDraft.creditHours}
-                          onChange={(event) => {
-                            const normalized = event.target.value.replace(/^0+(?=\d)/, '')
-                            setCourseDraft((draft) => ({ ...draft, creditHours: normalized }))
-                          }}
-                          onBlur={() => setCourseDraft((draft) => ({ ...draft, creditHours: String(normalizeCreditHours(draft.creditHours)) }))}
-                        />
+                        {tr('Crédits','Credit hours')}
+                        <select ref={courseCreditsRef} aria-label={tr('Crédits','Credit hours')} aria-invalid={Boolean(courseErrors.credits)} className={inputClass+' h-10 text-center font-bold'} value={courseDraft.creditHours} onChange={event=>{setCourseDraft(draft=>({...draft,creditHours:event.target.value}));setCourseErrors(current=>({...current,credits:undefined}))}}>
+                          {!['1','2'].includes(courseDraft.creditHours)&&<option value="" disabled>{tr('Choisir 1 ou 2','Choose 1 or 2')}</option>}<option value="1">1</option><option value="2">2</option>
+                        </select>
+                        {courseErrors.credits&&<p role="alert" className="field-error">{courseErrors.credits}</p>}
                       </label>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -1684,7 +1701,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                     <label className="relative block sm:w-72">
                       <input className={inputClass} value={courseSearch} onChange={(event) => setCourseSearch(event.target.value)} placeholder="Search" />
                     </label>
-                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{filteredCourses.length} subject(s)</span>
+                    <div className="flex flex-wrap items-center gap-3"><span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{filteredCourses.length} subject(s)</span>{skipCourseDeleteConfirmation && <button type="button" onClick={() => { localStorage.removeItem(COURSE_DELETE_CONFIRM_KEY); setSkipCourseDeleteConfirmation(false) }} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-bold text-amber-800 dark:border-amber-700 dark:text-amber-200">{tr('Réactiver la confirmation de suppression', 'Turn delete confirmation back on')}</button>}</div>
                   </div>
                   <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-kcs-blue-800">
                     <table className="w-full min-w-[820px] text-left text-sm">
@@ -1820,7 +1837,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold text-kcs-blue-900 dark:text-blue-100">
                   {tr('Crédits', 'Credit hours')}
-                  <input className={inputClass} type="number" min={1} max={60} value={courseDraft.creditHours} onChange={(event) => setCourseDraft((draft) => ({ ...draft, creditHours: event.target.value.replace(/^0+(?=\d)/, '') }))} onBlur={() => setCourseDraft((draft) => ({ ...draft, creditHours: String(normalizeCreditHours(draft.creditHours)) }))} />
+                  <select ref={courseCreditsRef} aria-label={tr('Crédits','Credit hours')} aria-invalid={Boolean(courseErrors.credits)} className={inputClass} value={courseDraft.creditHours} onChange={event=>{setCourseDraft(draft=>({...draft,creditHours:event.target.value}));setCourseErrors(current=>({...current,credits:undefined}))}}>{!['1','2'].includes(courseDraft.creditHours)&&<option value="" disabled>{tr('Choisir 1 ou 2','Choose 1 or 2')}</option>}<option value="1">1</option><option value="2">2</option></select>
+                  {courseErrors.credits&&<p role="alert" className="field-error">{courseErrors.credits}</p>}
+                  {editingCourseId&&!['1','2'].includes(courseDraft.creditHours)&&<p className="text-xs font-normal text-amber-800 dark:text-amber-200">{tr('Valeur historique conservée : ','Historical value preserved: ')}{courses.find(course=>course.id===editingCourseId)?.creditHours}{tr('. Choisissez 1 ou 2 avant d’enregistrer cette modification.','. Choose 1 or 2 before saving this edit.')}</p>}
                 </label>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -2679,6 +2698,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           </div>
         </div>
       )}
+      {pendingDeleteCourse && <div className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="course-delete-title"><section className="w-full max-w-lg rounded-3xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900/60 dark:bg-kcs-blue-950"><p className="text-xs font-black uppercase tracking-[.16em] text-red-600">{tr("Suppression du cours", "Course deletion")}</p><h2 id="course-delete-title" className="mt-2 text-xl font-black text-kcs-blue-950 dark:text-white">{tr("Voulez-vous réellement supprimer ce cours ?", "Do you really want to delete this course?")}</h2><p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{tr("Cours concerné :", "Course:")} <strong>{pendingDeleteCourse.name}</strong>. {tr("Ses liens officiels seront supprimés.", "Its official links will be removed.")}</p><label className="mt-5 flex items-start gap-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700 dark:bg-kcs-blue-900 dark:text-slate-200"><input type="checkbox" className="mt-1 h-4 w-4" checked={rememberCourseDeleteChoice} onChange={(event) => setRememberCourseDeleteChoice(event.target.checked)}/><span>{tr("Ne plus me demander sur cet appareil", "Do not ask me again on this device")}</span></label><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setPendingDeleteCourse(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-kcs-blue-700 dark:text-white">{tr("Annuler", "Cancel")}</button><button type="button" onClick={confirmCourseDelete} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-black text-white hover:bg-red-700">{tr("Supprimer le cours", "Delete course")}</button></div></section></div>}
     </section>
   )
 }
