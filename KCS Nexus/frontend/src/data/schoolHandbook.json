@@ -1,0 +1,22 @@
+[
+  {
+    "language": "en",
+    "title": "KCS School Handbook",
+    "pages": 18,
+    "bytes": 560232,
+    "sha256": "2a9ada89438b6b4a0359fb22782d1c2ed888f2a5f90e34fa6035c7259f2b2515",
+    "file": "documents/handbooks/kcs-school-handbook-en-2a9ada89438b.pdf",
+    "cover": "documents/handbooks/kcs-school-handbook-en-2a9ada89438b.webp",
+    "downloadName": "KCS-School-Handbook-EN.pdf"
+  },
+  {
+    "language": "fr",
+    "title": "Manuel de l’école KCS",
+    "pages": 19,
+    "bytes": 803992,
+    "sha256": "a5e8f383af86ead907ddb82b85449a1358b13f689cd09f12126309be7e2a3d74",
+    "file": "documents/handbooks/kcs-school-handbook-fr-a5e8f383af86.pdf",
+    "cover": "documents/handbooks/kcs-school-handbook-fr-a5e8f383af86.webp",
+    "downloadName": "KCS-School-Handbook-FR.pdf"
+  }
+]

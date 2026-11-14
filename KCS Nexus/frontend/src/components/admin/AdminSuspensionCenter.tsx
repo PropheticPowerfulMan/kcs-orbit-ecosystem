@@ -1,3 +1,4 @@
+import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
@@ -214,7 +215,7 @@ export default function AdminSuspensionCenter({
 
   const cancel = async (id: string) => {
     if (
-      !confirm(
+      !await confirmPortalAction(
         tr(
           "Annuler cette suspension officielle ?",
           "Cancel this official suspension?",

@@ -1,3 +1,5 @@
+import { confirmPortalAction, promptPortalAction } from '@/utils/portalActionDialogs'
+import RegistryRecordBanner, { useRegistryDialogFocus } from '@/components/admin/RegistryRecordBanner'
 import PeopleRegistryHeader from '@/components/admin/PeopleRegistryHeader'
 import AcademicVisibilityControlCenter from '@/components/admin/AcademicVisibilityControlCenter'
 import AdminReportsHub from '@/components/admin/AdminReportsHub'
@@ -1634,14 +1636,19 @@ const AdminSectionView = ({
     students: [createAdminStudentDraft()],
   })
 
+  useRegistryDialogFocus(Boolean(editingParent || editingStudent || selectedParent || viewingStudent || showCreateStudent))
+
   useEffect(() => {
-    if (!editingParent && !editingStudent) return
+    if (!editingParent && !editingStudent && !selectedParent && !viewingStudent && !showCreateStudent) return
     const previousBodyOverflow = document.body.style.overflow
     const previousHtmlOverflow = document.documentElement.style.overflow
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || savingParentEdit || savingStudentEdit) return
       setEditingParent(null)
       setEditingStudent(null)
+      setSelectedParent(null)
+      setViewingStudent(null)
+      setShowCreateStudent(false)
     }
     document.body.style.overflow = 'hidden'
     document.documentElement.style.overflow = 'hidden'
@@ -1651,7 +1658,7 @@ const AdminSectionView = ({
       document.documentElement.style.overflow = previousHtmlOverflow
       window.removeEventListener('keydown', closeOnEscape)
     }
-  }, [editingParent, editingStudent, savingParentEdit, savingStudentEdit])
+  }, [editingParent, editingStudent, selectedParent, viewingStudent, showCreateStudent, savingParentEdit, savingStudentEdit])
 
   const shouldLoadRoster = adminRosterSegments.has(segment)
 
@@ -1946,9 +1953,9 @@ const AdminSectionView = ({
 
   const toggleParentAccess = async (parent: AdminParentRecord) => {
     const blocked = Boolean(parentAccess[parent.id]?.accountBlockedAt)
-    const reason = blocked ? undefined : window.prompt('Reason for blocking this parent account:')?.trim()
+    const reason = blocked ? undefined : (await promptPortalAction('Reason for blocking this parent account:'))?.trim()
     if (!blocked && !reason) return
-    if (!window.confirm((blocked ? 'Unblock ' : 'Block immediately and revoke sessions for ') + parent.name + '?')) return
+    if (!await confirmPortalAction((blocked ? 'Unblock ' : 'Block immediately and revoke sessions for ') + parent.name + '?')) return
     setParentAccessBusy(parent.id)
     try { await registryAPI.setParentAccess(parent.id, !blocked, reason); setParentNotice(blocked ? 'Parent account unblocked.' : 'Parent account blocked and sessions revoked.'); await loadParentAccessStatuses() }
     catch (error) { setParentNotice(extractStudentApiMessage(error, 'Unable to update parent access.')) }
@@ -2060,11 +2067,11 @@ const AdminSectionView = ({
       return
     }
 
-    const confirmed = window.confirm(`Retirer ${student.name} de tous les registres actifs et archiver son dossier ?\n\nCette opération bloque son accès, mais préserve ses preuves académiques dans Archives.`)
+    const confirmed = await confirmPortalAction(`Retirer ${student.name} de tous les registres actifs et archiver son dossier ?\n\nCette opération bloque son accès, mais préserve ses preuves académiques dans Archives.`)
     if (!confirmed) return
-    const secondConfirmation = window.prompt('Pour confirmer cette décision, tapez exactement ARCHIVER :')
+    const secondConfirmation = await promptPortalAction('Pour confirmer cette décision, tapez exactement ARCHIVER :')
     if (secondConfirmation !== 'ARCHIVER') return setStudentNotice('Décision annulée : aucune donnée n’a été modifiée.')
-    const reason = window.prompt(`Motif officiel de l’archivage de ${student.name} (10 caractères minimum) :`)
+    const reason = await promptPortalAction(`Motif officiel de l’archivage de ${student.name} (10 caractères minimum) :`)
     if (!reason || reason.trim().length < 10) return setStudentNotice('Un motif officiel d’au moins 10 caractères est obligatoire.')
     try {
       const response = await studentsAPI.delete(student.id, { confirmation: 'ARCHIVER', reason: reason.trim() })
@@ -2294,7 +2301,7 @@ const AdminSectionView = ({
     }
   }
   const deleteParentRecord = async (parent: AdminParentRecord) => {
-    const confirmed = window.confirm(`Supprimer ${parent.name} du registre parent ?`)
+    const confirmed = await confirmPortalAction(`Supprimer ${parent.name} du registre parent ?`)
     if (!confirmed) return
 
     try {
@@ -2358,7 +2365,7 @@ const AdminSectionView = ({
   }
 
   const deleteTeacherRecord = async (teacher: SharedDirectoryTeacher) => {
-    if (!window.confirm(`Supprimer ${teacher.fullName} du registre partagé ?`)) return
+    if (!await confirmPortalAction(`Supprimer ${teacher.fullName} du registre partagé ?`)) return
     try {
       const response = await registryAPI.deleteEntity('teacher', teacher.id)
       if (editingTeacherId === teacher.id) clearTeacherForm()
@@ -2628,39 +2635,40 @@ const AdminSectionView = ({
           </div>
         </div>
 
-        {selectedParent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche parent">
-            <section className="max-h-[92vh] w-full max-w-none lg:w-[80vw] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        {selectedParent && createPortal((
+          <div data-entity-dialog="parent-view" className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche parent">
+            <section className="registry-dialog-window max-h-[92vh] w-full max-w-none lg:w-[80vw] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+              <div className="registry-dialog-heading mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Consultation</p>
-                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Fiche parent</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Contact familial et enfants rattaches.</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Consultation','Profile overview')}</p>
+                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{tr('Dossier parent','Parent profile')}</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Identité du responsable et parcours des enfants liés.','Guardian information and linked learners.')}</p>
                 </div>
                 <button type="button" onClick={() => setSelectedParent(null)} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
                   <X size={16} />
-                  Fermer
+                  {tr('Fermer','Close')}
                 </button>
               </div>
 
+              <div className="registry-dialog-body"><RegistryRecordBanner kind="parent" mode="view" name={selectedParent.name} photo={selectedParent.photoData} detail={selectedParent.email} badge={selectedParent.studentCount+tr(" enfant(s) lié(s)"," linked learner(s)")}/>
               <div className="mb-4 flex flex-wrap gap-2">
                 <button type="button" onClick={() => openEditParent(selectedParent)} className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20">{tr('Modifier','Edit')}</button>
-                <button type="button" onClick={() => deleteParentRecord(selectedParent)} className="rounded-xl border border-red-100 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20">Supprimer</button>
+                <button type="button" onClick={() => deleteParentRecord(selectedParent)} className="rounded-xl border border-red-100 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20">{tr('Supprimer','Delete')}</button>
               </div>
 
               <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
                 <aside className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/55">
                   <ProfilePhoto src={selectedParent.photoData} name={selectedParent.name} />
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">Responsable</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Responsable','Guardian')}</p>
                   <h4 className="mt-2 font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedParent.name}</h4>
                   <div className="mt-5 space-y-3">
                     {[
-                      ['ID parent', selectedParent.displayId || selectedParent.id],
+                      [tr('ID parent','Parent ID'), selectedParent.displayId || selectedParent.id],
                       ['Email', selectedParent.email],
                       ['Telephone', selectedParent.phone],
-                      ['Adresse physique', selectedParent.physicalAddress],
+                      [tr('Adresse physique','Home address'), selectedParent.physicalAddress],
                       ['Enfants', String(selectedParent.studentCount)],
-                      ['Statut', selectedParent.status],
+                      [tr('Statut','Status'), selectedParent.status],
                     ].map(([label, value]) => (
                       <div key={label} className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
                         <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
@@ -2684,7 +2692,7 @@ const AdminSectionView = ({
                         <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${pillTone(getStudentRisk(student))}`}>{getStudentRisk(student)}</span>
                       </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                        <div className="rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70"><p className="text-xs text-gray-400">Presence</p><p className={`font-bold ${scoreTone(student.attendance, 'attendance')}`}>{student.attendance}%</p></div>
+                        <div className="rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70"><p className="text-xs text-gray-400">{tr('Presence','Attendance')}</p><p className={`font-bold ${scoreTone(student.attendance, 'attendance')}`}>{student.attendance}%</p></div>
                         <div className="rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70"><p className="text-xs text-gray-400">GPA</p><p className={`font-bold ${scoreTone(student.gpa, 'gpa')}`}>{student.gpa}</p></div>
                         <div className="rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70"><p className="text-xs text-gray-400">Discipline</p><p className="font-bold text-kcs-blue-900 dark:text-white">{student.discipline}</p></div>
                       </div>
@@ -2692,31 +2700,33 @@ const AdminSectionView = ({
                   ))}
                 </div>
               </div>
+              </div>
             </section>
           </div>
-        )}
+        ), document.body)}
 
         {editingParent && createPortal((
-          <div className="fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto overscroll-contain bg-kcs-blue-950/80 px-2 pb-2 pt-2 backdrop-blur-md sm:px-5 sm:pb-5 sm:pt-5" role="dialog" aria-modal="true" aria-label="Modifier parent">
-            <section className="my-0 flex h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] min-h-0 w-full max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 shadow-[0_30px_100px_rgba(0,20,45,.65)] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-[calc(100svh-2.5rem)] sm:max-h-[calc(100svh-2.5rem)] sm:max-w-6xl sm:rounded-[2rem]">
-              <div className="sticky top-0 z-20 flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 bg-sky-50/95 p-4 backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:p-5">
+          <div data-entity-dialog="parent-edit" className="fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto overscroll-contain bg-kcs-blue-950/80 px-2 pb-2 pt-2 backdrop-blur-md sm:px-5 sm:pb-5 sm:pt-5" role="dialog" aria-modal="true" aria-label="Modifier parent">
+            <section className="registry-dialog-window my-0 flex h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] min-h-0 w-full max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 shadow-[0_30px_100px_rgba(0,20,45,.65)] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-[calc(100svh-2.5rem)] sm:max-h-[calc(100svh-2.5rem)] sm:max-w-6xl sm:rounded-[2rem]">
+              <div className="registry-dialog-heading sticky top-0 z-20 flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 bg-sky-50/95 p-4 backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:p-5">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Gestion parent</p>
-                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Modifier le parent</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Mettre a jour le nom et les contacts du responsable familial.</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Dossier familial','Family record')}</p>
+                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{tr('Modifier le parent','Edit parent profile')}</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Identité, contacts et enfants liés : un dossier clair, une famille bien accompagnée.','Identity, contacts and linked children: a clear record for a well-supported family.')}</p>
                 </div>
                 <button type="button" onClick={() => setEditingParent(null)} className="inline-flex shrink-0 items-center gap-2 rounded-xl border-2 border-kcs-blue-300 bg-white px-3 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 focus:outline-none focus:ring-2 focus:ring-kcs-blue-500 dark:border-kcs-blue-400 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">
                   <X size={16} />
-                  Fermer
+                  {tr('Fermer','Close')}
                 </button>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch] sm:p-5">                {parentNotice ? <p role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">{parentNotice}</p> : null}
+              <div className="registry-dialog-body min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch] sm:p-5"><RegistryRecordBanner kind="parent" mode="edit" name={[parentEditForm.lastName,parentEditForm.middleName,parentEditForm.firstName].filter(Boolean).join(" ")} photo={parentEditForm.photoData} detail={parentEditForm.email} badge={editingParent.students.length+tr(" enfant(s) lié(s)"," linked learner(s)")}/>
+                {parentNotice ? <p role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">{parentNotice}</p> : null}
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
-                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité du parent</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">{tr('Identité du parent','Parent identity')}</p>
                   <div className="mt-3">
                     <PhotoCaptureField
-                      label="Photo du parent"
+                      label={tr('Photo du parent','Parent photograph')}
                       value={parentEditForm.photoData}
                       onChange={(photoData) => setParentEditForm((current) => ({ ...current, photoData }))}
                       onError={setParentNotice}
@@ -2724,43 +2734,43 @@ const AdminSectionView = ({
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Nom
-                      <input value={parentEditForm.lastName} onChange={(event) => setParentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom du parent" />
+                      {tr('Nom','Last name')}
+                      <input value={parentEditForm.lastName} onChange={(event) => setParentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Nom du parent','Parent last name')} />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Postnom
-                      <input value={parentEditForm.middleName} onChange={(event) => setParentEditForm((current) => ({ ...current, middleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom du parent" />
+                      {tr('Postnom','Middle name')}
+                      <input value={parentEditForm.middleName} onChange={(event) => setParentEditForm((current) => ({ ...current, middleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Postnom du parent','Parent middle name')} />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Prénom
-                      <input value={parentEditForm.firstName} onChange={(event) => setParentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom du parent" />
+                      {tr('Prénom','First name')}
+                      <input value={parentEditForm.firstName} onChange={(event) => setParentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Prénom du parent','Parent first name')} />
                     </label>
                   </div>
                 </section>
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
-                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Coordonnées</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">{tr('Coordonnées','Contact information')}</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Email
-                      <input type="email" autoComplete="email" value={parentEditForm.email} onChange={(event) => setParentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email du parent" />
+                      <input type="email" autoComplete="email" value={parentEditForm.email} onChange={(event) => setParentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Email du parent','Parent email')} />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Téléphone
+                      {tr('Téléphone','Phone')}
                       <InternationalPhoneInput value={parentEditForm.phone} onChange={(value) => setParentEditForm((current) => ({ ...current, phone: value }))} />
                     </label>
-                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">Adresse physique<input value={parentEditForm.physicalAddress} onChange={(event) => setParentEditForm((current) => ({ ...current, physicalAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Adresse complète du parent" /></label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">{tr('Adresse physique','Home address')}<input value={parentEditForm.physicalAddress} onChange={(event) => setParentEditForm((current) => ({ ...current, physicalAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Adresse complète du parent','Guardian home address')} /></label>
                   </div>
                 </section>
                 <FamilyContactsEditor contacts={parentEditForm.familyContacts} onChange={(familyContacts) => setParentEditForm((current) => ({ ...current, familyContacts }))} />
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Enfants liés</p>
+                      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">{tr('Enfants liés','Linked learners')}</p>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Modifiez les dossiers liés, retirez un rattachement ou créez un nouvel élève complet.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-bold text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{parentEditStudents.length} enfant(s) lié(s)</span>
-                      <button type="button" onClick={() => { setShowParentNewStudent(true); setParentNewStudents((current) => current.length ? current : [createAdminStudentDraft(parentEditStudents[0]?.grade || 'K3', parentEditStudents[0]?.section || '')]) }} className="inline-flex items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-kcs-blue-800 dark:bg-kcs-gold-400 dark:text-kcs-blue-950"><UserPlus size={16} /> Ajouter un enfant</button>
+                      <button type="button" onClick={() => { setShowParentNewStudent(true); setParentNewStudents((current) => current.length ? current : [createAdminStudentDraft(parentEditStudents[0]?.grade || 'K3', parentEditStudents[0]?.section || '')]) }} className="inline-flex items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-kcs-blue-800 dark:bg-kcs-gold-400 dark:text-kcs-blue-950"><UserPlus size={16} /> {tr('Ajouter un enfant','Add a learner')}</button>
                     </div>
                   </div>
                   <div className="mt-4 space-y-4">
@@ -2773,15 +2783,15 @@ const AdminSectionView = ({
                     </div>
                     {parentEditStudents.map((student, index) => (
                       <article key={student.id} className="rounded-2xl border border-kcs-blue-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Enfant lié {index + 1}</p><p className="mt-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{[student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ') || student.studentNumber}</p></div><button type="button" onClick={() => setParentEditStudents((current) => current.filter((item) => item.id !== student.id))} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-200">Retirer de cette famille</button></div>
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Enfant lié {index + 1}</p><p className="mt-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{[student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ') || student.studentNumber}</p></div><button type="button" onClick={() => setParentEditStudents((current) => current.filter((item) => item.id !== student.id))} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-200">{tr('Retirer de cette famille','Unlink from family')}</button></div>
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="md:col-span-2"><PhotoCaptureField label={`Photo de l’enfant ${index + 1}`} value={student.photoData || ''} onChange={(photoData) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
                           <input value={student.lastName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, lastName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève *" required />
-                          <input value={student.middleName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l’élève" />
+                          <input value={student.middleName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Postnom de l’élève','Learner middle name')} />
                           <input value={student.firstName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, firstName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève *" required />
                           <input value={student.studentNumber} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, studentNumber: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Identifiant élève *" required />
-                          <input type="email" value={student.email} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, email: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="E-mail scolaire" />
-                          <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance<DateSelect value={student.dateOfBirth} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" /></label>
+                          <input type="email" value={student.email} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, email: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('E-mail scolaire','School email')} />
+                          <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">{tr('Date de naissance','Date of birth')}<DateSelect value={student.dateOfBirth} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" /></label>
                           <select value={student.grade} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select>
                           <input value={student.section} maxLength={40} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, section: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Section libre : A, B, Sciences 1… ou vide" />
                         </div>
@@ -2790,11 +2800,11 @@ const AdminSectionView = ({
                     {showParentNewStudent ? <section className="rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/60 p-4 dark:border-emerald-700 dark:bg-emerald-950/20">
                       <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Nouveaux enfants</p><p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Leurs accès seront générés et propagés dans l’écosystème à l’enregistrement.</p></div><button type="button" onClick={() => setParentNewStudents((current) => [...current, createAdminStudentDraft(current[0]?.grade || parentEditStudents[0]?.grade || 'K3', current[0]?.section || '')])} className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-800 dark:border-emerald-700 dark:bg-kcs-blue-950 dark:text-emerald-200">Ajouter encore</button></div>
                       <div className="mt-4 space-y-4">{parentNewStudents.map((student, index) => <article key={`parent-new-student-${index}`} className="rounded-xl border border-emerald-200 bg-white p-4 dark:border-emerald-800 dark:bg-kcs-blue-900">
-                        <div className="mb-3 flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">Nouvel élève {index + 1}</p><button type="button" onClick={() => setParentNewStudents((current) => current.filter((_item, itemIndex) => itemIndex !== index))} className="text-xs font-bold text-red-700 dark:text-red-300">Retirer</button></div>
+                        <div className="mb-3 flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">Nouvel élève {index + 1}</p><button type="button" onClick={() => setParentNewStudents((current) => current.filter((_item, itemIndex) => itemIndex !== index))} className="text-xs font-bold text-red-700 dark:text-red-300">{tr('Retirer','Remove')}</button></div>
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="md:col-span-2"><PhotoCaptureField label={`Photo du nouvel élève ${index + 1}`} value={student.photoData} onChange={(photoData) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
                           <input value={student.lastName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, lastName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève *" required />
-                          <input value={student.middleName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l’élève" />
+                          <input value={student.middleName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Postnom de l’élève','Learner middle name')} />
                           <input value={student.firstName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, firstName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève *" required />
                           <div className="rounded-xl border border-dashed border-kcs-blue-200 bg-kcs-blue-50 px-4 py-3 text-sm text-kcs-blue-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-kcs-blue-200"><strong>ID :</strong> généré automatiquement</div>
                           <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance *<DateSelect value={student.dateOfBirth} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
@@ -2808,9 +2818,9 @@ const AdminSectionView = ({
                 </section>
               </div>
 
-              <div className="sticky bottom-0 z-20 flex shrink-0 flex-col-reverse gap-2 border-t border-gray-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:flex-row sm:justify-end sm:p-5">
-                <button type="button" onClick={() => setEditingParent(null)} className="rounded-xl border-2 border-slate-400 bg-white px-5 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500 dark:border-slate-300 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">Annuler</button>
-                <button type="button" onClick={() => void saveEditedParent()} disabled={savingParentEdit} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:text-kcs-blue-950 dark:hover:bg-emerald-400 dark:focus:ring-offset-kcs-blue-900">{savingParentEdit ? 'Enregistrement...' : 'Enregistrer'}</button>
+              <div className="registry-dialog-footer sticky bottom-0 z-20 flex shrink-0 flex-col-reverse gap-2 border-t border-gray-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:flex-row sm:justify-end sm:p-5">
+                <button type="button" onClick={() => setEditingParent(null)} className="registry-cancel rounded-xl border-2 border-slate-400 bg-white px-5 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500 dark:border-slate-300 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">{tr('Annuler','Cancel')}</button>
+                <button type="button" onClick={() => void saveEditedParent()} disabled={savingParentEdit} className="registry-save rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:text-kcs-blue-950 dark:hover:bg-emerald-400 dark:focus:ring-offset-kcs-blue-900">{savingParentEdit ? tr('Enregistrement…','Saving…') : tr('Enregistrer','Save changes')}</button>
               </div>
             </section>
           </div>
@@ -2878,67 +2888,70 @@ const AdminSectionView = ({
               </section>
             </div>
           ), document.body)}
-          {showCreateStudent && (
-            <form className="mt-5 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30" onSubmit={(event) => {
+          {showCreateStudent && createPortal((
+            <div data-entity-dialog="family-create" role="dialog" aria-modal="true" aria-label={tr("Ajouter un élève et sa famille","Add a learner and family")}>
+            <form className="registry-dialog-window" onSubmit={(event) => {
               event.preventDefault()
               registerOfficialStudent()
             }}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="registry-dialog-heading flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h3 className="font-bold text-kcs-blue-900 dark:text-white">Nouvelle famille</h3>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Même logique que SAVANEX : un parent, un ou plusieurs élèves, et les accès temporaires générés ensemble.</p>
+                  <h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr("Un nouveau départ à KCS","A new beginning at KCS")}</h3>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{tr("Créez les dossiers des élèves et de leur responsable familial en une seule inscription.","Create learner and guardian records together in one registration.")}</p>
                 </div>
-                <button type="button" className="w-fit rounded-lg px-3 py-1.5 text-xs font-bold text-kcs-blue-700 hover:bg-white dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setShowCreateStudent(false)}>Close</button>
+                <button type="button" className="w-fit rounded-lg px-3 py-1.5 text-xs font-bold text-kcs-blue-700 hover:bg-white dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setShowCreateStudent(false)}>{tr("Fermer","Close")}</button>
               </div>
+              <div className="registry-dialog-body"><RegistryRecordBanner kind="family" mode="create" name={[newFamily.parentLastName,newFamily.parentFirstName].filter(Boolean).join(" ")} photo={newFamily.parentPhotoData} detail={tr("Responsable familial et élèves à inscrire","Guardian and learner registration")} badge={newFamily.students.length+tr(" élève(s)"," learner(s)")}/><h4 className="registry-section-title">{tr("01 · Le responsable familial","01 · Parent / guardian")}</h4>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <input value={newFamily.parentLastName} onChange={(event) => setNewFamily((item) => ({ ...item, parentLastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom du parent *" required />
-                <input value={newFamily.parentMiddleName} onChange={(event) => setNewFamily((item) => ({ ...item, parentMiddleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom du parent" />
-                <input value={newFamily.parentFirstName} onChange={(event) => setNewFamily((item) => ({ ...item, parentFirstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom du parent *" required />
-                <input value={newFamily.parentEmail} onChange={(event) => setNewFamily((item) => ({ ...item, parentEmail: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="E-mail du parent" />
+                <label className="registry-field"><span>{tr('Nom du parent *','Parent last name *')}</span><input value={newFamily.parentLastName} onChange={(event) => setNewFamily((item) => ({ ...item, parentLastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom du parent *" required /></label>
+                <label className="registry-field"><span>{tr('Post-nom du parent','Parent middle name')}</span><input value={newFamily.parentMiddleName} onChange={(event) => setNewFamily((item) => ({ ...item, parentMiddleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Postnom du parent','Parent middle name')} /></label>
+                <label className="registry-field"><span>{tr('Prénom du parent *','Parent first name *')}</span><input value={newFamily.parentFirstName} onChange={(event) => setNewFamily((item) => ({ ...item, parentFirstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom du parent *" required /></label>
+                <label className="registry-field"><span>{tr('E-mail du parent','Parent email')}</span><input value={newFamily.parentEmail} onChange={(event) => setNewFamily((item) => ({ ...item, parentEmail: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="E-mail du parent" /></label>
                 <InternationalPhoneInput value={newFamily.parentPhone} onChange={(value) => setNewFamily((item) => ({ ...item, parentPhone: value }))} />
-                <input value={newFamily.parentAddress} onChange={(event) => setNewFamily((item) => ({ ...item, parentAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:col-span-2" placeholder="Adresse physique du parent" />
-                <input value={newFamily.advisor} onChange={(event) => setNewFamily((item) => ({ ...item, advisor: event.target.value }))} className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:max-w-sm" placeholder="Conseiller pédagogique (facultatif)" />
+                <label className="registry-field md:col-span-2"><span>{tr('Adresse physique','Home address')}</span><input value={newFamily.parentAddress} onChange={(event) => setNewFamily((item) => ({ ...item, parentAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:col-span-2" placeholder="Adresse physique du parent" /></label>
+                <label className="registry-field"><span>{tr('Conseiller pédagogique (facultatif)','Academic advisor (optional)')}</span><input value={newFamily.advisor} onChange={(event) => setNewFamily((item) => ({ ...item, advisor: event.target.value }))} className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:max-w-sm" placeholder="Conseiller pédagogique (facultatif)" /></label>
                 <div className="min-w-0 md:col-span-2"><FamilyContactsEditor contacts={newFamily.familyContacts} onChange={(familyContacts) => setNewFamily((item) => ({ ...item, familyContacts }))} /></div>
               </div>
-              <div className="mt-4"><PhotoCaptureField label="Photo du parent" value={newFamily.parentPhotoData} onChange={parentPhotoData=>setNewFamily(item=>({...item,parentPhotoData}))} onError={setStudentNotice}/></div>
+              <div className="mt-4"><PhotoCaptureField label={tr('Photo du parent','Parent photograph')} value={newFamily.parentPhotoData} onChange={parentPhotoData=>setNewFamily(item=>({...item,parentPhotoData}))} onError={setStudentNotice}/></div>
               <div className="mt-5 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h4 className="text-sm font-bold text-kcs-blue-900 dark:text-white">Élèves liés</h4>
-                  <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-white dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setNewFamily((item) => ({ ...item, students: [...item.students, createAdminStudentDraft(item.students[0]?.grade, item.students[0]?.section)] }))}>Ajouter un enfant</button>
+                  <h4 className="text-sm font-bold text-kcs-blue-900 dark:text-white">{tr("02 · Les élèves de la famille","02 · Learners in the family")}</h4>
+                  <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-white dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setNewFamily((item) => ({ ...item, students: [...item.students, createAdminStudentDraft(item.students[0]?.grade, item.students[0]?.section)] }))}>{tr('Ajouter un enfant','Add a learner')}</button>
                 </div>
                 {newFamily.students.map((student, index) => (
                   <div key={`new-family-student-${index}`} className="rounded-xl border border-white/70 bg-white/70 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Élève {index + 1}</p>
                       {newFamily.students.length > 1 ? (
-                        <button type="button" className="text-xs font-bold text-red-600 dark:text-red-300" onClick={() => setNewFamily((item) => ({ ...item, students: item.students.filter((_student, studentIndex) => studentIndex !== index) }))}>Retirer</button>
+                        <button type="button" className="text-xs font-bold text-red-600 dark:text-red-300" onClick={() => setNewFamily((item) => ({ ...item, students: item.students.filter((_student, studentIndex) => studentIndex !== index) }))}>{tr('Retirer','Remove')}</button>
                       ) : null}
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                     <div className="md:col-span-2">
                       <PhotoCaptureField label={`Photo de l’élève ${index + 1}`} value={student.photoData} onChange={photoData => setNewFamily(item => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, photoData } : draft) }))} onError={setStudentNotice} />
                     </div>
-                      <input value={student.lastName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, lastName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l'eleve *" required />
-                      <input value={student.middleName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, middleName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l'eleve" />
-                      <input value={student.firstName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, firstName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom de l'eleve *" required />
+                      <label className="registry-field"><span>{tr('Nom de l’élève *','Learner last name *')}</span><input value={student.lastName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, lastName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l'eleve *" required /></label>
+                      <label className="registry-field"><span>{tr('Post-nom de l’élève','Learner middle name')}</span><input value={student.middleName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, middleName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l'eleve" /></label>
+                      <label className="registry-field"><span>{tr('Prénom de l’élève *','Learner first name *')}</span><input value={student.firstName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, firstName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom de l'eleve *" required /></label>
                       <div className="rounded-xl border border-dashed border-kcs-blue-200 bg-kcs-blue-50 px-4 py-3 text-sm text-kcs-blue-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50 dark:text-kcs-blue-200"><strong>ID eleve :</strong> genere automatiquement par le systeme</div>
-                      <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance<DateSelect value={student.dateOfBirth} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, dateOfBirth: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
-                      <input value={schoolEmailPreview(student)} readOnly className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-gray-300" placeholder="E-mail scolaire généré automatiquement : prenom.nom@ourkcs.org" />
+                      <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">{tr('Date de naissance','Date of birth')}<DateSelect value={student.dateOfBirth} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, dateOfBirth: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
+                      <label className="registry-field"><span>{tr('E-mail scolaire généré automatiquement','Automatically generated school email')}</span><input value={schoolEmailPreview(student)} readOnly className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-gray-300" placeholder="E-mail scolaire généré automatiquement : prenom.nom@ourkcs.org" /></label>
                       <select value={student.grade} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, grade: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                         {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
                       </select>
-                      <input value={student.section} maxLength={40} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, section: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Section libre : A, B, Sciences 1… ou vide" />
+                      <label className="registry-field"><span>{tr('Section / sous-classe (facultatif)','Section / class group (optional)')}</span><input value={student.section} maxLength={40} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, section: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Section libre : A, B, Sciences 1… ou vide" /></label>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
-                <button type="submit" className={`${adminButton} w-full sm:w-auto`}><UserPlus size={16} className="inline" /> Enregistrer la famille</button>
-                <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">Élèves prêts: {newFamily.students.filter((student) => student.lastName.trim() && student.firstName.trim()).length}</span>
+              </div>
+              <div className="registry-dialog-footer">
+                <button type="submit" className={`${adminButton} registry-save w-full sm:w-auto`}><UserPlus size={16} className="inline" /> {tr("Enregistrer la famille","Save family")}</button>
+                <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">{tr("Élèves prêts : ","Learners ready: ")}{newFamily.students.filter((student) => student.lastName.trim() && student.firstName.trim()).length}</span>
               </div>
               {studentNotice && <p className="mt-3 rounded-xl bg-white p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">{studentNotice}</p>}
-            </form>
-          )}
+            </form></div>
+          ), document.body)}
         </div>
 
         <div data-registry-list className="rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -3046,40 +3059,41 @@ const AdminSectionView = ({
           </div>
         </div>
 
-        {viewingStudent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche élève">
-            <section className="max-h-[92vh] w-full max-w-none lg:w-[80vw] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        {viewingStudent && createPortal((
+          <div data-entity-dialog="student-view" className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche élève">
+            <section className="registry-dialog-window max-h-[92vh] w-full max-w-none lg:w-[80vw] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+              <div className="registry-dialog-heading mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Consultation</p>
-                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Fiche individuelle élève</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Identité, classe, parents responsables et suivi administratif.</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Consultation','Profile overview')}</p>
+                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{tr('Dossier de l’élève','Learner profile')}</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Une vue complète de l’identité, de la famille et du suivi scolaire.','A complete view of identity, family and school follow-up.')}</p>
                 </div>
                 <button type="button" onClick={() => setViewingStudent(null)} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
                   <X size={16} />
-                  Fermer
+                  {tr('Fermer','Close')}
                 </button>
               </div>
 
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="registry-dialog-body"><RegistryRecordBanner kind="student" mode="view" name={viewingStudent.name} photo={viewingStudent.photoData} detail={viewingStudent.studentNumber} badge={formatClassName(viewingStudent.grade,viewingStudent.section)}/>
+              <div className="registry-profile-layout">
                 <div className="grid gap-3 md:grid-cols-2">
                   {[
-                    ['ID élève', viewingStudent.studentNumber ?? 'Non renseigné'],
-                    ['Nom complet', viewingStudent.name],
-                    ['E-mail scolaire', viewingStudent.email || 'Non renseigné'],
-                    ['Date de naissance', viewingStudent.dateOfBirth
+                    [tr('ID élève','Student ID'), viewingStudent.studentNumber ?? 'Non renseigné'],
+                    [tr('Nom complet','Full name'), viewingStudent.name],
+                    [tr('E-mail scolaire','School email'), viewingStudent.email || 'Non renseigné'],
+                    [tr('Date de naissance','Date of birth'), viewingStudent.dateOfBirth
                       ? new Date(viewingStudent.dateOfBirth).toLocaleDateString('fr-FR', { timeZone: 'UTC' })
                       : 'Non renseignée'],
                     ['Classe', formatClassName(viewingStudent.grade, viewingStudent.section) || 'Non assignée'],
-                    ['Statut', viewingStudent.status],
-                    ['Parent titulaire', viewingStudent.parent || 'Aucun parent lié'],
-                    ['Email parent', viewingStudent.parentEmail || 'Non renseigné'],
-                    ['Téléphone parent', viewingStudent.parentPhone || 'Non renseigné'],
-                    ['Conseiller', viewingStudent.advisor ?? selectedInsight?.advisor ?? 'Non assigné'],
-                    ['Présence', viewingStudent.attendance == null ? 'Aucune présence enregistrée' : `${viewingStudent.attendance}%`],
+                    [tr('Statut','Status'), viewingStudent.status],
+                    [tr('Parent titulaire','Primary guardian'), viewingStudent.parent || 'Aucun parent lié'],
+                    [tr('Email parent','Parent email'), viewingStudent.parentEmail || 'Non renseigné'],
+                    [tr('Téléphone parent','Parent phone'), viewingStudent.parentPhone || 'Non renseigné'],
+                    [tr('Conseiller','Advisor'), viewingStudent.advisor ?? selectedInsight?.advisor ?? 'Non assigné'],
+                    [tr('Présence','Attendance'), viewingStudent.attendance == null ? 'Aucune présence enregistrée' : `${viewingStudent.attendance}%`],
                     ['GPA', String(viewingStudent.gpa)],
                     ['Discipline', viewingStudent.discipline],
-                    ['Suivi', getStudentRisk(viewingStudent)],
+                    [tr('Suivi','Follow-up'), getStudentRisk(viewingStudent)],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{label}</p>
@@ -3087,7 +3101,7 @@ const AdminSectionView = ({
                     </div>
                   ))}
                   <section className="md:col-span-2 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50/70 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">Tous les parents responsables</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Tous les parents responsables','All responsible guardians')}</p>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       {(viewingStudent.responsibleParents?.length ? viewingStudent.responsibleParents : [{
                         id: 'primary-parent',
@@ -3106,7 +3120,7 @@ const AdminSectionView = ({
                     </div>
                   </section>
                   <section className="md:col-span-2 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Contacts familiaux complémentaires</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Contacts familiaux complémentaires','Additional family contacts')}</p>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{(viewingStudent.familyContacts ?? []).length ? viewingStudent.familyContacts!.map((contact, index) => (
                       <article key={contact.kind + index} className="min-w-0 rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
                         <p className="break-words font-bold text-kcs-blue-950 dark:text-white">{[contact.lastName, contact.middleName, contact.firstName].filter(Boolean).join(' ')}</p>
@@ -3119,7 +3133,7 @@ const AdminSectionView = ({
                           {contact.emergencyContact ? <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Contact d’urgence</span> : null}
                         </div>
                       </article>
-                    )) : <p className="text-sm text-gray-500">Aucun contact complémentaire enregistré.</p>}</div>
+                    )) : <p className="text-sm text-gray-500">{tr('Aucun contact complémentaire enregistré.','No additional contacts recorded.')}</p>}</div>
                   </section>
                 </div>
 
@@ -3127,7 +3141,7 @@ const AdminSectionView = ({
                   <ProfilePhoto src={viewingStudent.photoData} name={viewingStudent.name} />
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">Résumé</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Résumé','Profile summary')}</p>
                       <h4 className="mt-2 font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{viewingStudent.name}</h4>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{viewingStudent.studentNumber ?? 'ID non renseigné'}</p>
                     </div>
@@ -3136,7 +3150,7 @@ const AdminSectionView = ({
 
                   <div className="mt-5 space-y-3">
                     <div className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Famille</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{tr('Famille','Family')}</p>
                       <p className="mt-2 font-semibold text-kcs-blue-900 dark:text-white">{viewingStudent.parent || 'Aucun parent lié'}</p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{viewingStudent.parentEmail || 'Email non renseigné'}</p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{viewingStudent.parentPhone || 'Téléphone non renseigné'}</p>
@@ -3149,7 +3163,7 @@ const AdminSectionView = ({
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-xl bg-white p-4 text-center dark:bg-kcs-blue-900/70">
                         <p className={`font-display text-xl font-bold ${viewingStudent.attendance == null ? 'text-gray-400' : scoreTone(viewingStudent.attendance, 'attendance')}`}>{viewingStudent.attendance == null ? '—' : `${viewingStudent.attendance}%`}</p>
-                        <p className="mt-1 text-xs text-gray-400">Présence</p>
+                        <p className="mt-1 text-xs text-gray-400">{tr('Présence','Attendance')}</p>
                       </div>
                       <div className="rounded-xl bg-white p-4 text-center dark:bg-kcs-blue-900/70">
                         <p className={`font-display text-xl font-bold ${scoreTone(viewingStudent.gpa, 'gpa')}`}>{viewingStudent.gpa}</p>
@@ -3159,38 +3173,40 @@ const AdminSectionView = ({
                   </div>
 
                   <div className="mt-5 flex flex-wrap gap-2">
-                    <button type="button" className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800" onClick={() => setViewingStudent(null)}>Retour à la liste</button>
+                    <button type="button" className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800" onClick={() => setViewingStudent(null)}>{tr('Retour à la liste','Back to directory')}</button>
                     <button type="button" className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${viewingStudent.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(viewingStudent)}>{tr('Modifier','Edit')}</button>
                     <button type="button" className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => {
                       const target = viewingStudent
                       setViewingStudent(null)
                       deleteOfficialStudent(target)
-                    }}>Supprimer</button>
+                    }}>{tr('Supprimer','Delete')}</button>
                   </div>
                 </aside>
               </div>
+              </div>
             </section>
           </div>
-        )}
+        ), document.body)}
 
         {editingStudent && createPortal((
-          <div className="fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto overscroll-contain bg-kcs-blue-950/80 px-2 pb-2 pt-2 backdrop-blur-md sm:px-5 sm:pb-5 sm:pt-5" role="dialog" aria-modal="true" aria-label="Modifier élève">
-            <section className="my-0 flex h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] min-h-0 w-full max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 shadow-[0_30px_100px_rgba(0,20,45,.65)] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-[calc(100svh-2.5rem)] sm:max-h-[calc(100svh-2.5rem)] sm:max-w-6xl sm:rounded-[2rem]">
-              <div className="sticky top-0 z-20 flex shrink-0 items-start justify-between gap-3 border-b border-sky-200 bg-white/95 p-4 backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:p-5">
+          <div data-entity-dialog="student-edit" className="fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto overscroll-contain bg-kcs-blue-950/80 px-2 pb-2 pt-2 backdrop-blur-md sm:px-5 sm:pb-5 sm:pt-5" role="dialog" aria-modal="true" aria-label="Modifier élève">
+            <section className="registry-dialog-window my-0 flex h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] min-h-0 w-full max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 shadow-[0_30px_100px_rgba(0,20,45,.65)] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-[calc(100svh-2.5rem)] sm:max-h-[calc(100svh-2.5rem)] sm:max-w-6xl sm:rounded-[2rem]">
+              <div className="registry-dialog-heading sticky top-0 z-20 flex shrink-0 items-start justify-between gap-3 border-b border-sky-200 bg-white/95 p-4 backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:p-5">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">Modification</p>
-                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Modifier l’élève</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Le système bloque les doublons de numéro et d’email avant d’enregistrer.</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">{tr('Dossier élève','Learner record')}</p>
+                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{tr('Modifier l’élève','Edit learner profile')}</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Identité officielle, classe et liens familiaux réunis dans un même espace.','Official identity, class assignment and family links in one workspace.')}</p>
                 </div>
-                <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">Fermer</button>
+                <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">{tr('Fermer','Close')}</button>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch] sm:p-5">                {studentNotice ? <p role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">{studentNotice}</p> : null}
+              <div className="registry-dialog-body min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch] sm:p-5"><RegistryRecordBanner kind="student" mode="edit" name={[studentEditForm.lastName,studentEditForm.middleName,studentEditForm.firstName].filter(Boolean).join(" ")} photo={studentEditForm.photoData} detail={studentEditForm.studentNumber} badge={formatClassName(studentEditForm.grade,studentEditForm.section)}/>
+                {studentNotice ? <p role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">{studentNotice}</p> : null}
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
-                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité de l’élève</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">{tr('Identité de l’élève','Learner identity')}</p>
                   <div className="mt-3">
                     <PhotoCaptureField
-                      label="Photo de l’élève"
+                      label={tr('Photo de l’élève','Learner photograph')}
                       value={studentEditForm.photoData ?? ''}
                       onChange={(photoData) => setStudentEditForm((current) => ({ ...current, photoData }))}
                       onError={setStudentNotice}
@@ -3198,42 +3214,42 @@ const AdminSectionView = ({
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Nom
-                      <input value={studentEditForm.lastName} onChange={(event) => setStudentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève" />
+                      {tr('Nom','Last name')}
+                      <input value={studentEditForm.lastName} onChange={(event) => setStudentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Nom de l’élève','Learner last name')} />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Postnom
-                      <input value={studentEditForm.middleName} onChange={(event) => setStudentEditForm((current) => ({ ...current, middleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l’élève" />
+                      {tr('Postnom','Middle name')}
+                      <input value={studentEditForm.middleName} onChange={(event) => setStudentEditForm((current) => ({ ...current, middleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Postnom de l’élève','Learner middle name')} />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Prénom
-                      <input value={studentEditForm.firstName} onChange={(event) => setStudentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève" />
+                      {tr('Prénom','First name')}
+                      <input value={studentEditForm.firstName} onChange={(event) => setStudentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Prénom de l’élève','Learner first name')} />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Date de naissance
+                      {tr('Date de naissance','Date of birth')}
                       <DateSelect value={studentEditForm.dateOfBirth} onChange={(event) => setStudentEditForm((current) => ({ ...current, dateOfBirth: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">
-                      Email élève
-                      <input type="email" autoComplete="email" value={studentEditForm.email} onChange={(event) => setStudentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="E-mail institutionnel obligatoire" required />
+                      {tr('Email élève','Learner email')}
+                      <input type="email" autoComplete="email" value={studentEditForm.email} onChange={(event) => setStudentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('E-mail institutionnel obligatoire','Required institutional email')} required />
                     </label>
                   </div>
                 </section>
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
-                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Classe et dossier</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">{tr('Classe et dossier','Class and enrollment')}</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Numéro d’élève
-                      <input value={studentEditForm.studentNumber} onChange={(event) => setStudentEditForm((current) => ({ ...current, studentNumber: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Numéro d’élève" />
+                      {tr('Numéro d’élève','Student number')}
+                      <input value={studentEditForm.studentNumber} onChange={(event) => setStudentEditForm((current) => ({ ...current, studentNumber: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Numéro d’élève','Student number')} />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Statut
+                      {tr('Statut','Status')}
                       <select value={studentEditForm.status} onChange={(event) => setStudentEditForm((current) => ({ ...current, status: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                         {['Active', 'Inactive', 'Suspended'].map((status) => <option key={status}>{status}</option>)}
                       </select>
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Niveau
+                      {tr('Niveau','Grade')}
                       <select value={studentEditForm.grade} onChange={(event) => setStudentEditForm((current) => ({ ...current, grade: event.target.value, section: '' }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                         {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
                       </select>
@@ -3250,14 +3266,14 @@ const AdminSectionView = ({
                 </section>
                 <FamilyContactsReadOnly contacts={editingStudent.familyContacts ?? []} />
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
-                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Famille liée</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">{tr('Famille liée','Linked family')}</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-3">
                     <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
                       <p className="text-xs text-gray-400">{tr('Parent responsable','Guardian')}</p>
                       <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parent || 'Aucun parent lié'}</p>
                     </div>
                     <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
-                      <p className="text-xs text-gray-400">Téléphone</p>
+                      <p className="text-xs text-gray-400">{tr('Téléphone','Phone')}</p>
                       <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parentPhone || 'Non renseigné'}</p>
                     </div>
                     <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
@@ -3268,9 +3284,9 @@ const AdminSectionView = ({
                 </section>
               </div>
 
-              <div className="sticky bottom-0 z-20 flex shrink-0 flex-col-reverse gap-2 border-t border-sky-200 bg-white/95 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:flex-row sm:justify-end sm:p-5">
-                <button type="button" className="rounded-xl border border-kcs-blue-900 bg-kcs-blue-800 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-kcs-blue-900/25 hover:bg-kcs-blue-950 disabled:opacity-60" onClick={() => void saveEditedStudent()} disabled={savingStudentEdit}>{savingStudentEdit ? 'Enregistrement...' : 'Enregistrer les modifications'}</button>
-                <button type="button" className="rounded-xl border-2 border-amber-500 bg-amber-100 px-5 py-3 text-sm font-bold text-amber-950 shadow-sm hover:bg-amber-200 dark:border-amber-300 dark:bg-amber-400 dark:text-kcs-blue-950 dark:hover:bg-amber-300" onClick={() => setEditingStudent(null)}>Annuler</button>
+              <div className="registry-dialog-footer sticky bottom-0 z-20 flex shrink-0 flex-col-reverse gap-2 border-t border-sky-200 bg-white/95 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:flex-row sm:justify-end sm:p-5">
+                <button type="button" className="registry-save rounded-xl border border-kcs-blue-900 bg-kcs-blue-800 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-kcs-blue-900/25 hover:bg-kcs-blue-950 disabled:opacity-60" onClick={() => void saveEditedStudent()} disabled={savingStudentEdit}>{savingStudentEdit ? tr('Enregistrement…','Saving…') : tr('Enregistrer les modifications','Save changes')}</button>
+                <button type="button" className="registry-cancel rounded-xl border-2 border-amber-500 bg-amber-100 px-5 py-3 text-sm font-bold text-amber-950 shadow-sm hover:bg-amber-200 dark:border-amber-300 dark:bg-amber-400 dark:text-kcs-blue-950 dark:hover:bg-amber-300" onClick={() => setEditingStudent(null)}>{tr('Annuler','Cancel')}</button>
               </div>
             </section>
           </div>

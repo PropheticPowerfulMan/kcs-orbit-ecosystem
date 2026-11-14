@@ -1,3 +1,4 @@
+import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import { useEffect, useMemo, useState } from 'react'
 import { Bell, CheckCheck, Search, Trash2, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
@@ -86,7 +87,7 @@ export default function ParentNotificationsPanel({ notices, onChange }: Props) {
   }
 
   const deleteSelected = async () => {
-    if (!selectedIds.length || !window.confirm(`Supprimer ${selectedIds.length} notification(s) ?`)) return
+    if (!selectedIds.length || !await confirmPortalAction(`Supprimer ${selectedIds.length} notification(s) ?`)) return
     setBusy(true)
     setFeedback('')
     try {

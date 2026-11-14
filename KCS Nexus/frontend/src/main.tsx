@@ -1,3 +1,4 @@
+import PortalActionDialogs from '@/components/shared/PortalActionDialogs'
 import './buttonProcessingFeedback.js'
 import InstallAppButton from '@/components/InstallAppButton'
 import React from 'react'
@@ -45,6 +46,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <App />
         <ConnectionGuard />
         <MutationFeedback />
+        <PortalActionDialogs />
         <InstallAppButton />
       </BrowserRouter>
     </QueryClientProvider>

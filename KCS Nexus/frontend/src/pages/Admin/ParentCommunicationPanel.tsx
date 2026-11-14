@@ -1,3 +1,4 @@
+import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import React, { useRef, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, CheckSquare, Download, Eye, Mail, MessageSquare, Paperclip, Send, Square, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -301,7 +302,7 @@ export default function ParentCommunicationPanel() {
     if (!selectedParents.length) return setNotice(c.selectParent)
     if (!channels.length) return setNotice(c.selectChannel)
     if (!subject.trim() || !body.trim()) return setNotice(c.enterMessage)
-    if (selectedParents.length > 1 && !window.confirm(c.confirmSend(selectedParents.length))) return
+    if (selectedParents.length > 1 && !await confirmPortalAction(c.confirmSend(selectedParents.length))) return
     sendingRef.current = true
     setBusy(true)
     setNotice('')
@@ -341,7 +342,7 @@ export default function ParentCommunicationPanel() {
 
   const deleteSelected = async () => {
     if (!selectedHistory.length || deleting) return
-    if (!window.confirm(c.confirmDelete(selectedHistory.length))) return
+    if (!await confirmPortalAction(c.confirmDelete(selectedHistory.length))) return
     setDeleting(true)
     setNotice('')
     try {

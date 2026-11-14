@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import {
   Menu, X, Sun, Moon, Globe, Bell,
-  GraduationCap, BookOpen, Users, Home, Phone, Image, Newspaper, LogIn
+  GraduationCap, BookOpen, Users, Home, Phone, Image, Newspaper, LogIn, FileText
 } from 'lucide-react'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
@@ -60,9 +60,10 @@ const Header = () => {
   const navItems = [
     { to: '/', label: t('nav.home'), icon: Home },
     { to: '/about', label: t('nav.about'), icon: Users },
-    { to: '/academics', label: t('nav.academics'), icon: GraduationCap },
-    { to: '/news', label: t('nav.news'), icon: Newspaper },
+    { to: '/academics', label: currentLanguage === 'fr' ? 'Études' : t('nav.academics'), icon: GraduationCap },
+    { to: '/news', label: currentLanguage === 'fr' ? 'Actualités' : t('nav.news'), icon: Newspaper },
     { to: '/admissions', label: t('nav.admissions'), icon: BookOpen },
+    { to: '/school-handbook', label: currentLanguage === 'fr' ? 'Manuel' : 'Handbook', icon: FileText },
     { to: '/gallery', label: t('nav.gallery'), icon: Image },
     { to: '/contact', label: t('nav.contact'), icon: Phone },
   ]
@@ -89,7 +90,7 @@ const Header = () => {
                 className="h-full w-full object-contain"
               />
             </div>
-            <div className="hidden sm:block">
+            <div className="hidden sm:block xl:hidden">
               <p className={`font-bold text-sm leading-tight font-display transition-colors duration-300 ${
                 scrolled || !isHomePage
                   ? 'text-kcs-blue-900 dark:text-white'
@@ -108,13 +109,13 @@ const Header = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex">
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 xl:flex">
             {navItems.map(({ to, label }) => (
               <NavLink
                 key={to}
                 to={to}
                 className={({ isActive }) =>
-                  `public-nav-link max-w-[118px] truncate rounded-full px-3 py-2 text-center text-[13px] font-semibold leading-none transition-all duration-200 xl:max-w-none xl:px-3.5 ${
+                  `public-nav-link max-w-[118px] truncate rounded-full px-3 py-2 text-center text-[13px] font-semibold leading-none transition-all duration-200 xl:max-w-none xl:px-2.5 ${
                     isActive
                       ? 'bg-kcs-blue-700 text-white shadow-sm dark:bg-kcs-blue-100 dark:text-kcs-blue-950'
                       : scrolled || !isHomePage
@@ -210,7 +211,7 @@ const Header = () => {
               ref={mobileMenuButtonRef}
               type="button"
               onClick={() => setMobileOpen(!mobileOpen)}
-              className={`public-menu-button flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-200 lg:hidden ${
+              className={`public-menu-button flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-200 xl:hidden ${
                 scrolled || !isHomePage
                   ? 'border-kcs-blue-100 bg-white/65 text-kcs-blue-800 shadow-sm hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40 dark:text-gray-200 dark:hover:bg-white/10'
                   : 'border-white/20 bg-white/10 text-white shadow-sm hover:bg-white/15'
@@ -231,7 +232,7 @@ const Header = () => {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="lg:hidden overflow-hidden"
+            className="xl:hidden overflow-hidden"
           >
             <div className="container-custom py-3">
               <div ref={mobileMenuRef} className="public-mobile-menu github-glass dark:github-glass-dark max-h-[calc(100dvh-96px)] space-y-1 overflow-y-auto rounded-[30px] p-2.5 shadow-2xl shadow-kcs-blue-950/15 sm:rounded-[34px] sm:p-3">
