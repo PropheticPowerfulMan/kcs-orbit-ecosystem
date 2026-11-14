@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-courses-people-20261114-v25'
+const CACHE_NAME = 'kcs-nexus-school-handbook-20261114-v26'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
@@ -37,6 +37,19 @@ self.addEventListener('fetch', (event) => {
     url.origin !== self.location.origin ||
     url.pathname.includes('/api/')
   ) {
+    return;
+  }
+
+  // A PDF is a document, never the application shell. Cache only complete PDFs.
+  if (url.pathname.includes('/documents/handbooks/') && url.pathname.endsWith('.pdf')) {
+    if (request.headers.has('range')) return;
+    event.respondWith(fetch(request).then((response) => {
+      if (response.status === 200 && response.headers.get('Content-Type')?.includes('application/pdf')) {
+        const copy = response.clone();
+        event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.put(request, copy)).catch(() => undefined));
+      }
+      return response;
+    }).catch(async () => (await caches.match(request)) || new Response('Manuel indisponible hors connexion. Reconnectez-vous puis réessayez. / Handbook unavailable offline. Please reconnect and retry.', {status: 503})));
     return;
   }
 

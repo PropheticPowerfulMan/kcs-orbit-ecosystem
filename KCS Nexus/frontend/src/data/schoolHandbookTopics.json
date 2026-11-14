@@ -1,0 +1,194 @@
+[
+  {
+    "id": "I",
+    "page": {
+      "en": 2,
+      "fr": 3
+    },
+    "title": {
+      "en": "Our mission and values",
+      "fr": "Notre mission et nos valeurs"
+    },
+    "summary": {
+      "en": "Quality education, Biblical foundations, excellence and spiritual growth.",
+      "fr": "Éducation de qualité, fondements bibliques, excellence et croissance spirituelle."
+    },
+    "keywords": "introduction christ faith foi"
+  },
+  {
+    "id": "II",
+    "page": {
+      "en": 2,
+      "fr": 3
+    },
+    "title": {
+      "en": "Our beliefs",
+      "fr": "Nos croyances"
+    },
+    "summary": {
+      "en": "The school’s statement of Christian faith and Biblical references.",
+      "fr": "La déclaration de foi chrétienne de l’école et ses références bibliques."
+    },
+    "keywords": "scriptures bible church église"
+  },
+  {
+    "id": "III",
+    "page": {
+      "en": 4,
+      "fr": 5
+    },
+    "title": {
+      "en": "Learning expectations",
+      "fr": "Attentes d’apprentissage"
+    },
+    "summary": {
+      "en": "Independent learning, critical thinking, communication, creativity and citizenship.",
+      "fr": "Autonomie, esprit critique, communication, créativité et citoyenneté."
+    },
+    "keywords": "learners investigative perceptive cooperative apprenants"
+  },
+  {
+    "id": "IV",
+    "page": {
+      "en": 5,
+      "fr": 6
+    },
+    "title": {
+      "en": "Admissions",
+      "fr": "Admissions"
+    },
+    "summary": {
+      "en": "Enrollment, placement, readiness and English-language support.",
+      "fr": "Inscription, placement, préparation scolaire et accompagnement en anglais."
+    },
+    "keywords": "admission kindergarten maternelle ESL registration"
+  },
+  {
+    "id": "V",
+    "page": {
+      "en": 5,
+      "fr": 6
+    },
+    "title": {
+      "en": "Fees and financial procedures",
+      "fr": "Frais et procédures financières"
+    },
+    "summary": {
+      "en": "Registration, tuition schedules, payment conditions and financial obligations.",
+      "fr": "Inscription, échéances de scolarité, conditions de paiement et obligations financières."
+    },
+    "keywords": "financial finances late fees frais retard scolarité remboursement refunds"
+  },
+  {
+    "id": "VI",
+    "page": {
+      "en": 6,
+      "fr": 7
+    },
+    "title": {
+      "en": "Academics and assessment",
+      "fr": "Études et évaluation"
+    },
+    "summary": {
+      "en": "Grading, homework, honor roll, tutoring, make-up work and the school year.",
+      "fr": "Notation, devoirs, tableau d’honneur, tutorat, rattrapage et année scolaire."
+    },
+    "keywords": "academics grading 70% homework tutoring cheating technology 180 days jours tricherie redoublement"
+  },
+  {
+    "id": "VII",
+    "page": {
+      "en": 9,
+      "fr": 10
+    },
+    "title": {
+      "en": "Attendance and punctuality",
+      "fr": "Assiduité et ponctualité"
+    },
+    "summary": {
+      "en": "Attendance records, reported absences, supporting documents and tardiness.",
+      "fr": "Registres de présence, déclaration des absences, justificatifs et retards."
+    },
+    "keywords": "attendance absences sick excused unexcused scholarship bourse retards tardies grade 12"
+  },
+  {
+    "id": "VIII",
+    "page": {
+      "en": 11,
+      "fr": 11
+    },
+    "title": {
+      "en": "Withdrawal from school",
+      "fr": "Retrait de l’école"
+    },
+    "summary": {
+      "en": "Notice, withdrawal forms, outstanding balances and school property.",
+      "fr": "Préavis, formulaire de retrait, soldes dus et restitution des biens de l’école."
+    },
+    "keywords": "withdrawal retrait refund remboursement"
+  },
+  {
+    "id": "IX",
+    "page": {
+      "en": 11,
+      "fr": 12
+    },
+    "title": {
+      "en": "Uniform and dress code",
+      "fr": "Uniforme et code vestimentaire"
+    },
+    "summary": {
+      "en": "Uniform requirements, appearance and dress-down guidelines.",
+      "fr": "Règles relatives à l’uniforme, à la présentation et à la tenue décontractée."
+    },
+    "keywords": "dress code uniform shoes hair vêtements chaussures cheveux tenue"
+  },
+  {
+    "id": "X",
+    "page": {
+      "en": 13,
+      "fr": 14
+    },
+    "title": {
+      "en": "School life and family communication",
+      "fr": "Vie scolaire et échanges avec les familles"
+    },
+    "summary": {
+      "en": "Arts, celebrations, parent–teacher conferences, report cards and transcripts.",
+      "fr": "Arts, célébrations, rencontres parents–enseignants, bulletins et relevés de notes."
+    },
+    "keywords": "guidelines procedures conferences reports bulletin transcript parents fêtes arts"
+  },
+  {
+    "id": "XI",
+    "page": {
+      "en": 14,
+      "fr": 15
+    },
+    "title": {
+      "en": "Conduct, health and daily procedures",
+      "fr": "Conduite, santé et procédures quotidiennes"
+    },
+    "summary": {
+      "en": "Discipline, demerits, devices, school hours, trips, illness, books and medication.",
+      "fr": "Discipline, démérites, appareils, horaires, sorties, maladie, livres et médicaments."
+    },
+    "keywords": "discipline bullying intimidation detention suspension expulsion demerits health maladie médicaments medication objets trouvés lost found language langue"
+  },
+  {
+    "id": "XII",
+    "page": {
+      "en": 17,
+      "fr": 18
+    },
+    "title": {
+      "en": "Safety, emergencies and visitors",
+      "fr": "Sécurité, urgences et visiteurs"
+    },
+    "summary": {
+      "en": "Emergency evacuation, weapons, school closure and visitor procedures.",
+      "fr": "Évacuation d’urgence, armes, fermeture de l’école et accueil des visiteurs."
+    },
+    "keywords": "miscellaneous divers security evacuation visitors visiteurs weapons armes fermeture emergency"
+  }
+]

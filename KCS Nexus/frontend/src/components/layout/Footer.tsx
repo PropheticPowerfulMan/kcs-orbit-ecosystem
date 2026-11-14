@@ -16,7 +16,7 @@ const WhatsAppIcon = ({ size = 16 }: { size?: number }) => (
 
 
 const Footer = () => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const logoSrc = getAssetUrl('images/kcs.jpg')
 
   const quickLinks = [
@@ -24,6 +24,7 @@ const Footer = () => {
     { to: '/academics', label: t('nav.academics') },
     { to: '/news', label: t('nav.news') },
     { to: '/admissions', label: t('nav.admissions') },
+    { to: '/school-handbook', label: (i18n.resolvedLanguage || i18n.language).startsWith('fr') ? 'Manuel de l’école' : 'School Handbook' },
     { to: '/gallery', label: t('nav.gallery') },
     { to: '/contact', label: t('nav.contact') },
   ]

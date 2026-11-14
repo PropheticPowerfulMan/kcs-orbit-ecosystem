@@ -1,3 +1,4 @@
+import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, CheckCircle2, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
@@ -92,7 +93,7 @@ export default function ShiningStudentsPage() {
     } finally { setActionId('') }
   }
   const remove = async (item: Schedule) => {
-    if (!window.confirm(tr('Supprimer cette programmation ?', 'Remove this assignment?'))) return
+    if (!await confirmPortalAction(tr('Supprimer cette programmation ?', 'Remove this assignment?'))) return
     setActionId(`remove:${item.id}`)
     try {
       await shiningStudentsAPI.remove(item.id)

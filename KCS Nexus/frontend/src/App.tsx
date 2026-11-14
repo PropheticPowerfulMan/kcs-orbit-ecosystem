@@ -1,3 +1,4 @@
+import PortalDialogTheme from '@/components/shared/PortalDialogTheme'
 import ParentMeetingVerification from '@/components/shared/ParentMeetingVerification'
 import { useUIStore } from '@/store/uiStore'
 import { Component, Suspense, lazy, useEffect, useState, type ComponentType, type ErrorInfo, type ReactNode } from 'react'
@@ -27,6 +28,7 @@ const lazyWithRecovery = <T extends ComponentType<any>>(importer: () => Promise<
   }
 })
 
+const SchoolHandbookPage = lazyWithRecovery(() => import('@/pages/SchoolHandbook'))
 const HomePage = lazyWithRecovery(() => import('@/pages/Home'))
 const AboutPage = lazyWithRecovery(() => import('@/pages/About'))
 const AcademicsPage = lazyWithRecovery(() => import('@/pages/Academics'))
@@ -188,6 +190,7 @@ const App = () => {
   const location = useLocation()
   return (
     <>
+      <PortalDialogTheme />
       <RouteScrollReset />
       <GlobalTextTranslator />
       <RouteErrorBoundary routeKey={location.pathname}>
@@ -207,6 +210,9 @@ const App = () => {
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/school-handbook" element={<SchoolHandbookPage />} />
+            <Route path="/admin/handbook" element={<ProtectedRoute allowedRoles={['admin']}><SchoolHandbookPage portal /></ProtectedRoute>} />
+            {(['student','parent','teacher','staff'] as const).map(role => <Route key={`handbook-${role}`} path={`/portal/${role}/handbook`} element={<ProtectedRoute allowedRoles={[role]}><SchoolHandbookPage portal /></ProtectedRoute>} />)}
             <Route path="/academics" element={<AcademicsPage />} />
             <Route path="/news" element={<NewsPage />} />
             <Route path="/news/:id" element={<NewsPage />} />

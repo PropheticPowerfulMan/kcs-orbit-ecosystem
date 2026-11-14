@@ -1,14 +1,16 @@
 import DateSelect from '@/components/shared/DateSelect'
+import { Link } from 'react-router-dom'
 import { useState, useRef } from 'react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import {
   CheckCircle2, ChevronRight, FileText, Upload, User, Users,
-  GraduationCap, Calendar, ClipboardList, ArrowRight, Star
+  GraduationCap, Calendar, ClipboardList, ArrowRight, Star, BookOpen
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
+import '@/pages/SchoolHandbook/schoolHandbook.css'
 import { SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { admissionsAPI } from '@/services/api'
 
@@ -235,7 +237,7 @@ const sendAdmissionFallbackEmail = async (
 
 /* ────────────── Component ────────────── */
 const AdmissionsPage = () => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [activeStep, setActiveStep] = useState<Step>('Student')
   const [studentsData, setStudentsData] = useState<StudentData[]>([])
   const [studentPhotos, setStudentPhotos] = useState<Array<File | null>>([])
@@ -412,6 +414,7 @@ const AdmissionsPage = () => {
         </div>
       </section>
 
+      <section className="handbook-admissions-banner" aria-labelledby="admissions-handbook-title"><div><div><h2 id="admissions-handbook-title">{(i18n.resolvedLanguage || i18n.language).startsWith('fr') ? 'Découvrez la vie à KCS avant de vous inscrire' : 'Get to know life at KCS before you apply'}</h2><p>{(i18n.resolvedLanguage || i18n.language).startsWith('fr') ? 'Consultez et téléchargez le manuel de l’école : valeurs, études, assiduité et règles de vie, en français ou en anglais.' : 'Read and download our school handbook: values, academics, attendance and school life, in English or French.'}</p></div><Link to="/school-handbook"><BookOpen size={17}/>{(i18n.resolvedLanguage || i18n.language).startsWith('fr') ? 'Manuel de l’école' : 'School Handbook'}<ArrowRight size={16}/></Link></div></section>
       {/* Admission Process */}
       <section className="section-padding bg-white dark:bg-kcs-blue-950">
         <div className="container-custom">

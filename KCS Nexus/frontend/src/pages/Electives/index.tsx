@@ -1,3 +1,4 @@
+import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import "./electives.css";
 import { useEffect, useState, type FormEvent } from "react";
@@ -824,8 +825,8 @@ export default function ElectivesPage() {
                             )}
                             <button
                               disabled={busy || cycle.status !== "DRAFT"}
-                              onClick={() =>
-                                confirm(
+                              onClick={async () =>
+                                await confirmPortalAction(
                                   tr(
                                     "Supprimer ce cours ?",
                                     "Delete this course?",
