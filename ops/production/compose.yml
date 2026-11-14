@@ -233,7 +233,7 @@ services:
 
   edusync_api:
     <<: *service-defaults
-    image: kcs/edusync-api:${KCS_RELEASE:?set KCS_RELEASE}
+    image: kcs/edusync-api:${EDUSYNC_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge, kcs_private]
     env_file: /etc/kcs-orbit/edusync-api.env
     depends_on: { edusync_db: { condition: service_healthy }, orbit_api: { condition: service_started } }

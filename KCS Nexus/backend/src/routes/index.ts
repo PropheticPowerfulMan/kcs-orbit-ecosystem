@@ -1,6 +1,8 @@
 import { documentDownloadRouter } from './document-download.routes.js'
 import {academicVisibilityResponseGuard} from '../middleware/academicVisibility.js'
 import {academicVisibilityRouter} from './academic-visibility.routes.js'
+import {accountAccessRouter} from './account-access.routes.js'
+import {siteContentRouter} from './site-content.routes.js'
 import { Router } from 'express'
 import { academyRouter } from './academy.routes.js'
 import { adminRouter } from './admin.routes.js'
@@ -42,6 +44,8 @@ export const router = Router()
 router.use(academicVisibilityResponseGuard)
 router.use('/academic-visibility',academicVisibilityRouter)
 
+router.use('/account-access',accountAccessRouter)
+router.use('/site-content',siteContentRouter)
 router.use('/auth', authRouter)
 router.use('/documents', documentDownloadRouter)
 router.use('/academy', academyRouter)

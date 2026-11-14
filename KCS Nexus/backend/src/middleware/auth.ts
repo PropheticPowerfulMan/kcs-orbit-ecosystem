@@ -26,7 +26,8 @@ export const authenticate = async (req: AuthenticatedRequest, _res: Response, ne
     await assertAccountAccess(payload.sub)
     req.user = payload
     next()
-  } catch {
+  } catch(error:any) {
+    if(error?.status===503||error?.status===403)return next(new ApiError(error.status,error.message))
     next(new ApiError(401, 'Invalid or expired token'))
   }
 }

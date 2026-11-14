@@ -7,7 +7,7 @@ import { z } from "zod";
 import { prisma } from "../../prisma";
 import { env } from "../../config/env";
 import { syncOrbitRegistryMirror, type SharedParentOption, type SharedTeacherOption } from "../../integrations/orbitRegistry";
-import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
+import { verifyInstitutionalAccess, authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 import { sendEmail, sendSms } from "../../utils/messaging";
 import { resolveCurrentParent } from "../parents/currentParent";
 
@@ -573,6 +573,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
           email: externalUser.email, accessCode: externalUser.accessCode,
           mustChangePassword: externalUser.mustChangePassword
         });
+        await verifyInstitutionalAccess([resolved.user.id,resolved.user.email,resolved.user.accessCode]);
         const token = buildToken({ id: resolved.user.id, role: resolved.user.role, schoolId: resolved.user.schoolId });
         return res.json({ token, role: resolved.user.role, fullName: resolved.user.fullName, parentId: resolved.parent.id,
           photoUrl: resolved.parent.photoUrl, accessCode: resolved.user.accessCode, mustChangePassword: resolved.user.mustChangePassword });
@@ -584,6 +585,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
           mustChangePassword: externalUser.mustChangePassword,
           employeeId: externalUser.employeeId, phone: externalUser.phone
         });
+        await verifyInstitutionalAccess([resolved.user.id,resolved.user.email,resolved.user.accessCode]);
         const token = buildToken({ id: resolved.user.id, role: resolved.user.role, schoolId: resolved.user.schoolId });
         return res.json({ token, role: resolved.user.role, fullName: resolved.user.fullName,
           salaryProfileId: resolved.salaryProfile.id, employeeCode: resolved.salaryProfile.employeeCode,
@@ -597,6 +599,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
     if (user) {
       const ok = await bcrypt.compare(payload.password, user.passwordHash);
       if (ok) {
+        await verifyInstitutionalAccess([user.id,user.email,user.accessCode]);
         const token = buildToken({ id: user.id, role: user.role, schoolId: user.schoolId });
         const parent = await resolveParentForUser(user);
         return res.json({
@@ -622,7 +625,8 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
         accessCode: externalUser.accessCode,
         mustChangePassword: externalUser.mustChangePassword
       });
-      const token = buildToken({ id: resolved.user.id, role: resolved.user.role, schoolId: resolved.user.schoolId });
+      await verifyInstitutionalAccess([resolved.user.id,resolved.user.email,resolved.user.accessCode]);
+        const token = buildToken({ id: resolved.user.id, role: resolved.user.role, schoolId: resolved.user.schoolId });
       return res.json({
         token,
         role: resolved.user.role,
@@ -644,7 +648,8 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
         employeeId: externalUser.employeeId,
         phone: externalUser.phone
       });
-      const token = buildToken({ id: resolved.user.id, role: resolved.user.role, schoolId: resolved.user.schoolId });
+      await verifyInstitutionalAccess([resolved.user.id,resolved.user.email,resolved.user.accessCode]);
+        const token = buildToken({ id: resolved.user.id, role: resolved.user.role, schoolId: resolved.user.schoolId });
       return res.json({
         token,
         role: resolved.user.role,

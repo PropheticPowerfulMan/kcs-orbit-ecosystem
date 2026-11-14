@@ -29,7 +29,8 @@ import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSettings'
 import AdminAnalyticsPanel from '@/components/admin/AdminAnalyticsPanel'
 import AdminPreEnrollments from '@/components/admin/AdminPreEnrollments'
-import AdminNewsEventsManager from '@/components/admin/AdminNewsEventsManager'
+import AccountAccessCenter from '@/components/admin/AccountAccessCenter'
+import AdminSiteManager from '@/components/admin/AdminSiteManager'
 import AdminSuspensionCenter from '@/components/admin/AdminSuspensionCenter'
 import StudentArchivesCenter from '@/components/admin/StudentArchivesCenter'
 import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenterV2'
@@ -3618,7 +3619,8 @@ const AdminSectionView = ({
     )
   }
 
-  if (segment === 'news' || segment === 'media') return <AdminNewsEventsManager />
+  if (segment === 'account-access') return <AccountAccessCenter/>
+  if (segment === 'site' || segment === 'news' || segment === 'media') return <AdminSiteManager initial={segment==='news'?'news':segment==='media'?'media':'pages'}/>
 
   if (segment === 'analytics') return <AdminAnalyticsPanel />
 
