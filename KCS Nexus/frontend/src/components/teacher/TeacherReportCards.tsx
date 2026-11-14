@@ -1,3 +1,4 @@
+import { usePublishedAcademicCalendar } from '@/hooks/usePublishedAcademicCalendar'
 import AcademicPeriodConfirmationSummary from '@/components/shared/AcademicPeriodConfirmationSummary'
 import { createPortal } from 'react-dom'
 import { useUIStore } from '@/store/uiStore'
@@ -112,7 +113,7 @@ const commentBank = [
   'Should complete missing work and ask for help earlier.',
 ]
 
-const panel = 'rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
+const panel = 'nexus-workspace-card rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
 const field = 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:disabled:bg-kcs-blue-900'
 const primary = 'inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-45'
 
@@ -254,7 +255,10 @@ function SubjectGradeSubmission() {
   const [overviewState, setOverviewState] = useState<Record<string, any>>({})
   const [courses, setCourses] = useState<Course[]>([])
   const [courseId, setCourseId] = useState('')
+  const { calendar: publishedCalendar } = usePublishedAcademicCalendar()
+  const initialYearSet = useRef(false)
   const [academicYear, setAcademicYear] = useState('2026-2027')
+  useEffect(() => { if (publishedCalendar?.name && !initialYearSet.current) { initialYearSet.current = true; setAcademicYear(publishedCalendar.name) } }, [publishedCalendar?.name])
   const [term, setTerm] = useState(sessions[0])
   const [drafts, setDrafts] = useState<DraftStore>({})
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -523,7 +527,7 @@ function SubjectGradeSubmission() {
     <div className={panel}>
       <div className='grid gap-3 lg:grid-cols-[1.25fr_.7fr_.9fr_1fr]'>
         <label className='text-xs font-bold uppercase text-gray-400'>My assigned subject<select className={`${field} mt-1 normal-case`} value={course?.id ?? ''} onChange={(event) => setCourseId(event.target.value)}>{courses.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name} · {item.grade}</option>)}</select></label>
-        <label className='text-xs font-bold uppercase text-gray-400'>Academic year<input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} pattern='\d{4}-\d{4}' /></label>
+        <label className='text-xs font-bold uppercase text-gray-400'>Academic year<input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => { initialYearSet.current = true; setAcademicYear(event.target.value) }} pattern='\d{4}-\d{4}' /></label>
         <label className='text-xs font-bold uppercase text-gray-400'>Report session<select className={`${field} mt-1 normal-case`} value={term} onChange={(event) => setTerm(event.target.value)}>{sessions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <label className='text-xs font-bold uppercase text-gray-400'>Search<input className={`${field} mt-1 normal-case`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder='Name or student number' /></label>
       </div>

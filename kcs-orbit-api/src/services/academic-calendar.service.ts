@@ -83,7 +83,11 @@ export async function getOrCreateCurrentAcademicCalendar(organizationId: string,
   const current = await prisma.academicYear.findFirst({
     where: { organizationId, isCurrent: true }, include: includePeriods, orderBy: { updatedAt: "desc" }
   });
-  return current || saveAcademicCalendar(
+  if (current) return current;
+  // A read after an explicit year closure must never activate a new year by date.
+  const latest = await prisma.academicYear.findFirst({ where: { organizationId }, include: includePeriods, orderBy: { startDate: "desc" } });
+  if (latest) return latest;
+  return saveAcademicCalendar(
     buildDefaultAcademicCalendar(getDefaultAcademicStartYear(effectiveDate), organizationId),
     AppSlug.KCS_NEXUS
   );

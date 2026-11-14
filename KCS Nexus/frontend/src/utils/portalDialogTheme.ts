@@ -13,7 +13,7 @@ export function decoratePortalDialogs(root: ParentNode = document) {
   // Full-screen workspaces keep their own table sizing; nested confirmation dialogs still receive the theme.
   if(panel.matches('.gradebook-focus-window')||panel.querySelector('table')&&panel.matches('[class*="h-screen"]'))continue
   // Preserve the composition and colors of windows that already use a modern custom design.
-  const polished=dialog.hasAttribute('data-gradebook-overlay')||panel.classList.contains('rounded-3xl')||/parent-meeting|credential|report-card|certificate/i.test(dialog.className+' '+panel.className)||Boolean(panel.querySelector('[class*="bg-gradient"]'))
+  const polished=dialog.hasAttribute('data-gradebook-overlay')||dialog.hasAttribute('data-nexus-dialog-preserve')||panel.hasAttribute('data-nexus-dialog-preserve')||Boolean(panel.querySelector('header[class*="bg-kcs-blue"], header[class*="bg-gradient"]'))||/parent-meeting|credential|report-card|certificate/i.test(dialog.className+' '+panel.className)||Boolean(panel.querySelector('[class*="bg-gradient"]'))
   const level=polished?'polish':'full'
   dialog.dataset.nexusDialogLevel=level
   panel.dataset.nexusDialogLevel=level

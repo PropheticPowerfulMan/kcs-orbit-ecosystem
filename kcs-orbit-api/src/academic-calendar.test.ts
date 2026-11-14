@@ -1,3 +1,5 @@
+import { prisma } from './db';
+import { getOrCreateCurrentAcademicCalendar } from './services/academic-calendar.service';
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildDefaultAcademicCalendar } from "@ecosystem/shared-contracts";
@@ -37,4 +39,15 @@ test("overlapping periods are rejected", () => {
   const calendar = buildDefaultAcademicCalendar(2026, "org-kcs");
   calendar.periods.find((p) => p.code === "Q2")!.startDate = new Date("2026-10-01T00:00:00Z");
   assert.throws(() => validateAcademicCalendar(calendar), /must not overlap/);
+});
+
+test("reading a previously closed year never activates another academic year", async () => {
+ const original = prisma.academicYear.findFirst;
+ const originalTransaction = prisma.$transaction;
+ let reads = 0;
+ const closed = {name:'2026-2027',isCurrent:false,status:'CLOSED',periods:[]};
+ (prisma.academicYear.findFirst as any) = async () => ++reads === 1 ? null : closed;
+ (prisma.$transaction as any) = async () => { throw new Error('Unexpected implicit activation'); };
+ try { assert.equal(await getOrCreateCurrentAcademicCalendar('school-test',new Date('2028-10-01T12:00:00Z')),closed);assert.equal(reads,2); }
+ finally { prisma.academicYear.findFirst=original;prisma.$transaction=originalTransaction; }
 });

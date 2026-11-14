@@ -1,3 +1,4 @@
+import PublishedCalendarStrip from '@/components/shared/PublishedCalendarStrip'
 import TeacherReportsHub from '@/components/teacher/TeacherReportsHub'
 import DateSelect from '@/components/shared/DateSelect'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -1494,7 +1495,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }
 
   const inputClass = 'input-kcs py-2 text-sm'
-  const panelClass = 'rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
+  const panelClass = 'nexus-workspace-card rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
   const compactButton = 'rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-kcs-blue-800'
   useEffect(() => {
     const saveWithKeyboard = (event: KeyboardEvent) => {
@@ -1525,7 +1526,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   if (segment === 'grades') {
     return (
       <section className="space-y-6">
-        <div className="rounded-2xl border border-kcs-blue-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+        <div className="nexus-workspace-card p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">
@@ -1564,8 +1565,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   return (
     <section className="space-y-6">
-      <div className="rounded-2xl border border-kcs-blue-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="nexus-workspace-heading">
+        <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">
               <Icon size={22} />
@@ -1590,7 +1591,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
       {segment === 'courses' && (
         <div className="space-y-6">
-          <div className="overflow-hidden rounded-2xl border border-kcs-blue-100 bg-white shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="nexus-workspace-card overflow-hidden">
             <div className="border-b border-gray-100 px-5 pt-5 dark:border-kcs-blue-800">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -1615,10 +1616,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
               <div className="mt-5 grid gap-3 pb-5 sm:grid-cols-2 xl:grid-cols-4">
                 {[
-                  { label: 'Subjects', value: courses.length, sub: 'active workspace' },
-                  { label: 'Enrollment', value: totalEnrollment, sub: 'student seats' },
-                  { label: 'Credit Hours', value: totalCreditHours, sub: 'teaching load' },
-                  { label: 'Grade Coverage', value: coveredGrades, sub: 'grade levels' },
+                  { label: 'Subjects', value: courses.length, sub: tr('espace actif', 'active workspace') },
+                  { label: 'Enrollment', value: totalEnrollment, sub: tr('places inscrites', 'student seats') },
+                  { label: 'Credit Hours', value: totalCreditHours, sub: tr('charge d’enseignement', 'teaching load') },
+                  { label: 'Grade Coverage', value: coveredGrades, sub: tr('niveaux scolaires', 'grade levels') },
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl bg-gray-50 px-4 py-3 dark:bg-kcs-blue-800/30">
                     <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{item.value}</p>
@@ -1630,10 +1631,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             </div>
 
             {courseTab === 'setup' && (
-              <div className="grid gap-6 p-5 xl:grid-cols-[0.8fr_1.2fr]">
+              <div className="grid gap-6 p-5 xl:grid-cols-[minmax(20rem,.85fr)_minmax(0,1.15fr)]">
                 <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                  <h4 className="font-bold text-kcs-blue-900 dark:text-white">{editingCourseId ? 'Edit course' : 'Create a course'}</h4>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Use one official class or build a custom roster with learners from several classes.</p>
+                  <h4 className="font-bold text-kcs-blue-900 dark:text-white">{editingCourseId ? tr('Modifier le cours', 'Edit course') : tr('Créer un cours', 'Create a course')}</h4>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Utilisez une classe officielle ou composez un groupe avec des élèves de plusieurs classes.', 'Use one official class or build a custom roster with learners from several classes.')}</p>
                   <div className="mt-4 grid gap-3">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                       Subject name
@@ -1690,7 +1691,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       {courseErrors.grade && <p className="field-error mt-1" role="alert">{courseErrors.grade}</p>}
                     </div>}
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" data-teacher-save-primary disabled={courseSaving} aria-busy={courseSaving} onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-green-700 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-400 dark:text-emerald-950 dark:shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(52,211,153,0.32)] dark:hover:bg-emerald-300">{courseSaving ? 'Saving securely…' : editingCourseId ? 'Save course' : 'Create course'}</button>
+                      <button type="button" data-teacher-save-primary disabled={courseSaving} aria-busy={courseSaving} onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-green-700 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-400 dark:text-emerald-950 dark:shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(52,211,153,0.32)] dark:hover:bg-emerald-300">{courseSaving ? tr('Enregistrement sécurisé…', 'Saving securely…') : editingCourseId ? tr('Enregistrer le cours', 'Save course') : tr('Créer le cours', 'Create course')}</button>
                       {editingCourseId && <button onClick={resetCourseDraft} className="rounded-xl border-2 border-kcs-blue-600 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-gold-400 dark:bg-kcs-blue-950 dark:text-kcs-gold-300 dark:hover:bg-kcs-blue-800">Cancel edit</button>}
                     </div>
                   </div>
@@ -3102,7 +3103,7 @@ const TeacherPortal = () => {
     <div className="portal-shell flex">
       <PortalSidebar />
 
-      <main className="min-w-0 flex-1 overflow-x-hidden">
+      <main data-portal-workspace={`teacher-${activeSegment}`} className="min-w-0 flex-1 overflow-x-hidden">
         <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
@@ -3125,6 +3126,7 @@ const TeacherPortal = () => {
         </div>
 
         <div className="min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6">
+          <PublishedCalendarStrip/>
           {isDashboard && <PortalSectionPanel />}
           {isDashboard && <SuggestionBox />}
 

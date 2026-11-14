@@ -1,3 +1,4 @@
+import '@/components/shared/portalWorkspace.css'
 import PortalActionDialogs from '@/components/shared/PortalActionDialogs'
 import './buttonProcessingFeedback.js'
 import InstallAppButton from '@/components/InstallAppButton'

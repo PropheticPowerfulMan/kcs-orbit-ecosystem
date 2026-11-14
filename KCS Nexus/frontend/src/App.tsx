@@ -17,7 +17,7 @@ const lazyWithRecovery = <T extends ComponentType<any>>(importer: () => Promise<
     return module
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    const chunkFailed = /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message)
+    const chunkFailed = /ChunkLoadError|Loading chunk|Unable to preload CSS|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message)
     const recoveryKey = `${window.location.pathname}${window.location.search}`
     if (chunkFailed && sessionStorage.getItem(CHUNK_RELOAD_KEY) !== recoveryKey) {
       sessionStorage.setItem(CHUNK_RELOAD_KEY, recoveryKey)

@@ -24,3 +24,8 @@ body[data-nexus-dashboard] [data-nexus-dialog-level=full] [data-nexus-dialog-act
 
 body[data-nexus-dashboard] [data-nexus-dialog-panel][data-nexus-dialog-level=polish]{scrollbar-width:thin;scrollbar-color:#3d87a8 transparent;overscroll-behavior:contain}
 body[data-nexus-dashboard] [data-nexus-dialog-panel][data-nexus-dialog-level=polish] :is(button,a):focus-visible{outline:3px solid #2da6c2;outline-offset:3px}
+
+/* Rounded corners alone do not make an old form modern: give plain windows a clear section header. */
+body[data-nexus-dashboard] [data-nexus-dialog-panel][data-nexus-dialog-level=full] [data-nexus-dialog-header]{padding:17px 18px;border-radius:16px;background:linear-gradient(110deg,#e3f2fa,#eff8fc);color:#0b304e}
+.dark body[data-nexus-dashboard] [data-nexus-dialog-panel][data-nexus-dialog-level=full] [data-nexus-dialog-header]{background:linear-gradient(110deg,#123e58,#123149);color:#e8f4ff}
+body[data-nexus-dashboard] [data-nexus-dialog-panel][data-nexus-dialog-level=full] [data-nexus-dialog-title]{letter-spacing:-.025em}
