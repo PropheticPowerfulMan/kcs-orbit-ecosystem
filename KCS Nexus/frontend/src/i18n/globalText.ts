@@ -1,6 +1,8 @@
 type PhraseMap = Record<string, string>
 
 export const globalFrenchText: PhraseMap = {
+  "Assignments and submission review": "Devoirs et suivi des soumissions",
+  "Publish to the whole enrolled class, review submissions, grade and provide feedback.": "Publiez pour toute la classe inscrite, examinez les travaux, attribuez les notes et ajoutez vos commentaires.",
   'Equipping students from Grade 6 through Grade 12 with rigorous academics, biblical principles, spiritual maturity, and servant leadership.': 'Former les élèves de la 6e à la terminale grâce à des apprentissages exigeants, des principes bibliques, la maturité spirituelle et le leadership au service des autres.',
   'Raise the next generation of leaders with compassion and mercy': 'Former la prochaine génération de leaders avec compassion et miséricorde',
   'Equip passionate, independent, life-long learners with a biblical worldview': 'Former des apprenants passionnés, autonomes et permanents, porteurs d’une vision biblique du monde',
