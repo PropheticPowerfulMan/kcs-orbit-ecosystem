@@ -1,3 +1,4 @@
+import { alertPortalMessage } from '@/utils/portalActionDialogs'
 import {ForumFeedHeading, ForumTopics, ForumGuidelines, ForumExpandable, forumCategoryLabel} from '@/components/shared/ForumPresentation'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
@@ -129,8 +130,8 @@ const StudentForumPage = () => {
 
   const readMedia = (file: File | undefined, type: 'image' | 'video' | 'audio') => {
     if (!file) return
-    if (!file.type.startsWith(type + '/')) { alert('Please select a valid ' + type + ' file.'); return }
-    if (file.size > 8_000_000) { alert('Media must be 8 MB or less.'); return }
+    if (!file.type.startsWith(type + '/')) { void alertPortalMessage('Please select a valid ' + type + ' file.'); return }
+    if (file.size > 8_000_000) { void alertPortalMessage('Media must be 8 MB or less.'); return }
     const reader = new FileReader()
     reader.onload = () => setAttachment({ type, data: String(reader.result), name: file.name })
     reader.readAsDataURL(file)
@@ -138,7 +139,7 @@ const StudentForumPage = () => {
 
   const readAnyMedia = (file: File | undefined, done: (media: { type: 'image' | 'video' | 'audio' | 'document'; data: string; name: string }) => void) => {
     if (!file) return
-    if (file.size > 8_000_000) { alert(tr('Le fichier doit faire 8 Mo maximum.','The file must be 8 MB or less.')); return }
+    if (file.size > 8_000_000) { void alertPortalMessage(tr('Le fichier doit faire 8 Mo maximum.','The file must be 8 MB or less.')); return }
     const family = file.type.split('/')[0]
     const type = (['image','video','audio'].includes(family) ? family : 'document') as 'image' | 'video' | 'audio' | 'document'
     const reader = new FileReader(); reader.onload = () => done({ type, data: String(reader.result), name: file.name }); reader.readAsDataURL(file)

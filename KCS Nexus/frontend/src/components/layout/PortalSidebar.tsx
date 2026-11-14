@@ -94,6 +94,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
   const base: NavItem[] = [
     { to: dashboardPath, label: t("portalNav.dashboard"), icon: LayoutDashboard },
+    { to: `${dashboardPath}/handbook`, label: language === 'fr' ? 'Manuel de l’école' : 'School Handbook', icon: BookOpen },
     ...(["teacher", "admin"].includes(role) ? [] : [{ to: "/incident-reports", label: t("portalNav.incidentReport"), icon: ClipboardList }]),
     ...(["student", "parent", "admin"].includes(role) ? [{ to: "/shining-students", label: "Shining Student", icon: GraduationCap }] : []),
     ...(["student", "teacher"].includes(role) ? [{ to: "/electives", label: t("portalNav.electives"), icon: BookOpenCheck }] : []),
@@ -315,6 +316,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
 
   const navItems: NavItem[] = activeRole === 'admin' && user.id !== 'configured-superadmin' ? [
     { to: '/admin', label: t('portalNav.dashboard'), icon: LayoutDashboard },
+    { to: '/admin/handbook', label: language === 'fr' ? 'Manuel de l’école' : 'School Handbook', icon: BookOpen },
     { to: '/shining-students', label: 'Shining Student', icon: GraduationCap },
     { to: '/incident-reports', label: t('portalNav.incidentReport'), icon: ClipboardList },
     { to: '/electives', label: t('portalNav.electives'), icon: BookOpenCheck },
