@@ -1,3 +1,4 @@
+import { showOfficialDocument } from '@/utils/officialDocumentPreview'
 import { useEffect, useMemo, useState } from 'react'
 import { BarChart3, CheckCircle2, ClipboardList, FileSpreadsheet, FileText, Plus, Printer, ShieldCheck } from 'lucide-react'
 import { diagnosticAPI } from '@/services/api'
@@ -83,7 +84,7 @@ const studentName = (submission: DiagnosticSubmission) => {
 
 const printReport = (submission: DiagnosticSubmission) => {
   const html = `
-    <html><head><title>Diagnostic Assessment Report</title>
+    <!doctype html><html><head><title>Diagnostic Assessment Report</title>
     <style>body{font-family:Arial;padding:24px;color:#10233f}.header{border-bottom:3px solid #0b3b73;padding-bottom:16px}h1{color:#0b3b73}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card{border:1px solid #dbe4f0;border-radius:12px;padding:14px}.muted{color:#64748b}table{width:100%;border-collapse:collapse;margin-top:18px}td,th{border:1px solid #dbe4f0;padding:8px;text-align:left}</style>
     </head><body>
       <div class="header"><h1>Diagnostic Assessment Report</h1><p>Kinshasa Christian School - KCS Nexus AI</p></div>
@@ -107,9 +108,7 @@ const printReport = (submission: DiagnosticSubmission) => {
     </body></html>`
   const win = window.open('', '_blank')
   if (!win) return
-  win.document.write(html)
-  win.document.close()
-  win.print()
+  void showOfficialDocument(win, html.trim(), { filename: `KCS-diagnostic-${submission.id}` })
 }
 
 export default function DiagnosticCenter() {

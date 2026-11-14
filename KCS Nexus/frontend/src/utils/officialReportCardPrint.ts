@@ -1,3 +1,4 @@
+import { showOfficialDocument } from './officialDocumentPreview'
 import { academicRecordsAPI } from '@/services/api'
 type ReportSubject = {
   id: string
@@ -60,10 +61,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
     // Only trusted, server-generated report HTML is accepted. All personal fields are escaped there.
     const html = response.data.data.html as string
     if (!html.startsWith('<!doctype html>')) throw new Error('Invalid official report document')
-    const ready = `<script>addEventListener('load',async function(){await document.fonts.ready;await Promise.all(Array.from(document.images,function(i){return i.complete?Promise.resolve():new Promise(function(r){i.onload=r;i.onerror=r})}));setTimeout(function(){window.focus();window.print()},150)});<\/script>`
-    const url = URL.createObjectURL(new Blob([html.replace('</body>', ready + '</body>')], { type: 'text/html;charset=utf-8' }))
-    printWindow.location.replace(url)
-    window.setTimeout(() => URL.revokeObjectURL(url), 300_000)
+    await showOfficialDocument(printWindow, html, { filename: `KCS-report-card-${card.id}`, language, onError: onBlocked })
   } catch {
     printWindow.close()
     onBlocked(language === 'fr' ? 'Impossible de préparer le bulletin officiel. Réessayez.' : 'Unable to prepare the official report card. Please retry.')

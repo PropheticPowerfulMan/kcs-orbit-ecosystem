@@ -1,3 +1,4 @@
+import ParentMeetingVerification from '@/components/shared/ParentMeetingVerification'
 import { useUIStore } from '@/store/uiStore'
 import { Component, Suspense, lazy, useEffect, useState, type ComponentType, type ErrorInfo, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
@@ -216,6 +217,7 @@ const App = () => {
             <Route path="/terms" element={<AboutPage />} />
             <Route path="/sitemap" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/verify/parent-meeting" element={<ParentMeetingVerification />} />
             <Route path="/verify/transcript" element={<TranscriptVerificationPage />} />
             <Route path="/verify/report-card-analytics" element={<TranscriptVerificationPage />} />
             <Route path="/verify/report-card" element={<TranscriptVerificationPage />} />

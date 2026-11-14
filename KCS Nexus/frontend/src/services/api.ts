@@ -665,3 +665,13 @@ export const syllabiAPI = {
 export const academicVisibilityAPI = { get: () => api.get('/academic-visibility'), save: (data: unknown) => api.put('/academic-visibility', data) }
 
 export const academicPortalAPI = {reportCards:(studentId:string)=>api.get('/academic-records/portal-report-cards/'+encodeURIComponent(studentId)),reportDocument:(id:string)=>api.get('/academic-records/report-cards/'+encodeURIComponent(id)+'/portal-document',{params:{language:'en'}})}
+
+export const parentMeetingsAPI = {
+ context: () => api.get('/teachers/parent-meetings/context'),
+ list: () => api.get('/teachers/parent-meetings'),
+ save: (data: object) => api.post('/teachers/parent-meetings/save', data, { headers: { 'x-silent-feedback': 'true' } }),
+ submit: (id: string, updatedAt: string) => api.post(`/teachers/parent-meetings/${id}/submit`, { updatedAt }, { headers: { 'x-silent-feedback': 'true' } }),
+ document: (id: string, language: 'fr' | 'en') => api.get(`/teachers/parent-meetings/${id}/document`, { params: { language } }),
+ review: (id: string, data: object) => api.post(`/teachers/parent-meetings/${id}/review`, data),
+ verify: (document: string, fingerprint: string) => api.get('/teachers/parent-meetings/verify', { params: { document, fingerprint } }),
+}

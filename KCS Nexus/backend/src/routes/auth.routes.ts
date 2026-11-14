@@ -1004,12 +1004,13 @@ authRouter.put('/profile', authenticate, asyncHandler(async (req: AuthenticatedR
     ),
   }).strict()
 
+  // Self-service avatars belong to this Nexus account only; this route never writes to Orbit or an official portrait.
   const data = profileSchema.parse(req.body)
 
   if (isConfiguredSuperAdminUser(req.user!.sub)) {
     const account = await getConfiguredSuperAdminAccount()
     const updatedAccount = await prisma.user.update({ where: { id: account.id }, data: { avatar: data.avatar } })
-    return success(res, buildConfiguredSuperAdminUser(updatedAccount), 'Profile updated successfully')
+    return success(res, {...buildConfiguredSuperAdminUser(updatedAccount),avatar:updatedAccount.avatar}, 'Personal Nexus profile photo updated without changing the official ecosystem portrait')
   }
 
   const currentUser = await prisma.user.findUnique({ where: { id: req.user!.sub } })

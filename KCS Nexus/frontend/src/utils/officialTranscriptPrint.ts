@@ -1,3 +1,4 @@
+import { showOfficialDocument } from './officialDocumentPreview'
 import {academicRecordsAPI} from '@/services/api'
 type OfficialTranscript={student:{id?:string;studentNumber:string;name:string};rows:unknown[]}
 
@@ -32,7 +33,6 @@ export async function printOfficialTranscript(transcript:OfficialTranscript,onBl
   if(error)nav.append(button(text.retry,()=>{void prepare()}))
   nav.append(button(text.close,()=>win.close()))
  }
- const print=()=>{if(!win.closed){win.focus();win.print()}}
  const prepare=async()=>{
   if(busy||win.closed)return
   busy=true;status(text.loading)
@@ -41,22 +41,7 @@ export async function printOfficialTranscript(transcript:OfficialTranscript,onBl
    const html=response.data.data.html as string
    if(typeof html!=='string'||!/^<!doctype html>/i.test(html))throw new Error('Invalid transcript document')
    if(win.closed)return
-   win.document.open();win.document.write(html);win.document.close()
-   // Parent-owned handlers avoid injected-script escaping and Blob load-event races.
-   const style=win.document.createElement('style')
-   style.textContent='.kcs-transcript-print-toolbar{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;justify-content:center;gap:10px;padding:12px;background:#073b70;box-shadow:0 3px 12px #10284933}.kcs-transcript-print-toolbar button{border:1px solid #aac8e0;border-radius:8px;padding:10px 18px;background:#e9f5fc;color:#073b70;font:700 14px Arial;cursor:pointer}@media print{.kcs-transcript-print-toolbar{display:none!important}}'
-   win.document.head.append(style)
-   const toolbar=win.document.createElement('nav')
-   toolbar.className='kcs-transcript-print-toolbar';toolbar.setAttribute('aria-label',text.print)
-   toolbar.append(button(text.print,print),button(text.close,()=>win.close()))
-   win.document.body.prepend(toolbar)
-   const images=Array.from(win.document.images).map(image=>image.complete?Promise.resolve():new Promise<void>(resolve=>{
-    image.addEventListener('load',()=>resolve(),{once:true});image.addEventListener('error',()=>resolve(),{once:true})
-   }))
-   let timer:ReturnType<typeof setTimeout>|undefined
-   await Promise.race([Promise.all([win.document.fonts.ready,...images]),new Promise<void>(resolve=>{timer=setTimeout(resolve,4000)})])
-   if(timer)clearTimeout(timer)
-   print()
+   await showOfficialDocument(win, html, { filename: `KCS-transcript-${transcript.student.studentNumber}`, language: fr?'fr':'en', onError: onBlocked })
   }catch{
    if(!win.closed)status(text.failed,true)
    onBlocked(text.failed)

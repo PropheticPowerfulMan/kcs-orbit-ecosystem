@@ -1,4 +1,5 @@
-import { type ReactNode } from "react";
+import ParentMeetingReports from './ParentMeetingReports'
+import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ClipboardList, GraduationCap, MessageSquare, ShieldAlert } from "lucide-react";
 import { useUIStore } from "@/store/uiStore";
@@ -10,6 +11,7 @@ export default function TeacherReportsHub({ academicReports, disciplineReports }
   const language = useUIStore((state) => state.language);
   const tr = (fr: string, en: string) => (language === "fr" ? fr : en);
   const location = useLocation();
+  const [academicPanel,setAcademicPanel]=useState('meetings');
   const requested = new URLSearchParams(location.search).get("view");
   const active = location.pathname.endsWith("/discipline")
     ? "discipline"
@@ -123,7 +125,7 @@ export default function TeacherReportsHub({ academicReports, disciplineReports }
         {active === "discipline" ? (
           disciplineReports
         ) : active === "academic" ? (
-          academicReports
+          <div className="space-y-5"><nav aria-label={tr('Rapports académiques','Academic report workspace')} className="flex flex-wrap gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-2 dark:border-kcs-blue-700 dark:bg-kcs-blue-900">{[['meetings',tr('Rencontres parents–école','Parent–school conferences')],['activities',tr('Bilans et activités de classe','Class summaries and activities')]].map(([id,label])=><button key={id} onClick={()=>setAcademicPanel(id)} aria-pressed={academicPanel===id} className={'rounded-xl px-4 py-3 text-sm font-bold transition-colors '+(academicPanel===id?'bg-kcs-blue-700 text-white shadow-sm dark:bg-sky-700 dark:!text-white':'text-kcs-blue-900 dark:!text-sky-100')}>{label}</button>)}</nav>{academicPanel==='meetings'?<ParentMeetingReports/>:academicReports}</div>
         ) : active === "messages" ? (
           <ParentCommunicationPanel />
         ) : (

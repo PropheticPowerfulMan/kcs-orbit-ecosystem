@@ -1,3 +1,4 @@
+import PeopleRegistryHeader from '@/components/admin/PeopleRegistryHeader'
 import AcademicVisibilityControlCenter from '@/components/admin/AcademicVisibilityControlCenter'
 import AdminReportsHub from '@/components/admin/AdminReportsHub'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
@@ -539,7 +540,7 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     studentNumber: profile.studentNumber,
     email: profile.user?.email ?? '',
     dateOfBirth: profile.dateOfBirth ?? null,
-    photoData: Object.prototype.hasOwnProperty.call(profile, 'officialAvatar') ? profile.officialAvatar : profile.photoData ?? profile.user?.avatar ?? null,
+    photoData: Object.prototype.hasOwnProperty.call(profile, 'officialAvatar') ? profile.officialAvatar : profile.photoData ?? null,
     grade: normalizeSchoolLevel(profile.grade) ?? profile.grade,
     section: profile.section ?? '',
     parent: parent ? [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') : 'Parent record pending',
@@ -2534,7 +2535,7 @@ const AdminSectionView = ({
     const parentsWithAlerts = parentRecords.filter((parent) => parent.status === 'Suivi requis').length
 
     return (
-      <div className="space-y-6">
+      <div data-people-registry="parents" className="admin-person-directory space-y-5">
         {familyCredentials && createPortal((
           <div className="kcs-credential-modal fixed inset-0 z-[9999] grid place-items-center overflow-y-auto bg-slate-950/85 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true" aria-label="Identifiants générés">
             <section className="kcs-credential-modal-panel my-auto max-h-[calc(100dvh-1.5rem)] min-h-[min(34rem,calc(100dvh-1.5rem))] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-emerald-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-5 text-slate-900 shadow-[0_35px_120px_rgba(0,20,45,.65)] dark:border-sky-700/60 dark:from-slate-950 dark:via-kcs-blue-950 dark:to-slate-900 dark:text-slate-100 sm:max-h-[calc(100dvh-3rem)] sm:min-h-[36rem] sm:p-9">
@@ -2550,67 +2551,47 @@ const AdminSectionView = ({
             </section>
           </div>
         ), document.body)}
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">SAVANEX shared registry</p>
-              <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Parents</h2>
-              <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">Annuaire des parents responsables, construit depuis les familles et les eleves synchronises dans KCS Nexus.</p>
-            </div>
-            <span className={`w-fit rounded-full px-3 py-1.5 text-xs font-bold ${apiSynced ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'}`}>{apiSynced ? 'Synchronisé Orbit' : 'Synchronisation Orbit…'}</span>
-          </div>
-        </div>
+        <PeopleRegistryHeader kind="parents" synced={apiSynced} metrics={[
+          {label:tr('Parents affichés','Parents shown'),value:filteredParents.length,detail:canonicalParentCount==null?tr('Registre en cours de chargement','Registry loading'):String(canonicalParentCount)+tr(' au total',' in total')},
+          {label:tr('Enfants liés','Linked children'),value:totalLinkedStudents,detail:tr('dans le registre officiel','in the official registry')},
+          {label:tr('Suivi requis','Follow-up required'),value:parentsWithAlerts,detail:tr('au moins un enfant à suivre','at least one child needs follow-up')},
+        ]}/>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          {[
-            { label: 'Parents visibles', value: filteredParents.length, detail: canonicalParentCount == null ? 'Synchronisation Orbit…' : `${canonicalParentCount} au total partagé`, icon: Users },
-            { label: 'Enfants lies', value: totalLinkedStudents, detail: 'dans le registre officiel', icon: GraduationCap },
-            { label: 'Suivi requis', value: parentsWithAlerts, detail: 'au moins un enfant a surveiller', icon: AlertTriangle },
-          ].map(({ label, value, detail, icon: Icon }) => (
-            <div key={label} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <Icon size={18} className="mb-3 text-kcs-blue-600 dark:text-kcs-blue-300" />
-              <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{value}</p>
-              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{detail}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+        <div data-registry-toolbar className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_180px_180px_220px] lg:items-center">
             <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
               <Search size={16} className="text-gray-400" />
-              <input value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Rechercher parent, ID, contact, enfant ou classe..." />
+              <input value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder={tr('Rechercher parent, ID, contact, enfant ou classe...','Search parent, ID, contact, child or class…')} />
             </label>
             <select value={parentGradeFilter} onChange={(event) => { setParentGradeFilter(event.target.value); setParentClassSuffixFilter('All') }} aria-label="Filtrer les parents par niveau de l'enfant" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option value="All">Tous les niveaux</option>
+              <option value="All">{tr('Tous les niveaux','All grades')}</option>
               {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
             </select>
             <select value={parentClassSuffixFilter} onChange={(event) => setParentClassSuffixFilter(event.target.value as typeof SEARCH_CLASS_SUFFIXES[number])} aria-label="Filtrer les parents par suffixe de classe" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option value="All">Tous les suffixes</option><option value="">Sans suffixe</option>
+              <option value="All">{tr('Tous les suffixes','All sections')}</option><option value="">{tr('Sans suffixe','No section')}</option>
               {CLASS_SECTIONS.filter(Boolean).map((section) => <option key={section} value={section}>Suffixe {section}</option>)}
             </select>
             <select value={parentStudentFilter} onChange={(event) => setParentStudentFilter(event.target.value)} aria-label="Filtrer par enfant lié" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option value="All">Tous les enfants liés</option>
+              <option value="All">{tr('Tous les enfants liés','All linked children')}</option>
               {parentStudentDirectory.map((student) => <option key={student.id} value={student.id}>{student.name} · {student.studentNumber || 'Sans ID'}</option>)}
             </select>
           </div>
           {parentNotice ? <p className="mt-3 rounded-xl bg-kcs-blue-50 p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">{parentNotice}</p> : null}
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+        <div data-registry-list className="rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="border-b border-gray-100 px-5 py-4 dark:border-kcs-blue-800">
-            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Liste officielle des parents</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Vue semblable a SAVANEX : responsable, contacts, enfants rattaches et statut de suivi.</p>
+            <h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Liste officielle des parents','Official parent directory')}</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Responsables, contacts, enfants liés et actions de gestion.','Guardians, contact details, linked children and record actions.')}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-[900px] w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-kcs-blue-950 dark:text-gray-400">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Parent</th>
-                  <th className="px-5 py-3 font-semibold">ID parent</th>
+                  <th className="px-5 py-3 font-semibold">{tr('ID parent','Parent ID')}</th>
                   <th className="px-5 py-3 font-semibold">Contact</th>
-                  <th className="px-5 py-3 font-semibold">Enfants</th>
+                  <th className="px-5 py-3 font-semibold">{tr('Enfants','Children')}</th>
                   <th className="px-5 py-3 font-semibold">Source</th>
                   <th className="px-5 py-3 text-right font-semibold">Action</th>
                 </tr>
@@ -2618,22 +2599,22 @@ const AdminSectionView = ({
               <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800/70">
                 {filteredParents.map((parent) => (
                   <tr key={parent.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-kcs-blue-800/20">
-                    <td className="px-5 py-4">
+                    <td data-label={tr('Parent','Parent')} className="px-5 py-4">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{parent.name}</p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{parent.status} {parentAccess[parent.id]?.accountBlockedAt ? '· Compte bloqué' : '· Compte actif'}</p>
                     </td>
-                    <td className="px-5 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{parent.displayId || parent.id}</td>
-                    <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400">
+                    <td data-label={tr('ID parent','Parent ID')} className="px-5 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{parent.displayId || parent.id}</td>
+                    <td data-label={tr('Contact','Contact')} className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400">
                       <p>{parent.email}</p>
                       <p className="mt-1">{parent.phone}</p>
                     </td>
-                    <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{parent.studentCount} enfant(s)</td>
-                    <td className="px-5 py-4"><span className="rounded-full bg-kcs-blue-50 px-2.5 py-1 text-xs font-bold uppercase text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">{parent.syncSource}</span></td>
-                    <td className="px-5 py-4 text-right">
+                    <td data-label={tr('Enfants','Children')} className="px-5 py-4 text-gray-700 dark:text-gray-200">{parent.studentCount} enfant(s)</td>
+                    <td data-label={tr('Registre','Registry')} className="px-5 py-4"><span className="rounded-full bg-kcs-blue-50 px-2.5 py-1 text-xs font-bold uppercase text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">{parent.syncSource}</span></td>
+                    <td data-label={tr('Actions','Actions')} className="px-5 py-4 text-right">
                       <div className="flex justify-end gap-2">
-                        <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setSelectedParent(parent)}>Voir</button>
-                        <button type="button" className="rounded-lg border border-amber-200 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20" onClick={() => openEditParent(parent)}>Modifier</button>
-                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('parent', parent)}>Reset accès</button>
+                        <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setSelectedParent(parent)}>{tr('Voir','View')}</button>
+                        <button type="button" className="rounded-lg border border-amber-200 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20" onClick={() => openEditParent(parent)}>{tr('Modifier','Edit')}</button>
+                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('parent', parent)}>{tr('Reset accès','Reset access')}</button>
                         <button type="button" className="rounded-lg border border-red-100 px-3 py-2 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => deleteParentRecord(parent)} aria-label={`Delete ${parent.name}`}><Trash2 size={15} /></button>
                       </div>
                     </td>
@@ -2663,7 +2644,7 @@ const AdminSectionView = ({
               </div>
 
               <div className="mb-4 flex flex-wrap gap-2">
-                <button type="button" onClick={() => openEditParent(selectedParent)} className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20">Modifier</button>
+                <button type="button" onClick={() => openEditParent(selectedParent)} className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20">{tr('Modifier','Edit')}</button>
                 <button type="button" onClick={() => deleteParentRecord(selectedParent)} className="rounded-xl border border-red-100 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20">Supprimer</button>
               </div>
 
@@ -2851,43 +2832,20 @@ const AdminSectionView = ({
       : Object.keys(rosterByFamily).length
 
     return (
-      <div className="space-y-6">
+      <div data-people-registry="students" className="admin-person-directory space-y-5">
         {detailModal}
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">SAVANEX shared registry</p>
-              <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Élèves</h2>
-              <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">Liste officielle lisible par classe et par famille, alimentée par SAVANEX via Orbit.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${apiSynced ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'}`}>{apiSynced ? 'Synchronisé Orbit' : 'Synchronisation Orbit…'}</span>
-              <button className={`${adminButton} inline-flex items-center gap-2`} onClick={openCreateStudentForm}><UserPlus size={16} /> Ajouter un élève</button>
-            </div>
-          </div>
-        </div>
+        <PeopleRegistryHeader kind="students" synced={apiSynced} onCreate={openCreateStudentForm} metrics={[
+          {label:tr('Élèves affichés','Learners shown'),value:filteredRoster.length,detail:String(activeStudents)+tr(' actifs',' active')},
+          {label:tr('Classes couvertes','Classes covered'),value:classesCovered,detail:tr('selon les filtres','based on current filters')},
+          {label:tr('Familles liées','Linked families'),value:familiesCovered,detail:tr('parents responsables','responsible guardians')},
+          {label:tr('À suivre','Needs follow-up'),value:filteredRoster.filter(student=>getStudentRisk(student)!=='On track').length,detail:tr('présence, discipline ou moyenne','attendance, conduct or average')},
+        ]}/>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          {[
-            { label: 'Élèves visibles', value: filteredRoster.length, detail: `${activeStudents} actifs`, icon: GraduationCap },
-            { label: 'Classes couvertes', value: classesCovered, detail: 'selon les filtres', icon: BookOpen },
-            { label: 'Familles liées', value: familiesCovered, detail: 'parents responsables', icon: Users },
-            { label: 'À suivre', value: filteredRoster.filter((student) => getStudentRisk(student) !== 'On track').length, detail: 'présence, discipline ou moyenne', icon: AlertTriangle },
-          ].map(({ label, value, detail, icon: Icon }) => (
-            <div key={label} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <Icon size={18} className="mb-3 text-kcs-blue-600 dark:text-kcs-blue-300" />
-              <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{value}</p>
-              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{detail}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+        <div data-registry-toolbar className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_180px_180px_220px] lg:items-center">
             <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
               <Search size={16} className="text-gray-400" />
-              <input value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Rechercher élève, ID, parent ou classe..." />
+              <input value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder={tr('Rechercher élève, ID, parent ou classe...','Search learner, ID, guardian or class…')} />
             </label>
             <select value={gradeFilter} onChange={(event) => {
               setGradeFilter(event.target.value)
@@ -2899,8 +2857,8 @@ const AdminSectionView = ({
             <select value={classSuffixFilter} onChange={(event) => {
               setClassSuffixFilter(event.target.value as typeof SEARCH_CLASS_SUFFIXES[number])
             }} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option value="All">Tous les suffixes</option>
-              <option value="">Sans suffixe</option>
+              <option value="All">{tr('Tous les suffixes','All sections')}</option>
+              <option value="">{tr('Sans suffixe','No section')}</option>
               {CLASS_SECTIONS.filter(Boolean).map((section) => <option key={section} value={section}>Suffixe {section}</option>)}
             </select>
             <select value={familyFilter} onChange={(event) => setFamilyFilter(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
@@ -2983,28 +2941,28 @@ const AdminSectionView = ({
           )}
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+        <div data-registry-list className="rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="border-b border-gray-100 px-5 py-4 dark:border-kcs-blue-800">
-            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Liste officielle des élèves</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Même logique que SAVANEX : élève, ID, classe, parent responsable, statut et action.</p>
+            <h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Liste officielle des élèves','Official learner directory')}</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Identité, classe, famille et suivi de chaque élève.','Each learner’s identity, class, family and follow-up at a glance.')}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-[980px] w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-kcs-blue-950 dark:text-gray-400">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Élève</th>
-                  <th className="px-5 py-3 font-semibold">ID élève</th>
-                  <th className="px-5 py-3 font-semibold">Classe</th>
-                  <th className="px-5 py-3 font-semibold">Parent responsable</th>
+                  <th className="px-5 py-3 font-semibold">{tr('ID élève','Student ID')}</th>
+                  <th className="px-5 py-3 font-semibold">{tr('Classe','Class')}</th>
+                  <th className="px-5 py-3 font-semibold">{tr('Parent responsable','Guardian')}</th>
                   <th className="px-5 py-3 font-semibold">Contact</th>
-                  <th className="px-5 py-3 font-semibold">Statut</th>
+                  <th className="px-5 py-3 font-semibold">{tr('Statut','Status')}</th>
                   <th className="px-5 py-3 text-right font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800/70">
                 {filteredRoster.map((student) => (
                   <tr key={student.id} className={`transition-colors ${selectedStudent?.id === student.id ? 'bg-kcs-blue-50 dark:bg-kcs-blue-800/40' : 'hover:bg-gray-50 dark:hover:bg-kcs-blue-800/20'}`}>
-                    <td className="px-5 py-4">
+                    <td data-label={tr('Élève','Learner')} className="px-5 py-4">
                       <button className="text-left" onClick={() => {
                         setSelectedStudent(student)
                         setViewingStudent(student)
@@ -3013,22 +2971,22 @@ const AdminSectionView = ({
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{student.status}</p>
                       </button>
                     </td>
-                    <td className="px-5 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{student.studentNumber ?? 'Non renseigné'}</td>
-                    <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{formatClassName(student.grade, student.section) || 'Non assignée'}</td>
-                    <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{student.parent || 'Aucun parent lié'}</td>
-                    <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400">
+                    <td data-label={tr('ID élève','Student ID')} className="px-5 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{student.studentNumber ?? 'Non renseigné'}</td>
+                    <td data-label={tr('Classe','Class')} className="px-5 py-4 text-gray-700 dark:text-gray-200">{formatClassName(student.grade, student.section) || 'Non assignée'}</td>
+                    <td data-label={tr('Parent responsable','Guardian')} className="px-5 py-4 text-gray-700 dark:text-gray-200">{student.parent || 'Aucun parent lié'}</td>
+                    <td data-label={tr('Contact','Contact')} className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400">
                       <p>{student.parentEmail || 'Email non renseigné'}</p>
                       <p className="mt-1">{student.parentPhone || 'Téléphone non renseigné'}</p>
                     </td>
-                    <td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${pillTone(getStudentRisk(student))}`}>{getStudentRisk(student)}</span></td>
-                    <td className="px-5 py-4">
+                    <td data-label={tr('Statut','Status')} className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${pillTone(getStudentRisk(student))}`}>{getStudentRisk(student)}</span></td>
+                    <td data-label={tr('Actions','Actions')} className="px-5 py-4">
                       <div className="flex justify-end gap-2">
                         <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => {
                           setSelectedStudent(student)
                           setViewingStudent(student)
-                        }}>Voir</button>
-                        <button type="button" className={`rounded-lg px-3 py-2 text-xs font-bold ${student.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(student)}>Modifier</button>
-                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('student', student)}>Reset accès</button>
+                        }}>{tr('Voir','View')}</button>
+                        <button type="button" className={`rounded-lg px-3 py-2 text-xs font-bold ${student.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(student)}>{tr('Modifier','Edit')}</button>
+                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('student', student)}>{tr('Reset accès','Reset access')}</button>
                         <button type="button" className="rounded-lg border border-red-100 px-3 py-2 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => deleteOfficialStudent(student)} aria-label={`Delete ${student.name}`}><Trash2 size={15} /></button>
                       </div>
                     </td>
@@ -3184,7 +3142,7 @@ const AdminSectionView = ({
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{viewingStudent.parentPhone || 'Téléphone non renseigné'}</p>
                     </div>
                     <div className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Classe</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{tr('Classe','Class')}</p>
                       <p className="mt-2 font-semibold text-kcs-blue-900 dark:text-white">{formatClassName(viewingStudent.grade, viewingStudent.section) || 'Non assignée'}</p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{getDivisionForGrade(viewingStudent.grade).title}</p>
                     </div>
@@ -3202,7 +3160,7 @@ const AdminSectionView = ({
 
                   <div className="mt-5 flex flex-wrap gap-2">
                     <button type="button" className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800" onClick={() => setViewingStudent(null)}>Retour à la liste</button>
-                    <button type="button" className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${viewingStudent.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(viewingStudent)}>Modifier</button>
+                    <button type="button" className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${viewingStudent.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(viewingStudent)}>{tr('Modifier','Edit')}</button>
                     <button type="button" className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => {
                       const target = viewingStudent
                       setViewingStudent(null)
@@ -3295,7 +3253,7 @@ const AdminSectionView = ({
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Famille liée</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-3">
                     <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
-                      <p className="text-xs text-gray-400">Parent responsable</p>
+                      <p className="text-xs text-gray-400">{tr('Parent responsable','Guardian')}</p>
                       <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parent || 'Aucun parent lié'}</p>
                     </div>
                     <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
