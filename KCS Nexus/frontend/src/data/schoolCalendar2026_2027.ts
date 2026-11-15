@@ -65,9 +65,15 @@ export const schoolCalendarEvents2026_2027: SchoolCalendarEvent[] = [
 
 export function formatSchoolCalendarDate(event: Pick<SchoolCalendarEvent, 'date' | 'endDate'>, locale = 'en-US') {
   const formatter = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
-  const start = formatter.format(new Date(`${event.date}T12:00:00Z`))
-  if (!event.endDate || event.endDate === event.date) return start
-  return `${start} — ${formatter.format(new Date(`${event.endDate}T12:00:00Z`))}`
+  // Static calendar entries use civil dates; published events arrive as ISO timestamps.
+  const display = (value: string) => {
+    const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00Z` : value)
+    return Number.isFinite(date.getTime()) ? formatter.format(date) : '—'
+  }
+  const start = display(event.date)
+  if (!event.endDate) return start
+  const end = display(event.endDate)
+  return end === start ? start : `${start} — ${end}`
 }
 
 export function getUpcomingSchoolEvents(today = new Date()) {
