@@ -92,3 +92,15 @@
 @media screen{[data-public-preview-viewport] .public-site-shell>[data-public-header]{position:sticky!important;top:0;z-index:50;padding-bottom:8px;background:var(--site-paper)}[data-public-preview-viewport] .public-site-main [data-public-hero]{margin-top:18px!important}[data-public-preview-viewport] .public-site-main>div.pt-20{padding-top:0}[data-public-preview-viewport] .public-site-shell .handbook-hero{margin-top:20px!important}}
 
 @media screen{.kcs-public-redesign .public-calendar-reference[hidden],.kcs-public-redesign [data-public-page] article[hidden],.kcs-public-redesign article[hidden]{display:none!important}.kcs-public-redesign .public-calendar-reference{max-height:65dvh;overflow-y:auto}.kcs-public-redesign #news-full-calendar{scroll-margin-top:105px;overscroll-behavior:contain}}
+
+@media screen {
+/* Keep the dark navigation readable when light-theme utility hovers activate. */
+.kcs-public-redesign .public-topbar :is(.public-nav-link,.public-header-action,.public-menu-button,a[href="/login"]):is(:hover,:focus-visible){background:#1a5d78!important;color:#f4fbff!important}
+.kcs-public-redesign .public-topbar .public-nav-link[aria-current=page]:is(:hover,:focus-visible){background:#24536a!important;color:#ffe1a7!important}
+.kcs-public-redesign .public-mobile-menu>a:is(:hover,:focus-visible){background:#d1e5ef!important;color:#133f59!important}
+.kcs-public-redesign .public-mobile-menu>a[aria-current=page]:is(:hover,:focus-visible){background:#175e7c!important;color:#fff!important}
+.dark .kcs-public-redesign .public-mobile-menu>a:is(:hover,:focus-visible){background:#17445d!important;color:#eef9ff!important}
+.kcs-public-redesign .public-program-tab-icon{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:14px;border:1px solid currentColor;background:#ffffff14;box-shadow:inset 0 1px #ffffff30;color:inherit}
+.kcs-public-redesign .public-program-icon{display:grid;place-items:center;width:64px;height:64px;border-radius:19px;border:1px solid #74acbe66;background:linear-gradient(140deg,#e4f4f8,#cde6ef);color:#125373;box-shadow:inset 0 1px #ffffffb0,0 7px 18px #124b6712}
+.dark .kcs-public-redesign .public-program-icon{background:linear-gradient(140deg,#16475e,#0b2e44);border-color:#38768e;color:#9ae7ee;box-shadow:inset 0 1px #60c5d526,0 7px 18px #00000020}
+}

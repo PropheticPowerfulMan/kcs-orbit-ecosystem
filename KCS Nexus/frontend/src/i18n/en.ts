@@ -6,7 +6,7 @@ const en = {
     academics: 'Academics',
     news: 'News & Events',
     admissions: 'Admissions',
-    gallery: 'Gallery',
+    gallery: 'Gallery & Videos',
     contact: 'Contact',
     portal: 'Portal',
     login: 'Sign In',

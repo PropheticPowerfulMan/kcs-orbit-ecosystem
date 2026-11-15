@@ -39,7 +39,7 @@ export default function ForumInsightsPanel({ kind }: { kind: Kind }) {
   ]
 
   return (
-    <section className="space-y-5 rounded-2xl border border-kcs-blue-100 bg-white p-5 shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900">
+    <section data-admin-analysis className="space-y-5 rounded-2xl border border-kcs-blue-100 bg-white p-5 shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase text-cyan-700 dark:text-cyan-300">{tr('Analyse des données réelles', 'Verified live-data analysis')}</p>

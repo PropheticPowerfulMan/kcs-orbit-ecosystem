@@ -23,7 +23,7 @@ const eventSchema = z.object({
   liveStreamPlatform: z.string().min(2).optional(),
   liveStreamStatus: z.enum(['scheduled', 'live', 'ended', 'cancelled']).default('scheduled'),
   liveStreamStartsAt: z.coerce.date().optional(),
-  replayUrl: z.string().url().optional(),
+  replayUrl: z.string().url().nullable().optional(),
   audienceRoles: z.array(z.enum(['ADMIN', 'STAFF', 'TEACHER', 'STUDENT', 'PARENT'])).min(1).max(5).default(['ADMIN', 'STAFF', 'TEACHER', 'STUDENT', 'PARENT']),
   audienceGrades: z.array(z.string().trim().min(2).max(40)).max(20).default([]),
   reminderEnabled: z.boolean().default(true),

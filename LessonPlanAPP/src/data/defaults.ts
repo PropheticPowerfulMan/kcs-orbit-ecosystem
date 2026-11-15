@@ -1,3 +1,4 @@
+import {publishedLessonDefaults} from "../services/schoolCalendar";
 import { LessonPlan, LessonStage, LessonStageName, RepeatableItem, WeeklyDayName, WeeklyPlanDay } from "../types/lesson";
 import { uid } from "../utils/id";
 import { createVariedWeeklyPlan } from "../services/lessonContentVariationService";
@@ -161,7 +162,8 @@ export const createPdfExampleWeeklyPlan = (): WeeklyPlanDay[] => [
 
 export const createBlankLesson = (lessonNumber: string): LessonPlan => {
   const now = new Date().toISOString();
-  const currentYear = new Date().getFullYear();
+  const currentYear = new Date().getFullYear() - (new Date().getMonth()<8?1:0);
+  const official = publishedLessonDefaults();
   const today = new Date();
   const weekStartDate = toIsoDate(addDays(today, -((today.getDay() + 6) % 7)));
   const weekEndDate = toIsoDate(addDays(new Date(`${weekStartDate}T00:00:00`), 4));
@@ -176,9 +178,9 @@ export const createBlankLesson = (lessonNumber: string): LessonPlan => {
     status: "draft",
     tags: [],
     schoolName: schoolDisplayName,
-    schoolYear: `${currentYear}-${currentYear + 1}`,
-    semester: "1st",
-    quarter: "1st",
+    schoolYear: official?.schoolYear || `${currentYear}-${currentYear + 1}`,
+    semester: official?.semester || "1st",
+    quarter: official?.quarter || "1st",
     chapter: "",
     teachers: "",
     subject: "",

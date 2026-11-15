@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-public-design-20261115-v32'
+const CACHE_NAME = 'kcs-nexus-navigation-calendar-video-20261115-v34'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {

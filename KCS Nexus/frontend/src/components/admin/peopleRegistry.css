@@ -36,3 +36,16 @@
  .dark .admin-person-directory [data-registry-list] td::before{color:#a2c3da}
 }
 @media(prefers-reduced-motion:reduce){.admin-person-directory [data-registry-list] :is(button,tr){transition:none}.admin-person-directory [data-registry-list] button:hover{transform:none}}
+
+@media screen {
+[data-people-registry-header] [data-people-metrics]>div{background:#164762!important;border-color:#477e965e!important;box-shadow:inset 0 1px #ffffff0c}
+[data-people-registry-header] [data-people-metrics] p{color:#dceffb!important;opacity:1!important}
+[data-people-registry-header] [data-people-metrics] p:nth-child(2){color:#fff!important}
+.dark [data-people-registry-header] [data-people-metrics]>div{background:#103c55!important;border-color:#407b965c!important}
+}
+
+@media screen {
+html:not(.dark) .portal-shell [data-people-registry] [data-people-registry-header] [data-people-metrics]>div{background:#164762!important;border-color:#477e96!important}
+html:not(.dark) .portal-shell [data-people-registry] [data-people-registry-header] [data-people-metrics] p{color:#dceffb!important;opacity:1!important}
+html:not(.dark) .portal-shell [data-people-registry] [data-people-registry-header] [data-people-metrics] p:nth-child(2){color:#fff!important}
+}

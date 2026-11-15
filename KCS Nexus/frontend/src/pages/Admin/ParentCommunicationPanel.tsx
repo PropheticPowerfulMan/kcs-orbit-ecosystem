@@ -1,3 +1,4 @@
+import '@/components/admin/adminOverview.css'
 import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import React, { useRef, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, CheckSquare, Download, Eye, Mail, MessageSquare, Paperclip, Send, Square, Trash2, X } from 'lucide-react'
@@ -120,6 +121,7 @@ export default function ParentCommunicationPanel() {
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [usingCachedData, setUsingCachedData] = useState(() => Boolean(cachedCommunication))
   const [historyQuery, setHistoryQuery] = useState('')
+  const [workspaceStep,setWorkspaceStep]=useState('communication-recipients')
   const [historyFrom, setHistoryFrom] = useState('')
   const [historyTo, setHistoryTo] = useState('')
   const [remoteHistory, setRemoteHistory] = useState<any[] | null>(null)
@@ -363,7 +365,7 @@ export default function ParentCommunicationPanel() {
   return (
     <div className="space-y-6" data-communications-workspace>
       <header className="nexus-workspace-heading"><Mail size={34}/><div><span className="nexus-workspace-kicker">KCS ORBIT · {language==='fr'?'Communication institutionnelle':'Institutional communications'}</span><h2>{language==='fr'?'Un message précis, les bons destinataires':'A precise message, the right recipients'}</h2><p className="mt-2 max-w-3xl text-sm">{language==='fr'?'Ciblez les familles et les entités, préparez votre message et consultez l’historique des échanges et de leur livraison.':'Target families and identities, prepare your message and review correspondence and delivery history.'}</p></div></header>
-      <nav className="flex flex-wrap gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950" aria-label={language==='fr'?'Étapes de communication':'Communication steps'}>{[['communication-recipients',language==='fr'?'1 · Destinataires':'1 · Recipients'],['communication-compose',language==='fr'?'2 · Rédaction et envoi':'2 · Compose and send'],['communication-history',language==='fr'?'3 · Historique et suivi':'3 · History and follow-up']].map(([id,label])=><button key={id} type="button" onClick={()=>document.getElementById(id)?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})} className="rounded-xl border border-sky-200 bg-sky-100 px-4 py-2 text-xs font-bold text-sky-950 dark:border-sky-700 dark:bg-sky-900 dark:text-sky-100">{label}</button>)}</nav>
+      <nav className="communications-workspace-tabs" role="tablist" aria-label={language==='fr'?'Espaces de communication':'Communication workspaces'}>{[['communication-recipients',language==='fr'?'Destinataires':'Recipients',selectedParents.length],['communication-compose',language==='fr'?'Rédiger et envoyer':'Compose and send',attachment?1:0],['communication-history',language==='fr'?'Messages et historique':'Messages and history',historyTotal]].map(([key,label,count])=><button key={key} type="button" role="tab" id={String(key)+'-tab'} aria-controls={String(key)} aria-selected={workspaceStep===key} tabIndex={workspaceStep===key?0:-1} onClick={()=>setWorkspaceStep(String(key))} onKeyDown={event=>{const tabs=Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]')),i=tabs.indexOf(event.currentTarget),next=event.key==='ArrowRight'?(i+1)%3:event.key==='ArrowLeft'?(i+2)%3:event.key==='Home'?0:event.key==='End'?2:-1;if(next>=0){event.preventDefault();tabs[next].click();tabs[next].focus()}}}><span>{label}</span><b>{count}</b></button>)}</nav>
       {notice ? <div className="rounded-2xl border border-kcs-blue-200 bg-kcs-blue-50 p-4 text-sm font-semibold text-kcs-blue-800 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60 dark:text-kcs-blue-100">{notice}</div> : null}
       {usingCachedData ? <div className="flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
         <span className="flex items-center gap-2"><AlertTriangle size={18} />{c.cachedData}</span>
@@ -372,8 +374,8 @@ export default function ParentCommunicationPanel() {
         </button>
       </div> : null}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)]">
-        <section id="communication-recipients" data-communications-step className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-800 dark:bg-kcs-blue-900/50">
+      <div className="communications-active-panel min-w-0" hidden={workspaceStep==='communication-history'}>
+        <section id="communication-recipients" data-communications-step role="tabpanel" aria-labelledby="communication-recipients-tab" hidden={workspaceStep!=='communication-recipients'} className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-800 dark:bg-kcs-blue-900/50">
           <div className="flex justify-between gap-3">
             <div><p className="text-xs font-bold uppercase text-kcs-gold-600">{c.recipients}</p><h2 className="text-2xl font-bold dark:text-white">{c.families}</h2></div>
             <b className="text-kcs-blue-700 dark:text-white">{selectedParents.length} {c.selected}</b>
@@ -393,7 +395,7 @@ export default function ParentCommunicationPanel() {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-kcs-blue-800 dark:text-kcs-blue-100"><span>{quickClasses.length} {c.classesChosen}</span><span aria-hidden="true">·</span><span>{selectedParents.length} {c.familiesReady}</span></div>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select className={fieldClass} value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value); setQuickClasses([]); setSelectedParents([]) }}><option value="ALL">{language === 'fr' ? 'Toutes les catégories' : 'All categories'}</option><option value="PARENT">{language === 'fr' ? 'Parents' : 'Parents'}</option><option value="STUDENT">{language === 'fr' ? 'Élèves' : 'Students'}</option><option value="TEACHER">{language === 'fr' ? 'Enseignants' : 'Teachers'}</option><option value="STAFF">{language === 'fr' ? 'Personnel' : 'Staff'}</option><option value="ADMIN">{language === 'fr' ? 'Administrateurs' : 'Administrators'}</option></select><select className={fieldClass} value={gradeFilter} onChange={(event) => { setGradeFilter(event.target.value); setQuickClasses([]); setSelectedParents([]) }}><option value="ALL">{language === 'fr' ? 'Tous les grades' : 'All grades'}</option>{gradeOptions.map((grade) => <option key={String(grade)} value={String(grade)}>{String(grade)}</option>)}</select><select className={fieldClass} value={contactFilter} onChange={(event) => { setContactFilter(event.target.value); setQuickClasses([]); setSelectedParents([]) }}><option value="ALL">{language === 'fr' ? 'Tous les contacts' : 'All contacts'}</option><option value="EMAIL">{language === 'fr' ? 'Avec email' : 'Has email'}</option><option value="SMS">{language === 'fr' ? 'Avec téléphone' : 'Has phone'}</option><option value="BOTH">{language === 'fr' ? 'Email et téléphone' : 'Email and phone'}</option></select></div><input className={fieldClass + ' mt-3'} value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} placeholder={c.parentSearch} />
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select className={fieldClass} value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value); setQuickClasses([]); setSelectedParents([]) }}><option value="ALL">{language === 'fr' ? 'Toutes les catégories' : 'All categories'}</option><option value="PARENT">{language === 'fr' ? 'Parents' : 'Parents'}</option><option value="STUDENT">{language === 'fr' ? 'Élèves' : 'Students'}</option><option value="TEACHER">{language === 'fr' ? 'Enseignants' : 'Teachers'}</option><option value="STAFF">{language === 'fr' ? 'Personnel' : 'Staff'}</option><option value="ADMIN">{language === 'fr' ? 'Administrateurs' : 'Administrators'}</option></select><select className={fieldClass} value={gradeFilter} onChange={(event) => { setGradeFilter(event.target.value); setQuickClasses([]); setSelectedParents([]) }}><option value="ALL">{language === 'fr' ? 'Tous les grades' : 'All grades'}</option>{gradeOptions.map((grade) => <option key={String(grade)} value={String(grade)}>{String(grade)}</option>)}</select><select className={fieldClass} value={contactFilter} onChange={(event) => { setContactFilter(event.target.value); setQuickClasses([]); setSelectedParents([]) }}><option value="ALL">{language === 'fr' ? 'Tous les contacts' : 'All contacts'}</option><option value="EMAIL">{language === 'fr' ? 'Avec email' : 'Has email'}</option><option value="SMS">{language === 'fr' ? 'Avec téléphone' : 'Has phone'}</option><option value="BOTH">{language === 'fr' ? 'Email et téléphone' : 'Email and phone'}</option></select></div><input className={fieldClass + ' mt-3'} aria-label={c.parentSearch} value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} placeholder={c.parentSearch} />
           <div className="mt-3 flex flex-wrap gap-2">
             <button className={primaryButton} onClick={() => { setQuickClasses([]); setSelectedParents(allParentsSelected ? [] : parentRows.map((parent) => parent.id)) }}>
               {allParentsSelected ? <CheckSquare size={17} /> : <Square size={17} />} {allParentsSelected ? c.deselect : c.selectResults}
@@ -412,14 +414,15 @@ export default function ParentCommunicationPanel() {
           </div>
         </section>
 
-        <section id="communication-compose" data-communications-step className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-800 dark:bg-kcs-blue-900/50">
+        <section id="communication-compose" data-communications-step role="tabpanel" aria-labelledby="communication-compose-tab" hidden={workspaceStep!=='communication-compose'} className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-800 dark:bg-kcs-blue-900/50">
           <p className="text-xs font-bold uppercase text-kcs-gold-600">{c.official}</p>
           <h2 className="text-2xl font-bold dark:text-white">{c.channels}</h2>
+          <div className="communications-audience-summary"><span>{selectedParents.length} {c.selected}</span><p>{parents.filter(person=>selectedParents.includes(person.id)).slice(0,5).map(displayName).join(' · ')}{selectedParents.length>5?' …':''}</p><button type="button" onClick={()=>setWorkspaceStep('communication-recipients')}>{language==='fr'?'Modifier les destinataires':'Review recipients'}</button></div>
           <div className="mt-4 grid grid-cols-2 gap-2">
             {(['email', 'sms'] as const).map((channel) => <button key={channel} onClick={() => toggle(setChannels as React.Dispatch<React.SetStateAction<string[]>>, channel)} className={`${primaryButton} ${channels.includes(channel) ? 'ring-2 ring-kcs-gold-400' : 'opacity-65'}`}>{channel === 'email' ? <Mail size={18} /> : <MessageSquare size={18} />}{channels.includes(channel) ? '✓ ' : ''}{channel.toUpperCase()}</button>)}
           </div>
-          <input className={fieldClass + ' mt-4'} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder={c.subject} />
-          <textarea className={fieldClass + ' mt-3 min-h-44 resize-y'} value={body} onChange={(event) => setBody(event.target.value)} placeholder={c.exactMessage} />
+          <input className={fieldClass + ' mt-4'} aria-label={c.subject} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder={c.subject} />
+          <textarea className={fieldClass + ' mt-3 min-h-44 resize-y'} aria-label={c.exactMessage} value={body} onChange={(event) => setBody(event.target.value)} placeholder={c.exactMessage} />
           <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-kcs-blue-300 p-3 text-sm font-bold text-kcs-blue-700 dark:text-kcs-blue-200"><Paperclip size={18}/>{attachment?.name||c.attachDocument}<input type="file" className="sr-only" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,image/*,audio/*,video/mp4,video/webm,video/quicktime" onChange={event=>{const file=event.target.files?.[0];if(file&&file.size>25*1024*1024){setNotice(c.fileTooLarge);return}setAttachment(file||null)}}/></label><AudioRecorder language={language} disabled={busy} onRecorded={setAttachment}/>
           {attachment?<button type="button" className="mt-2 text-xs font-bold text-red-600" onClick={()=>setAttachment(null)}>{c.removeAttachment}</button>:null}
           <p className="my-3 text-xs text-gray-500 dark:text-gray-300">{c.copyStored}</p>
@@ -427,11 +430,11 @@ export default function ParentCommunicationPanel() {
         </section>
       </div>
 
-      <section id="communication-history" data-communications-step className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-800 dark:bg-kcs-blue-900/50">
+      <section id="communication-history" data-communications-step role="tabpanel" aria-labelledby="communication-history-tab" hidden={workspaceStep!=='communication-history'} className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-800 dark:bg-kcs-blue-900/50">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div><p className="text-xs font-bold uppercase text-kcs-gold-600">{c.history}</p><h2 className="text-2xl font-bold dark:text-white">{c.oldMessages}</h2><p className="mt-1 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-200">{c.archiveCount(history.length, historyTotal || history.length)}</p></div>
           <div className="grid w-full gap-2 sm:grid-cols-2 xl:max-w-4xl xl:grid-cols-3">
-            <input className={fieldClass} value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder={c.historySearch} />
+            <input className={fieldClass} aria-label={language==='fr'?'Rechercher dans tous les messages':'Search all messages'} value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder={c.historySearch} />
             <input type="date" className={fieldClass} value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} aria-label={c.startDate} />
             <input type="date" className={fieldClass} value={historyTo} onChange={(event) => setHistoryTo(event.target.value)} aria-label={c.endDate} />
           </div>
@@ -445,7 +448,7 @@ export default function ParentCommunicationPanel() {
             <button className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-40" disabled={!selectedHistory.length || deleting} onClick={() => void deleteSelected()}><Trash2 size={17} />{deleting ? c.deleting : c.deleteSelection}</button>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="communications-history-list overflow-x-auto" tabIndex={0} aria-label={c.oldMessages}>
           <table className="w-full min-w-[760px] text-sm">
             <thead><tr className="border-b text-left text-gray-500 dark:border-kcs-blue-700 dark:text-gray-300"><th className="p-3">{c.choice}</th><th className="p-3">{c.parent}</th><th className="p-3">{c.subject}</th><th className="p-3">{c.date}</th><th className="p-3">{c.action}</th></tr></thead>
             <tbody>{historyRows.map((message) => {

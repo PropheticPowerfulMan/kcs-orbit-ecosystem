@@ -24,6 +24,11 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
     serializer_class = AcademicYearSerializer
     permission_classes = [AdminOrReadOnly]
 
+    def get_queryset(self):
+        from .utils import current_or_default_academic_year
+        current_or_default_academic_year()
+        return super().get_queryset()
+
 
 class LevelViewSet(viewsets.ModelViewSet):
     queryset = Level.objects.all().order_by('order')

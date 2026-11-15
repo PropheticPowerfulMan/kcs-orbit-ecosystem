@@ -1,3 +1,4 @@
+import '@/components/shared/reportSurfaces.css'
 import ParentMeetingReports from './ParentMeetingReports'
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -121,7 +122,7 @@ export default function TeacherReportsHub({ academicReports, disciplineReports }
           </Link>
         ))}
       </nav>
-      <div className="min-w-0">
+      <div className="min-w-0" data-report-surface={active==='incident'||active==='discipline'?active:undefined}>
         {active === "discipline" ? (
           disciplineReports
         ) : active === "academic" ? (

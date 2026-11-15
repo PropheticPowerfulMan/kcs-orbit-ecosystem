@@ -1,3 +1,5 @@
+import {academicCalendars} from '../services/reportAttendance.service.js'
+import {publishedSemesterScope} from './publishedSemesterScope.js'
 import { prisma } from '../config/prisma.js'
 
 const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
@@ -13,12 +15,14 @@ const portalEntry = (entry: any) => ({
 })
 const ordered = (rows: any[]) => rows.sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day) || a.startTime.localeCompare(b.startTime) || (a.course?.name || a.subject).localeCompare(b.course?.name || b.subject))
 const activeScheduleScope = async () => {
+  const published=publishedSemesterScope(await academicCalendars(),new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Kinshasa'}))
+  if(published)return published
   const latest = await prisma.academicScheduleEntry.findFirst({
     where: { active: true },
     select: { academicYear: true, semester: true },
     orderBy: [{ academicYear: 'desc' }, { semester: 'desc' }, { updatedAt: 'desc' }],
   })
-  return latest ?? { academicYear: '2026-2027', semester: 1 }
+  return latest ?? { academicYear: '', semester: 1 }
 }
 
 export async function academicScheduleForGrade(grade: string, section?: string | null) {

@@ -1,4 +1,5 @@
-import { createContext, ReactNode, useContext, useLayoutEffect, useMemo, useState } from "react";
+import {refreshSchoolCalendar} from "../services/schoolCalendar";
+import { createContext, ReactNode, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { schoolImage } from "../data/defaults";
 import { Language } from "../types/lesson";
 
@@ -16,6 +17,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [dark, setDark] = useState(() => localStorage.getItem("plp:theme") ? localStorage.getItem("plp:theme") === "dark" : true);
   const [language, setLanguageState] = useState<Language>("en");
   const imageUrl = schoolImage;
+  useEffect(()=>{const controller=new AbortController();const refresh=()=>void refreshSchoolCalendar(controller.signal).catch(()=>undefined);refresh();const timer=window.setInterval(refresh,30000);window.addEventListener('online',refresh);window.addEventListener('focus',refresh);return()=>{controller.abort();clearInterval(timer);window.removeEventListener('online',refresh);window.removeEventListener('focus',refresh)}},[]);
 
   useLayoutEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
