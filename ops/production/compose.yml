@@ -109,6 +109,7 @@ services:
     networks: [kcs_edge, kcs_private]
     env_file: /etc/kcs-orbit/nexus-api.env
     environment:
+      NEXUS_UPLOADS_DIR: /app/uploads
       SAVANEX_API_URL: http://savanex-api:8000
       REPORT_PDF_RENDERER_SOCKET: /run/kcs-report/renderer.sock
     volumes: [nexus_uploads:/app/uploads, nexus_report_socket:/run/kcs-report:ro]

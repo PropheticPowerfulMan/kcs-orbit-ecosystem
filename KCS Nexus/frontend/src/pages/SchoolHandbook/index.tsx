@@ -22,13 +22,16 @@ export default function SchoolHandbook({ portal = false }: { portal?: boolean })
   const [query, setQuery] = useState('')
   const [reader, setReader] = useState<{ language: Language; page: number } | null>(null)
   const readerRef = useRef<HTMLElement>(null)
+  const mainRef=useRef<HTMLElement>(null)
+  const headerRef=useRef<HTMLElement>(null)
+  useEffect(()=>{if(portal)mainRef.current?.scrollTo({top:0,behavior:'instant'})},[portal])
   useEffect(() => setDocumentLanguage(language === 'fr' ? 'fr' : 'en'), [language])
   const chosen = documents.find(document => document.language === documentLanguage)!
   const opened = documents.find(document => document.language === reader?.language)
   const shown = topics.filter(topic => normalize([topic.title.en, topic.title.fr, topic.summary.en, topic.summary.fr, topic.keywords].join(' ')).includes(normalize(query.trim())))
   const read = (lang: Language, page = 1) => {
     setDocumentLanguage(lang); setReader({ language: lang, page })
-    window.requestAnimationFrame(() => readerRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }))
+    window.requestAnimationFrame(()=>{const node=readerRef.current;if(!node)return;const behavior=window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth';if(portal&&mainRef.current){const main=mainRef.current,header=headerRef.current;const mainTop=main.getBoundingClientRect().top;const mobile=document.querySelector('.nexus-mobile-dashboard-bar');const clearance=Math.max(header&&getComputedStyle(header).position==='sticky'?header.getBoundingClientRect().bottom-mainTop:0,mobile&&getComputedStyle(mobile).display!=='none'?mobile.getBoundingClientRect().bottom-mainTop:0)+12;main.scrollTo({top:Math.max(0,main.scrollTop+node.getBoundingClientRect().top-main.getBoundingClientRect().top-clearance),behavior})}else node.scrollIntoView({block:'start',behavior})})
   }
   const content = <div className={`school-handbook ${portal ? 'school-handbook--portal' : 'school-handbook--public'}`} data-school-handbook>
     <section className="handbook-hero" aria-labelledby="handbook-title" data-public-hero>
@@ -68,5 +71,5 @@ export default function SchoolHandbook({ portal = false }: { portal?: boolean })
     <aside className="handbook-help"><div><h2>{tr('Une question sur la vie à KCS ?', 'A question about life at KCS?')}</h2><p>{tr('L’administration est à votre disposition pour préciser les règles et accompagner votre famille.', 'Our school office can clarify school policies and support your family.')}</p></div><a href="mailto:kinshasachristianschool@gmail.com">kinshasachristianschool@gmail.com <ArrowUpRight size={16} aria-hidden="true"/></a><a href="tel:+243895326011">+243 895 326 011</a></aside>
   </div>
   if (!portal) return content
-  return <div className="portal-shell flex"><PortalSidebar/><main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"><header className="handbook-portal-header"><div><p>{getLocalizedGreeting(language)}, {getUserDisplayName(user)}</p><span>{getLocalizedPortalDate(language)} · {tr('Manuel de l’école', 'School Handbook')}</span></div><Link to={user?.role === 'admin' ? '/admin' : `/portal/${user?.role}`}><ChevronRight size={16} aria-hidden="true"/>{tr('Tableau de bord', 'Dashboard')}</Link></header>{content}</main></div>
+  return <div className="portal-shell flex"><PortalSidebar/><main ref={mainRef} className="handbook-portal-main min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"><header ref={headerRef} className="handbook-portal-header portal-dashboard-topbar sticky top-0 z-20"><div><p>{getLocalizedGreeting(language)}, {getUserDisplayName(user)}</p><span>{getLocalizedPortalDate(language)} · {tr('Manuel de l’école', 'School Handbook')}</span></div><Link to={user?.role === 'admin' ? '/admin' : `/portal/${user?.role}`}><ChevronRight size={16} aria-hidden="true"/>{tr('Tableau de bord', 'Dashboard')}</Link></header>{content}</main></div>
 }

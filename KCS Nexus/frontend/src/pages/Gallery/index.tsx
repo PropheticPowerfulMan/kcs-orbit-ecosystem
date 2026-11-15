@@ -1,10 +1,11 @@
+import './publicGallery.css'
 import {createPortal} from 'react-dom'
 import {useUIStore} from '@/store/uiStore'
 import PublicBroadcastGallery from '@/components/shared/PublicBroadcastGallery'
 import SchoolVideoPlayer from '@/components/shared/SchoolVideoPlayer'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
-import { Play, X, Camera, Film, ChevronRight } from 'lucide-react'
+import { Play, X, Camera, Film, Radio, RefreshCw, ChevronRight } from 'lucide-react'
 import { kcsPublicImages } from '@/data/kcsPublicImages'
 import { api,mediaAPI } from '@/services/api'
 
@@ -148,6 +149,10 @@ const galleryItems: GalleryItem[] = [
 
 const GalleryPage = () => {
   const language=useUIStore(state=>state.language)
+  const tr=(fr:string,en:string)=>language==='fr'?fr:en
+  const [section,setSection]=useState<'photos'|'videos'|'live'>('photos')
+  const selectSection=(value:'photos'|'videos'|'live')=>{setSection(value);requestAnimationFrame(()=>document.getElementById('gallery-sections')?.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}))}
+  const [refreshing,setRefreshing]=useState(false),[loadError,setLoadError]=useState(false)
   const [activeCategory, setActiveCategory] = useState<Category>('All')
   const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null)
   useEffect(()=>{if(!selectedItem)return;const previous=document.activeElement as HTMLElement|null,overflow=document.body.style.overflow;document.body.style.overflow='hidden';const close=(event:KeyboardEvent)=>{if(event.key==='Escape')setSelectedItem(null)};document.addEventListener('keydown',close);return()=>{document.body.style.overflow=overflow;document.removeEventListener('keydown',close);previous?.focus()}},[selectedItem])
@@ -155,8 +160,14 @@ const GalleryPage = () => {
   const [managed,setManaged]=useState<boolean|null>(null)
 
   useEffect(() => {
-    Promise.all([mediaAPI.getAll(),api.get('/site-content/publication-status')]).then(([{data},status])=>{
-      setManaged(status.data.data?.managed===true)
+    let alive=true,pending=false
+    const refresh=async()=>{
+      if(pending||document.visibilityState==='hidden')return
+      pending=true;if(alive)setRefreshing(true)
+      try{
+        const [{data},status]=await Promise.all([mediaAPI.getAll(),api.get('/site-content/publication-status')])
+        if(!alive)return
+        setManaged(status.data.data?.managed===true);setLoadError(false)
       const records = Array.isArray(data?.data) ? data.data : []
       setPublishedGallery(records
         .filter((item: any) => String(item.category || '').toLowerCase() === 'gallery')
@@ -170,14 +181,19 @@ const GalleryPage = () => {
           videoUrl:String(item.type).toUpperCase()==='VIDEO'?item.url:undefined,
           featured: (item.tags || []).some((tag: string) => String(tag).toLowerCase() === 'featured'),
         })))
-    }).catch(() => setPublishedGallery([]))
+
+      }catch{if(alive)setLoadError(true)}finally{pending=false;if(alive)setRefreshing(false)}
+    }
+    const wake=()=>{void refresh()}
+    wake();const timer=window.setInterval(wake,30000)
+    window.addEventListener('focus',wake);window.addEventListener('online',wake);window.addEventListener('kcs-gallery-refresh',wake);document.addEventListener('visibilitychange',wake)
+    return()=>{alive=false;window.clearInterval(timer);window.removeEventListener('focus',wake);window.removeEventListener('online',wake);window.removeEventListener('kcs-gallery-refresh',wake);document.removeEventListener('visibilitychange',wake)}
   }, [])
 
   const allGalleryItems = useMemo(() => (managed!==false||publishedGallery.length) ? publishedGallery : galleryItems, [publishedGallery,managed])
 
   const filteredItems = useMemo(() => {
-    if (activeCategory === 'All') return allGalleryItems
-    return allGalleryItems.filter((item) => item.category === activeCategory)
+    return allGalleryItems.filter(item=>item.type==='image'&&(activeCategory==='All'||item.category===activeCategory))
   }, [activeCategory, allGalleryItems])
 
   const imageItems = allGalleryItems.filter((item) => item.type === 'image')
@@ -186,7 +202,7 @@ const GalleryPage = () => {
     : imageItems.length ? imageItems : allGalleryItems).slice(0, 3)
 
   return (
-    <div className="bg-white dark:bg-kcs-blue-950 min-h-screen">
+    <div className="public-gallery-page bg-white dark:bg-kcs-blue-950 min-h-screen">
       <section className="relative min-h-[78vh] overflow-hidden bg-kcs-blue-950 text-white" data-public-hero>
         <div className="absolute inset-0 grid grid-cols-3 gap-3 p-3 opacity-25">
           {featuredItems.map((item) => (
@@ -213,22 +229,31 @@ const GalleryPage = () => {
               Explore the rhythm of Kinshasa Christian School through classrooms, competitions, worship, the arts, and the moments that shape student life.
             </p>
             <div className="flex flex-wrap gap-4">
-              <a href="#collection" className="btn-gold">Browse Collection</a>
-              <a href="#videos" className="btn-primary bg-white/10 border border-white/15">Watch Highlights</a>
+              <a href="#gallery-sections" onClick={()=>selectSection('photos')} className="btn-gold">{tr('Voir les photos','Browse photos')}</a>
+              <a href="#gallery-sections" onClick={()=>selectSection('videos')} className="btn-primary bg-white/10 border border-white/15">{tr('Voir les vidéos','Watch videos')}</a>
             </div>
           </motion.div>
         </div>
       </section>
 
-      <section className="section-padding bg-gray-50 dark:bg-kcs-blue-900/20">
+
+      <nav id="gallery-sections" onKeyDown={event=>{if((event.target as HTMLElement).getAttribute('role')!=='tab'||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const keys=['photos','videos','live'] as const,index=keys.indexOf(section),next=event.key==='Home'?0:event.key==='End'?2:(index+(event.key==='ArrowRight'?1:2))%3;selectSection(keys[next]);requestAnimationFrame(()=>document.getElementById('gallery-tab-'+keys[next])?.focus())}} data-site-exclude aria-label={tr('Photos, vidéos et directs','Photos, videos and live streams')} className="scroll-mt-28 border-b border-sky-200 bg-sky-50 py-5 dark:border-sky-900 dark:bg-kcs-blue-900">
+        <div className="container-custom flex flex-wrap items-center gap-3" role="tablist">{([
+          ['photos',Camera,tr('Photos','Photos'),imageItems.length],
+          ['videos',Film,tr('Vidéos','Videos'),allGalleryItems.filter(item=>item.type==='video'&&item.videoUrl).length],
+          ['live',Radio,tr('Directs et replays','Live streams & replays'),null],
+        ] as const).map(([key,Icon,label,count])=><button key={key} id={'gallery-tab-'+key} role="tab" aria-selected={section===key} aria-controls={key==='photos'?'collection':'videos'} onClick={()=>selectSection(key)} className={'inline-flex items-center gap-2 rounded-xl border px-5 py-3 text-sm font-bold transition '+(section===key?'border-sky-700 bg-sky-800 text-white shadow-md':'border-sky-200 bg-white text-sky-950 hover:bg-sky-100 dark:border-sky-700 dark:bg-kcs-blue-950 dark:text-sky-100')}><Icon size={19}/>{label}{count!==null&&<span className="rounded-full bg-current/10 px-2 text-xs">{count}</span>}</button>)}<button type="button" disabled={refreshing} onClick={()=>window.dispatchEvent(new Event('kcs-gallery-refresh'))} aria-label={tr('Actualiser la galerie','Refresh gallery')} className="ml-auto rounded-xl border border-sky-300 p-3 text-sky-800 dark:border-sky-600 dark:text-sky-100"><RefreshCw size={18} className={refreshing?'animate-spin':''}/></button></div>
+        {loadError&&<p role="status" className="container-custom mt-3 text-sm text-amber-800 dark:text-amber-200">{tr('La mise à jour est momentanément indisponible. Les dernières publications chargées restent affichées.','Refresh is temporarily unavailable. The last loaded publications remain visible.')}</p>}
+      </nav>
+      <section id="gallery-statistics" data-site-exclude className="public-gallery-stats section-padding bg-gray-50 dark:bg-kcs-blue-900/20">
         <div className="container-custom">
           <AnimSection>
-            <motion.div variants={fadeUp} className="grid lg:grid-cols-4 gap-4">
+            <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
-                { label: 'Photos', value: '240+' },
-                { label: 'Video Stories', value: '18' },
-                { label: 'Annual Events Covered', value: '32' },
-                { label: 'Student Moments Captured', value: '1,000+' },
+                { label: tr('Photos publiées','Published photos'), value: String(imageItems.length) },
+                { label: tr('Vidéos publiées','Published videos'), value: String(allGalleryItems.filter(item=>item.type==='video'&&item.videoUrl).length) },
+                { label: tr('Collections représentées','Collections represented'), value: String(new Set(allGalleryItems.map(item=>item.category)).size) },
+                { label: tr('Publications à la une','Featured publications'), value: String(allGalleryItems.filter(item=>item.featured).length) },
               ].map((stat) => (
                 <div key={stat.label} className="rounded-2xl border border-gray-100 dark:border-kcs-blue-800 bg-white dark:bg-kcs-blue-900/50 p-5">
                   <p className="text-3xl font-bold font-display text-kcs-blue-900 dark:text-white">{stat.value}</p>
@@ -240,7 +265,7 @@ const GalleryPage = () => {
         </div>
       </section>
 
-      <section id="collection" className="section-padding bg-white dark:bg-kcs-blue-950">
+      <section hidden={section!=='photos'} role="tabpanel" aria-labelledby="gallery-tab-photos" id="collection" className="section-padding bg-white dark:bg-kcs-blue-950">
         <div className="container-custom">
           <AnimSection>
             <motion.div variants={fadeUp} className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
@@ -303,16 +328,16 @@ const GalleryPage = () => {
         </div>
       </section>
 
-      <section id="videos" className="section-padding bg-gray-50 dark:bg-kcs-blue-900/20">
+      <section hidden={section==='photos'} role="tabpanel" aria-labelledby={'gallery-tab-'+section} id="videos" className="section-padding bg-gray-50 dark:bg-kcs-blue-900/20">
         <div className="container-custom">
           <AnimSection>
             <motion.div variants={fadeUp} className="text-center mb-12">
-              <h2 className="text-3xl font-bold font-display text-kcs-blue-900 dark:text-white mb-3">Video Highlights</h2>
+              <h2 className="text-3xl font-bold font-display text-kcs-blue-900 dark:text-white mb-3">{section==='live'?tr('Directs et replays','Live streams & replays'):tr('Vidéos à la une','Video Highlights')}</h2>
               <p className="text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
-                A short-form look at signature KCS experiences, from worship gatherings to student-led innovation.
+                {section==='live'?tr('Retrouvez les événements diffusés par l’école, en direct ou en replay.','Follow school broadcasts, live or on replay.'):tr('Les vidéos publiées par l’école, réunies dans un espace dédié.','School videos, together in their own dedicated space.')}
               </p>
             </motion.div>
-            <div className="grid lg:grid-cols-3 gap-6">
+            <div hidden={section!=='videos'} className="grid lg:grid-cols-3 gap-6">
               {allGalleryItems
                 .filter((item) => item.type === 'video' && Boolean(item.videoUrl))
                 .map((item) => (
@@ -338,7 +363,8 @@ const GalleryPage = () => {
                   </motion.button>
                 ))}
             </div>
-          <PublicBroadcastGallery/>
+          {section==='videos'&&!allGalleryItems.some(item=>item.type==='video'&&item.videoUrl)&&<div data-site-exclude className="mx-auto max-w-2xl rounded-3xl border border-dashed border-sky-300 bg-sky-50 p-9 text-center dark:border-sky-700 dark:bg-kcs-blue-900"><Film size={36} className="mx-auto mb-4 text-sky-700 dark:text-sky-200"/><h3 className="font-bold text-sky-950 dark:text-white">{tr('L’espace vidéo est prêt','Your video space is ready')}</h3><p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{tr('Les vidéos apparaîtront ici dès leur publication par l’école.','Videos will appear here as soon as the school publishes them.')}</p></div>}
+          <div hidden={section!=='live'}><PublicBroadcastGallery/></div>
           </AnimSection>
         </div>
       </section>

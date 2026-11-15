@@ -1,3 +1,4 @@
+import {uploadPath} from '../utils/uploadStorage.js'
 import {createHash,randomUUID} from 'node:crypto'
 import {z} from 'zod'
 import {Prisma} from '@prisma/client'
@@ -21,6 +22,7 @@ const mediaVersion=(item:{id:string;title:string;description:string|null;categor
 export const mediaRouter = Router()
 
 mediaRouter.get('/', asyncHandler(async (_req, res) => {
+  res.setHeader('Cache-Control','no-store')
   const items = await prisma.mediaItem.findMany({ orderBy: { uploadedAt: 'desc' } })
   return success(res, items.map(item => ({ ...item, version:mediaVersion(item), url: publicMediaUrl(item.url), thumbnailUrl: item.thumbnailUrl ? publicMediaUrl(item.thumbnailUrl) : item.thumbnailUrl })))
 }))
@@ -40,7 +42,7 @@ mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('
   if (!validateMediaUpload(req.file)) throw new ApiError(415, 'Unsupported or invalid media file')
 
   const filename = safeMediaFilename(req.file.originalname)
-  const mediaRoot = path.resolve(process.cwd(), 'uploads', 'media')
+  const mediaRoot = uploadPath('media')
   await mkdir(mediaRoot, { recursive: true })
   await writeFile(path.join(mediaRoot, filename), req.file.buffer)
 
@@ -101,7 +103,7 @@ mediaRouter.post('/:id/file',authenticate,requireRoles('admin'),upload.single('f
  const input=z.object({title:z.string().trim().min(2).max(200),description:z.string().trim().max(5000).nullable(),category:z.string().trim().min(1).max(120),tags:z.array(z.string().trim().min(1).max(80)).max(30),version:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse({...details as object,version:req.body.version});
  const existing=await prisma.mediaItem.findUnique({where:{id}});if(!existing)throw new ApiError(404,'This media no longer exists.');if(mediaVersion(existing)!==input.version)throw new ApiError(409,'This media changed elsewhere. Reload the library.');
  const kind=req.file.mimetype.startsWith('video/')?'VIDEO':'IMAGE';if(existing.type!==kind)throw new ApiError(415,'Keep the same media type when replacing a file.');
- const actorId=await databaseActorId(req.user!.sub),mediaRoot=path.resolve(process.cwd(),'uploads','media'),filename=safeMediaFilename(randomUUID()+path.extname(req.file.originalname)),filePath=path.join(mediaRoot,filename),url=`${process.env.PUBLIC_API_BASE_PATH||'/api'}/uploads/media/${filename}`;
+ const actorId=await databaseActorId(req.user!.sub),mediaRoot=uploadPath('media'),filename=safeMediaFilename(randomUUID()+path.extname(req.file.originalname)),filePath=path.join(mediaRoot,filename),url=`${process.env.PUBLIC_API_BASE_PATH||'/api'}/uploads/media/${filename}`;
  await mkdir(mediaRoot,{recursive:true});await writeFile(filePath,req.file.buffer,{flag:'wx'});
  try{
   const item=await prisma.$transaction(async tx=>{
@@ -129,6 +131,6 @@ mediaRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(asy
     await tx.auditLog.create({ data: { actorId, action: existing ? 'MEDIA_ITEM_DELETED' : 'MEDIA_ITEM_DELETE_ALREADY_ABSENT', targetType: 'MediaItem', targetId: mediaItemId, metadata: existing ? { title: existing.title, type: existing.type, url: existing.url } : { alreadyAbsent: true } } })
     return existing
   })
-  if (item && /^(?:\/nexus)?\/api\/uploads\/media\//.test(item.url)) await unlink(path.resolve(process.cwd(), 'uploads', 'media', path.basename(item.url))).catch(() => undefined)
+  if (item && /^(?:\/nexus)?\/api\/uploads\/media\//.test(item.url)) await unlink(uploadPath('media',path.basename(item.url))).catch(() => undefined)
   return success(res, { alreadyAbsent: !item }, item ? 'Media deleted' : 'Media was already deleted')
 }))

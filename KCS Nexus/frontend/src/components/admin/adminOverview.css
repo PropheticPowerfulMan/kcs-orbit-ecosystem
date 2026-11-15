@@ -53,3 +53,15 @@ html:not(.dark) .portal-shell [data-admin-analysis] :is(h1,h2,h3,p,b,strong,span
 html:not(.dark) .portal-shell [data-admin-analysis] :is(article,section,div[class*="bg-"],p[class*="bg-"]){background:#dcebf4!important;border-color:#b4ccde!important}
 html:not(.dark) .portal-shell [data-admin-analysis] button,html:not(.dark) .portal-shell [data-admin-analysis] button :is(span,svg){background:#105576!important;color:#fff!important}
 }
+
+@media screen {
+.portal-shell [data-admin-overview] .admin-overview-tabs button{color:#244b64!important;background:transparent}
+.portal-shell [data-admin-overview] .admin-overview-tabs button:hover{background:#c4deed;color:#153f59!important}
+.portal-shell [data-admin-overview] .admin-overview-tabs button[aria-selected=true]{background:#0b4b6b!important;color:#f1fbff!important}
+.dark .portal-shell [data-admin-overview] .admin-overview-tabs button{color:#d6eaf6!important}
+.dark .portal-shell [data-admin-overview] .admin-overview-tabs button:hover{background:#13455f;color:#f1fbff!important}
+.dark .portal-shell [data-admin-overview] .admin-overview-tabs button[aria-selected=true]{background:#145f7e!important;color:#fff!important}
+html:not(.dark) .portal-shell [data-admin-overview] section>div>div>p.text-kcs-gold-600{color:#10637a!important}
+.portal-shell [data-admin-tone=dark] [class*="bg-white/5"]{background:#ffffff0d!important;color:#dceff9}
+.portal-shell [data-admin-tone=dark] h2{color:#f3fbff!important}.portal-shell [data-admin-tone=dark] p{color:#b5e2ed!important}
+}
