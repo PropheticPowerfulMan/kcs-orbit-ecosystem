@@ -1,5 +1,7 @@
 from datetime import timedelta
 from django.db.models import Count, Q
+from django.core.cache import cache
+from apps.integration.orbit import fetch_shared_directory, orbit_sync_is_enabled
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -30,7 +32,7 @@ def _attendance_rate(queryset):
     if not total:
         return None
 
-    present_like = queryset.filter(status__in=['present', 'late', 'excused']).count()
+    present_like = queryset.filter(status__in=['present', 'late']).count()
     return round((present_like / total) * 100, 2)
 
 
@@ -49,8 +51,36 @@ def overview(request):
     grades = list(Grade.objects.select_related('student'))
     avg_grade = _normalized_average(grades)
 
+    registry = None
+    directory_state = 'local'
+    if orbit_sync_is_enabled():
+        registry = cache.get('savanex:analytics-directory:v1')
+        directory_state = 'orbit'
+        if registry is None:
+            try:
+                registry = fetch_shared_directory()
+                if not isinstance(registry, dict) or not all(isinstance(registry.get(k), list) for k in ['students', 'parents', 'teachers']):
+                    raise ValueError('Invalid directory shape')
+                cache.set('savanex:analytics-directory:v1', registry, timeout=30)
+                cache.set('savanex:analytics-directory:last', registry, timeout=900)
+            except Exception:
+                registry = cache.get('savanex:analytics-directory:last')
+                directory_state = 'stale' if registry is not None else 'unavailable'
+    local_students = total_students
+    local_teachers = total_teachers
+    if registry is not None:
+        total_students = len(registry['students'])
+        total_teachers = len(registry['teachers'])
+        total_classes = len({str(item.get('className') or '').strip().casefold() for item in registry['students'] if item.get('className')})
+    elif directory_state == 'unavailable':
+        total_students = total_teachers = total_classes = None
+
     return Response({
         'total_students': total_students,
+        'total_parents': len(registry['parents']) if registry is not None else None,
+        'directory_source': directory_state,
+        'local_students_with_files': local_students,
+        'local_teachers_with_files': local_teachers,
         'total_teachers': total_teachers,
         'total_classes': total_classes,
         'attendance_rate_30d': attendance_rate,
@@ -58,7 +88,9 @@ def overview(request):
         'average_excellence_percentage': avg_grade,
         'average_classical_equivalent_percentage': _classical_equivalent(avg_grade),
         'data_quality': {
-            'is_real_ecosystem_data': True,
+            'is_real_ecosystem_data': directory_state in ['orbit','stale'],
+            'academic_metrics_scope': 'savanex-local-records',
+            'directory_source': directory_state,
             'attendance_records_30d': attendance_qs.count(),
             'grade_records': len(grades),
             'attendance_rate_is_available': attendance_rate is not None,

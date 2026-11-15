@@ -29,3 +29,11 @@ test('assignment results are isolated by academic year and are idempotent', () =
   assert.equal(second.advancedGradebookByCycle['course-1::2027-2028'].assignments.length, 1)
   assert.equal(second.advancedGradebookByCourse['course-1'].scores['assignment:a-1:student-1'], '14')
 })
+
+test('first assignment transfer retains legacy columns, grades, comments and other courses',()=>{
+ const previous={advancedGradebookByCourse:{c:{assignments:[{id:'legacy',date:'2026-09-01'}],scores:{'legacy:student':'18'},comments:{'legacy:student':'Retain'},categories:[{id:'test',weight:100}]},other:{scores:{'x:s':'12'}}}};
+ const input={courseId:'c',assignmentId:'online',title:'Online quiz',description:'Reviewed',assignmentType:'QUIZ',dueDate:new Date('2026-10-01'),maxScore:10,academicYear:'2026-2027',term:'Semester 1 · Quarter 1',scores:[{studentId:'student',score:9}],savedAt:'2026-10-02'};
+ const result=mergeAssignmentIntoGradebookCycle(previous,input) as any;
+ assert.equal(result.advancedGradebookByCycle['c::2026-2027'].scores['legacy:student'],'18');assert.equal(result.advancedGradebookByCycle['c::2026-2027'].comments['legacy:student'],'Retain');assert.deepEqual(result.advancedGradebookByCycle['c::2026-2027'].categories,[{id:'test',weight:100}]);assert.deepEqual(result.advancedGradebookByCourse.other,previous.advancedGradebookByCourse.other);
+ const repeated=mergeAssignmentIntoGradebookCycle(result,{...input,scores:[{studentId:'student',score:8}]}) as any;assert.equal(repeated.advancedGradebookByCycle['c::2026-2027'].assignments.length,2);assert.equal(repeated.advancedGradebookByCycle['c::2026-2027'].scores['assignment:online:student'],'8');assert.equal(previous.advancedGradebookByCourse.c.assignments.length,1);
+});

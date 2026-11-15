@@ -1,3 +1,4 @@
+import MenuImage from './MenuImage'
 import SalePortion, { cartLineTotal, cartRequestItems, type PurchaseAmounts } from './SalePortion'
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
@@ -592,9 +593,10 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
       </div>
     </aside>
     <CurrencyDisplayProvider userKey={user.userId}>
-    <main className="workspace">
+    <main className="workspace" data-kitchen-workspace>
       <header><button ref={menuButtonRef} className="menu-button" aria-expanded={open} aria-controls="kitchen-navigation" aria-label={lang === 'fr' ? 'Ouvrir le menu' : 'Open navigation'} onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{page === 'school-dues' ? t.schoolDues : page === 'manager-inbox' ? t.managerInbox : t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
       <div className="page-body">
+        <KitchenPageHeading page={page} lang={lang} user={user} title={page==='school-dues'?t.schoolDues:page==='manager-inbox'?t.managerInbox:t[page]}/>
         <ExchangeRateCard lang={lang} compact />
         {page === 'dashboard' && <Dashboard user={user} t={t} lang={lang} />}
         {page === 'menus' && <DailyMenus lang={lang} />}
@@ -696,9 +698,9 @@ function PersonalDailyMenu({ user, lang, onOrdered }: { user: User; lang: Lang; 
   if (!menu) return null
   return <>
     <section className="panel personal-daily-menu">
-      <div className="daily-menu-cover"><img src="./images/kitchen-culinary-hero.jpg" alt="KCS Kitchen daily meal"/><div><span className="eyebrow">{fr ? 'MENU DU JOUR' : "TODAY'S MENU"}</span><h2>{menu.title}</h2><p>{fr ? 'Choisissez vos plats et boissons, puis commandez en achat ou en dette autorisée.' : 'Choose meals and drinks, then order as a purchase or authorized debt.'}</p></div></div>
-      <div className="personal-menu-grid">{products.map(product => { const purchasable = product.isAvailable && Number(product.currentPrice) > 0; return <article key={product.id} className="personal-menu-card">
-        <img src={menuPhotoFor(product)} alt={product.name} loading="lazy" />
+      <div className="daily-menu-cover"><MenuImage src="./images/kitchen-culinary-hero.jpg" alt={fr?'Menu de KCS Kitchen':'KCS Kitchen daily menu'}/><div><span className="eyebrow">{fr ? 'MENU DU JOUR' : "TODAY'S MENU"}</span><h2>{menu.title}</h2><p>{fr ? 'Choisissez vos plats et boissons, puis commandez en achat ou en dette autorisée.' : 'Choose meals and drinks, then order as a purchase or authorized debt.'}</p></div></div>
+      <div className="personal-menu-grid">{products.map((product,index) => { const purchasable = product.isAvailable && Number(product.currentPrice) > 0; return <article key={product.id} className="personal-menu-card">
+        <MenuImage src={menuPhotoFor(product)} alt={product.name} priority={index<2}/>
         <div><small>{product.category}</small><h3>{product.name}</h3>{purchasable ? <DisplayMoney value={product.currentPrice} currency={product.currency}/> : <b>{fr ? 'Prix à configurer' : 'Price to configure'}</b>}</div>
         {!amounts[product.id] && <div className="personal-menu-qty"><button type="button" disabled={!purchasable || Boolean(amounts[product.id])} onClick={() => change(product.id, -1)} aria-label={fr ? 'Retirer' : 'Remove'}>−</button><b>{cart[product.id] || 0}</b><button type="button" disabled={!purchasable || Boolean(amounts[product.id])} onClick={() => change(product.id, 1)} aria-label={fr ? 'Ajouter' : 'Add'}>+</button></div>}
         <SalePortion product={product} value={amounts[product.id]} onChange={value => chooseAmount(product.id, value)} fr={fr} disabled={!purchasable}/>
@@ -1644,3 +1646,5 @@ export default function App() {
   if (!user) return <Login onLogin={setUser} />
   return <Shell user={user} onLogout={() => { setToken(null); setUser(null) }} />
 }
+
+function KitchenPageHeading({page,title,lang,user}:{page:string;title:string;lang:Lang;user:User}){const descriptions:Record<string,[string,string]>={dashboard:['Votre activité et vos informations essentielles, réunies dans une vue claire.','Your activity and essential information in one clear overview.'],menus:['Composez, publiez et retrouvez vos menus et leurs tarifs.','Create, publish and trace menus and their prices.'],pos:['Identifiez la personne, préparez son panier et confirmez l’opération.','Identify the customer, prepare the basket and confirm the transaction.'],orders:['Consultez et traitez les commandes dans un registre partagé.','Review and process orders in the shared register.'],catalog:['Le catalogue des produits, leurs tarifs et leur disponibilité.','Your product catalogue, prices and availability.'],transactions:['Retrouvez les opérations et leurs justificatifs.','Find transactions and their supporting records.'],ledger:['Consultez les consommations, les dettes et les règlements.','Review consumption, debt and settlements.'],inventory:['Suivez les quantités disponibles et les mouvements de stock.','Track available quantities and inventory movements.'],disputes:['Retrouvez les réclamations et suivez leur traitement.','Find claims and follow their resolution.'],reports:['Analysez l’activité et préparez vos documents officiels.','Analyze activity and prepare official documents.'],access:['Gérez les autorisations liées à KCS Kitchen.','Manage access permissions for KCS Kitchen.'],'school-dues':['Suivez les prises en charge de l’école et leurs règlements.','Track school subsidies and their settlements.'],'manager-inbox':['Vos rapports et messages, réunis dans une boîte de suivi.','Your reports and messages in one follow-up inbox.'],settings:['Gérez vos paramètres personnels et les accès Kitchen autorisés.','Manage personal settings and authorized Kitchen access.'],procurement:['Suivez les achats, les articles et les fournisseurs.','Track purchases, items and suppliers.']};return <section className="kitchen-page-heading"><div><span className="eyebrow">KCS KITCHEN · {lang==='fr'?'ESPACE DE TRAVAIL':'WORKSPACE'}</span><h2>{title}</h2><p>{descriptions[page]?.[lang==='fr'?0:1]||''}</p></div><span className="kitchen-page-identity">{user.fullName}</span></section>}

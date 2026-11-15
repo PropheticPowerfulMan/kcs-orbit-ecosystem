@@ -58,7 +58,7 @@ export const mergeAssignmentIntoGradebookCycle = (
   const cycleMap = { ...(state.advancedGradebookByCycle ?? {}) }
   const previous = cycleMap[cycleKey] && typeof cycleMap[cycleKey] === 'object'
     ? cycleMap[cycleKey]
-    : {}
+    : input.academicYear===legacyAcademicYear && state.advancedGradebookByCourse?.[input.courseId] && typeof state.advancedGradebookByCourse[input.courseId]==='object' ? state.advancedGradebookByCourse[input.courseId] : {}
   const columnId = `assignment:${input.assignmentId}`
   const category = categoryForAssignmentType(input.assignmentType)
   const column: GradebookCycleColumn = {

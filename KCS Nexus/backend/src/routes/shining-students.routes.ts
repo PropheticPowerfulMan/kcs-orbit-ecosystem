@@ -48,10 +48,11 @@ const scheduleInclude = {
 shiningStudentsRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const from = typeof req.query.from === 'string' ? utcDate(req.query.from) : new Date(Date.now() - 30 * 86_400_000)
   const to = typeof req.query.to === 'string' ? utcDate(req.query.to) : new Date(Date.now() + 120 * 86_400_000)
-  const user = await prisma.user.findUnique({
+  const storedUser = await prisma.user.findUnique({
     where: { id: req.user!.sub },
     select: { role: true, studentProfile: { select: { id: true } }, parentLinks: { select: { studentId: true } } },
   })
+  const user=storedUser||(req.user!.sub==='configured-superadmin'&&req.user!.role==='admin'?{role:'ADMIN' as const,studentProfile:null,parentLinks:[]}:null)
   if (!user) throw new ApiError(404, 'Account not found.')
   const allowedStudentIds = user.role === 'STUDENT'
     ? [user.studentProfile?.id].filter(Boolean) as string[]

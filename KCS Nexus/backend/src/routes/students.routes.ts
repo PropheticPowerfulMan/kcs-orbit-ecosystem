@@ -1014,6 +1014,8 @@ studentsRouter.post('/me/assignments/:submissionId/submit-quiz', authenticate, r
 
   const updated = await prisma.$transaction(async (tx) => {
     await tx.assignmentSubmissionAnswer.deleteMany({ where: { submissionId } })
+    const claimed=await tx.assignmentSubmission.updateMany({where:{id:submissionId,status:'PENDING'},data:{status:'SUBMITTED'}})
+    if(claimed.count!==1)throw new ApiError(409,'This assignment was already submitted. Reload its saved result.')
     const saved = await tx.assignmentSubmission.update({
       where: { id: submissionId },
       data: {

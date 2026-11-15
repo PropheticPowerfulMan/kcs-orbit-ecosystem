@@ -1,3 +1,7 @@
+import {exportClassActivityReport,exportLearnerFollowup} from '@/utils/classActivityDocuments'
+import TeacherStudentDirectory from '@/components/teacher/TeacherStudentDirectory'
+import CoursePeriodToolbar,{CoursePeriodFields} from '@/components/teacher/CoursePeriodToolbar'
+import {useTeacherCoursePeriods} from '@/hooks/useTeacherCoursePeriods'
 import PublishedCalendarStrip from '@/components/shared/PublishedCalendarStrip'
 import TeacherReportsHub from '@/components/teacher/TeacherReportsHub'
 import DateSelect from '@/components/shared/DateSelect'
@@ -328,6 +332,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       }
     }).slice(0, 0),
   )
+  const coursePeriods=useTeacherCoursePeriods(['courses','students'].includes(segment))
   const [courseTab, setCourseTab] = useState<'setup' | 'enrollment'>('setup')
   const [pendingDeleteCourse, setPendingDeleteCourse] = useState<{ id: string; name: string } | null>(null)
   const [skipCourseDeleteConfirmation, setSkipCourseDeleteConfirmation] = useState(() => localStorage.getItem(COURSE_DELETE_CONFIRM_KEY) === 'true')
@@ -348,6 +353,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [selectedGradebookCourseId, setSelectedGradebookCourseId] = useState('')
   const [gradebookColumnsByCourse, setGradebookColumnsByCourse] = useState<Record<string, GradebookColumn[]>>({})
   const [gradebookScores, setGradebookScores] = useState<Record<string, string>>({})
+  const [studentFollowupIds,setStudentFollowupIds]=useState<string[]>([])
+  const studentExportRef=useRef<RegistryStudent[]>([])
   const [teacherStudents, setTeacherStudents] = useState<RegistryStudent[]>([])
   const [attendanceEntries, setAttendanceEntries] = useState(() => ecosystemAttendance.slice(0, 0))
   const [assignmentList, setAssignmentList] = useState(() => ecosystemAssignments.slice(0, 0))
@@ -391,9 +398,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     gradeLevels: [] as string[],
     studentId: '',
     enrollmentMode: 'class' as 'class' | 'custom',
+    periodYear:'',
+    semesters:[1] as number[],
   })
+  useEffect(()=>{if(!editingCourseId&&!courseDraft.name.trim()&&coursePeriods.year&&coursePeriods.year!=='all')setCourseDraft(d=>({...d,periodYear:coursePeriods.year,semesters:coursePeriods.semester==='all'?[1,2]:[Number(coursePeriods.semester)||1]}))},[coursePeriods.year,coursePeriods.semester,editingCourseId])
   const [courseAbbreviationManual, setCourseAbbreviationManual] = useState(false)
-  const [courseErrors, setCourseErrors] = useState<{ name?: string; grade?: string; credits?:string }>({})
+  const [courseErrors, setCourseErrors] = useState<{ name?: string; grade?: string; credits?:string;period?:string }>({})
   const courseNameRef = useRef<HTMLInputElement>(null)
   const courseCreditsRef = useRef<HTMLSelectElement>(null)
   const courseGradeRef = useRef<HTMLDivElement>(null)
@@ -463,6 +473,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         // Courses and enrollments are deliberately not restored from this
         // workspace cache. The relational Nexus registry loaded by /me/overview
         // is the only authority for a teacher's Gradebook roster.
+        if(Array.isArray(state.studentFollowupIds))setStudentFollowupIds(state.studentFollowupIds.filter((v:unknown)=>typeof v==='string'))
         if (Array.isArray(state.attendanceEntries)) setAttendanceEntries(state.attendanceEntries)
         if (Array.isArray(state.assignmentList)) setAssignmentList(state.assignmentList)
         if (Array.isArray(state.gradeEntries)) setGradeEntries(state.gradeEntries)
@@ -622,7 +633,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }
 
   const getWorkspaceState = (overrides: Record<string, unknown> = {}) => ({
-    courses, teacherStudents, attendanceEntries, assignmentList, gradeEntries, reportList, disciplineList,
+    courses, teacherStudents, studentFollowupIds, attendanceEntries, assignmentList, gradeEntries, reportList, disciplineList,
     reportCardRows, generatedReportCards, inbox, submittedTeacherReports, gradebookColumnsByCourse, gradebookScores, ...overrides,
   })
 
@@ -714,11 +725,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }
 
   const exportWorkspacePdf = () => {
+    if(segment==='reports'){exportClassActivityReport(buildTeacherOperationalReport(),language);return}
     const now = new Date()
     const academicYearStart = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1
-    const academicYearLabel = `${academicYearStart}-${academicYearStart + 1}`
+    const academicYearLabel = segment==='courses'?(coursePeriods.year==='all'?tr('Toutes les années','All years'):coursePeriods.year||'—'):`${academicYearStart}-${academicYearStart + 1}`
     const exportData = (() => {
-      if (segment === 'courses') return { columns: ['Subject', 'Class', 'Room', 'Credit hours', 'Enrolled'], rows: courses.map((course) => [course.name, course.gradeLevels.join(', '), course.room, course.creditHours, course.studentIds.length]), narrative: 'Official teaching-load and subject-enrolment register.' }
+      if (segment === 'courses') return { columns: ['Subject', 'Class', 'Room', 'Credit hours', 'Enrolled'], rows: filteredCourses.map((course) => [course.name, course.gradeLevels.join(', '), course.room, course.creditHours, course.studentIds.length]), narrative: 'Official teaching-load and subject-enrolment register.' }
   if (segment === 'attendance') return { columns: ['Student', 'Date', 'Class', 'Status'], rows: attendanceEntries.map((record) => [findStudent(record.studentId)?.name ?? 'Student', record.date, record.className, record.status]), narrative: 'Homeroom daily attendance register, generated from the current teacher record.' }
       if (segment === 'assignments') return { columns: ['Assignment', 'Student', 'Subject', 'Due date', 'Status', 'Priority'], rows: assignmentList.map((item) => [item.title, findStudent(item.studentId)?.name ?? 'Student', item.subject, item.due, item.status, item.priority]), narrative: 'Assignment register and learner follow-up status.' }
       if (segment === 'reports' || segment === 'report-card') return { columns: ['Student', 'Cycle', 'Average', 'Conduct', 'Approval'], rows: reportList.map((item) => [item.student, item.term, `${item.average}%`, item.conduct, item.principalStatus]), narrative: 'Teacher report-card register for administrative review.' }
@@ -726,7 +738,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       if (segment === 'discipline') return { columns: ['Reference', 'Student', 'Date', 'Category', 'Level', 'Status'], rows: disciplineList.map((item) => [item.id, item.student, item.date, item.category, item.level, item.status]), narrative: 'Confidential discipline-report register. Distribution is restricted to authorized staff.' }
       if (segment === 'messages') return { columns: ['From / To', 'Subject', 'Time', 'Response'], rows: inbox.map((item) => [item.from, item.subject, item.time, item.requiresResponse ? 'Required' : 'No']), narrative: 'Confidential teacher communication register.' }
       if (segment === 'settings') return { columns: ['Field', 'Recorded value'], rows: [['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim()], ['Email', profileDraft.email], ['Phone', profileDraft.phone]], narrative: 'Teacher profile record. This document does not include the profile photo.' }
-      return { columns: ['Student', 'Class', 'Average', 'Attendance', 'Risk'], rows: teacherStudents.map((student) => [student.name, canonicalClassLabel(student.grade, student.section), `${student.average ?? '—'}%`, `${student.attendance ?? '—'}%`, student.risk ?? 'low']), narrative: 'Current teacher student-support register.' }
+      return { columns: ['Student', 'Class', 'Average', 'Attendance', 'Risk'], rows: (segment==='students'?studentExportRef.current:teacherStudents).map((student) => [student.name, canonicalClassLabel(student.grade, student.section), `${student.average ?? '—'}%`, `${student.attendance ?? '—'}%`, student.risk ?? 'low']), narrative: 'Current teacher student-support register.' }
     })()
     if (!printOfficialPdf({ title: `Teacher ${meta.title} Export`, subtitle: 'KCS Nexus AI — Kinshasa Christian School', metadata: [['Document', meta.title], ['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim() || 'Teacher'], ['Academic year', academicYearLabel], ['Records', exportData.rows.length]], ...exportData, orientation: exportData.columns.length > 5 ? 'landscape' : 'portrait', documentKind: segment === 'timetable' ? 'timetable' : 'default' })) return runAction('Allow pop-ups to generate the official printable PDF.')
     runAction(`${meta.title} contextual official PDF was generated.`)
@@ -771,10 +783,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       (!incident.studentId || scopedIds.has(incident.studentId))
       && inRange(incident.createdAt ?? incident.date)
     ))
-    const attendanceValues = scopedStudents.map((student) => student.attendance).filter((value): value is number => typeof value === 'number')
-    const attendanceAverage = attendanceValues.length
-      ? Math.round(attendanceValues.reduce((sum, value) => sum + value, 0) / attendanceValues.length)
-      : null
+    const attendanceAverage = scopedAttendance.length ? Math.round(scopedAttendance.filter(entry=>['present','late'].includes(String(entry.status).toLowerCase())).length/scopedAttendance.length*1000)/10 : null
     const missingAssignments = scopedStudents.reduce((sum, student) => sum + (student.missingAssignments ?? 0), 0)
     const atRisk = scopedStudents.filter((student) => ['high', 'medium'].includes(String(student.risk).toLowerCase()))
     const teacherName = [user?.lastName, user?.middleName, user?.firstName].filter(Boolean).join(' ') || 'Teacher'
@@ -853,7 +862,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       const nextReports = [report, ...submittedTeacherReports].slice(0, 100)
       if (!await persistWorkspace({ submittedTeacherReports: nextReports })) return
       setSubmittedTeacherReports(nextReports)
-      downloadTeacherFile(`kcs-${reportPeriod.toLowerCase()}-teacher-report-${rangeSafeFilePart(report.dateFrom)}-${rangeSafeFilePart(report.dateTo)}.json`, JSON.stringify(report, null, 2), 'application/json')
+
       if (notify && delivered !== recipients.length) {
         runAction(tr(`Rapport enregistré. ${delivered}/${recipients.length} destinataire(s) informé(s); vérifiez les échecs dans la messagerie.`, `Report saved. ${delivered}/${recipients.length} recipient(s) notified; review failed deliveries in Messages.`), delivered === 0)
       } else {
@@ -917,6 +926,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       gradeLevels: [] as string[],
       studentId: firstStudentId,
       enrollmentMode: 'class' as 'class' | 'custom',
+      periodYear:coursePeriods.year==='all'?coursePeriods.data?.activeAcademicYear||'':coursePeriods.year,
+      semesters:coursePeriods.semester==='all'?[1,2]:[Number(coursePeriods.semester)||1],
     })
     setCourseAbbreviationManual(false)
   }
@@ -974,11 +985,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const customRoster = courseDraft.enrollmentMode === 'custom'
     const selectedGrade = customRoster ? 'Multi-class' : canonicalClassLabel(courseDraft.gradeLevels[0] ?? courseDraft.className)
     const resolvedClass = customRoster ? selectedGrade : resolveRosterClass(courseDraft.className || selectedGrade)
-    const errors: { name?: string; grade?: string; credits?:string } = {}
+    const errors: { name?: string; grade?: string; credits?:string;period?:string } = {}
     if (!courseDraft.name.trim()) errors.name = 'Enter the subject name.'
     if (!customRoster && !courseDraft.gradeLevels[0]) errors.grade = 'Select the class taught for this subject.'
     if(!['1','2'].includes(courseDraft.creditHours))errors.credits=tr('Choisissez 1 ou 2 crédits.','Choose 1 or 2 credit hours.')
-    if (errors.name || errors.grade || errors.credits) {
+    if(!coursePeriods.ready||!courseDraft.periodYear||!courseDraft.semesters.length)errors.period=tr('Choisissez une année scolaire publiée et au moins un semestre.','Choose a published school year and at least one semester.')
+    if (errors.name || errors.grade || errors.credits || errors.period) {
       setCourseErrors(errors)
       window.requestAnimationFrame(() => errors.name ? courseNameRef.current?.focus() : errors.grade ? courseGradeRef.current?.focus() : courseCreditsRef.current?.focus())
       return
@@ -1013,6 +1025,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     try {
       const response = await teacherWorkspaceAPI.syncCourse({
         id: nextCourse.id,
+        teachingPeriod:{academicYear:courseDraft.periodYear,semesters:courseDraft.semesters},
         name: nextCourse.name,
         abbreviation: nextCourse.abbreviation,
         description: courseScopeDescription(nextCourse.name, customRoster ? 'custom' : 'class', resolvedClass),
@@ -1033,9 +1046,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       setCourseSaving(false)
       return
     }
-    const nextCourses = existingCourse
-      ? courses.map((course) => course.id === existingCourse.id ? nextCourse : course)
-      : [nextCourse, ...courses]
+    const nextCourses = courses.some(course=>course.id===nextCourse.id)
+      ? courses.map(course=>course.id===nextCourse.id?nextCourse:course)
+      : [nextCourse,...courses]
+    void coursePeriods.reload().catch(()=>undefined)
     const existingIds = new Set(teacherStudents.map((student) => student.id))
     const nextStudents = [...roster.filter((student) => !existingIds.has(student.id)), ...teacherStudents]
     // Update every Gradebook dependency immediately. The relational refresh
@@ -1065,6 +1079,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     if (!course) return
     setEditingCourseId(course.id)
     setCourseDraft({
+      periodYear:coursePeriods.year==='all'?coursePeriods.data?.activeAcademicYear||'':coursePeriods.year,
+      semesters:coursePeriods.states.get(course.id)?.periods.find(p=>p.academicYear===(coursePeriods.year==='all'?coursePeriods.data?.activeAcademicYear:coursePeriods.year))?.semesters||[Number(coursePeriods.semester)||1],
       name: course.name,
       abbreviation: course.abbreviation,
       creditHours: [1,2].includes(Number(course.creditHours)) ? String(course.creditHours) : '',
@@ -1125,14 +1141,15 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     void performDeleteCourse(id)
   }
 
-  const filteredCourses = courses.filter((course) => {
+  const periodCourses=courses.filter(course=>coursePeriods.matches(course.id))
+  const filteredCourses = periodCourses.filter((course) => {
     const searchable = `${course.gradeLevels.join(' ')} ${course.name} ${course.abbreviation} ${course.room}`.toLowerCase()
     return searchable.includes(courseSearch.toLowerCase())
   })
-  const selectedEnrollmentCourse = courses.find((course) => course.id === selectedEnrollmentCourseId) ?? courses[0]
+  const selectedEnrollmentCourse = periodCourses.find((course) => course.id === selectedEnrollmentCourseId) ?? periodCourses[0]
   const enrollmentDialogCourse = courses.find((course) => course.id === enrollmentDialogCourseId)
-  const totalEnrollment = courses.reduce((sum, course) => sum + course.studentIds.length, 0)
-  const totalCreditHours = courses.reduce((sum, course) => sum + normalizeCreditHours(course.creditHours), 0)
+  const totalEnrollment = periodCourses.reduce((sum, course) => sum + course.studentIds.length, 0)
+  const totalCreditHours = periodCourses.reduce((sum, course) => sum + normalizeCreditHours(course.creditHours), 0)
   const coveredGrades = Array.from(new Set(courses.flatMap((course) => course.gradeLevels))).length
   const enrollmentClasses = useMemo(() => Array.from(new Set(
     superAdminStudentPool.map((student) => canonicalClassLabel(student.grade, student.section)),
@@ -1422,12 +1439,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setGradebookScores(nextScores)
   }
 
-  const importStudent = async () => {
-    const student = findStudent(selectedStudentId)
-    if (!student) return
-    const nextStudents = teacherStudents.some((item) => sameRegistryStudent(item, student)) ? teacherStudents : [student, ...teacherStudents]
-    if (!await persistWorkspace({ teacherStudents: nextStudents }, `${student.name} imported from the Super Admin registry and saved.`)) return
-    setTeacherStudents(nextStudents)
+  const importStudent = async (studentId:string) => {
+    const student=findStudent(studentId)
+    if(!student)return false
+    const next=[...new Set([...studentFollowupIds,studentId])]
+    if(!await persistWorkspace({studentFollowupIds:next},tr('Élève ajouté au suivi pédagogique.','Learner added to teaching follow-up.')))return false
+    setStudentFollowupIds(next)
+    return true
   }
 
   const addAttendance = async () => {
@@ -1565,7 +1583,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   return (
     <section className="space-y-6">
-      <div className="nexus-workspace-heading">
+      {!['students','reports'].includes(segment)&&<div className="nexus-workspace-heading">
         <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">
@@ -1581,7 +1599,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             <button onClick={exportWorkspacePdf} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {actionMessage && (
         <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${actionIsError ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300' : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/40 dark:bg-green-900/20 dark:text-green-300'}`}>
@@ -1591,6 +1609,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
       {segment === 'courses' && (
         <div className="space-y-6">
+          <CoursePeriodToolbar model={coursePeriods} courses={courses} onAction={runAction}/>
           <div className="nexus-workspace-card overflow-hidden">
             <div className="border-b border-gray-100 px-5 pt-5 dark:border-kcs-blue-800">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -1616,7 +1635,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
               <div className="mt-5 grid gap-3 pb-5 sm:grid-cols-2 xl:grid-cols-4">
                 {[
-                  { label: 'Subjects', value: courses.length, sub: tr('espace actif', 'active workspace') },
+                  { label: 'Subjects', value: periodCourses.length, sub: tr('espace actif', 'active workspace') },
                   { label: 'Enrollment', value: totalEnrollment, sub: tr('places inscrites', 'student seats') },
                   { label: 'Credit Hours', value: totalCreditHours, sub: tr('charge d’enseignement', 'teaching load') },
                   { label: 'Grade Coverage', value: coveredGrades, sub: tr('niveaux scolaires', 'grade levels') },
@@ -1636,6 +1655,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   <h4 className="font-bold text-kcs-blue-900 dark:text-white">{editingCourseId ? tr('Modifier le cours', 'Edit course') : tr('Créer un cours', 'Create a course')}</h4>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Utilisez une classe officielle ou composez un groupe avec des élèves de plusieurs classes.', 'Use one official class or build a custom roster with learners from several classes.')}</p>
                   <div className="mt-4 grid gap-3">
+                    <CoursePeriodFields years={(coursePeriods.data?.calendars||[]).map(c=>c.name)} year={courseDraft.periodYear} semesters={courseDraft.semesters} onYear={value=>setCourseDraft(d=>({...d,periodYear:value}))} onSemesters={value=>setCourseDraft(d=>({...d,semesters:value}))}/>
+                    {courseErrors.period&&<p className="field-error" role="alert">{courseErrors.period}</p>}
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                       Subject name
                       <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + " border-red-500 ring-2 ring-red-100" : inputClass} value={courseDraft.name} onChange={(event) => updateCourseName(event.target.value)} />
@@ -1721,7 +1742,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                         {filteredCourses.map((subject) => (
                           <tr key={subject.id} className="text-gray-700 dark:text-gray-300">
                             <td className="px-3 py-3">{subject.gradeLevels.join(', ')}</td>
-                            <td className="px-3 py-3 font-semibold text-kcs-blue-900 dark:text-white">{subject.name}</td>
+                            <td className="px-3 py-3 font-semibold text-kcs-blue-900 dark:text-white">{subject.name}<small className="mt-1 block text-[10px] font-medium text-slate-500 dark:text-slate-300">{(coursePeriods.states.get(subject.id)?.periods||[]).length?(coursePeriods.states.get(subject.id)?.periods||[]).filter(p=>coursePeriods.year==='all'||p.academicYear===coursePeriods.year).map(p=>p.academicYear+' · '+tr('Semestre ','Semester ')+p.semesters.join(' + ')).join(' / '):tr('Période à classer','Period to classify')}</small></td>
                             <td className="px-3 py-3">{subject.abbreviation}</td>
                             <td className="px-3 py-3">{subject.creditHours}</td>
                             <td className="px-3 py-3">
@@ -1752,7 +1773,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               <div className="grid gap-4 p-5 lg:grid-cols-2">
                 <div className="lg:col-span-2 rounded-xl border border-dashed border-kcs-blue-200 bg-white p-4 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-950/40 dark:text-gray-300">
                   <p className="font-bold text-kcs-blue-900 dark:text-white">Choose the subject roster to manage</p>
-                  <p className="mt-1">All {courses.length} assigned subject{courses.length === 1 ? '' : 's'} are listed below. Select a subject, then open its roster manager to enroll or remove students.</p>
+                  <p className="mt-1">{filteredCourses.length} {tr('cours dans la période sélectionnée.','courses in the selected period.')} Select a subject, then open its roster manager to enroll or remove students.</p>
                 </div>
 
                 {selectedEnrollmentCourse && (
@@ -1769,7 +1790,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                     </div>
                   </div>
                 )}
-                {courses.map((subject) => (
+                {filteredCourses.map((subject) => (
                   <div role="button" tabIndex={0} onClick={() => setSelectedEnrollmentCourseId(subject.id)} key={subject.id} className={`cursor-pointer rounded-xl border p-4 ${selectedEnrollmentCourse?.id === subject.id ? 'border-kcs-blue-300 bg-white shadow-sm dark:border-kcs-blue-600 dark:bg-kcs-blue-900/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1825,6 +1846,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               <button type="button" disabled={courseSaving} onClick={resetCourseDraft} className="rounded-full bg-white/10 p-2 hover:bg-white/20 disabled:opacity-50" aria-label={tr('Fermer', 'Close')}><X size={20} /></button>
             </header>
             <div className="grid gap-5 p-5 sm:p-7">
+              <div className="sm:col-span-2"><CoursePeriodFields years={(coursePeriods.data?.calendars||[]).map(c=>c.name)} year={courseDraft.periodYear} semesters={courseDraft.semesters} onYear={value=>setCourseDraft(d=>({...d,periodYear:value}))} onSemesters={value=>setCourseDraft(d=>({...d,semesters:value}))}/>{courseErrors.period&&<p role="alert" className="field-error mt-2">{courseErrors.period}</p>}</div>
               <label className="grid gap-1.5 text-sm font-semibold text-kcs-blue-900 dark:text-blue-100">
                 {tr('Nom du cours', 'Course name')}
                 <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + ' border-red-500 ring-2 ring-red-100' : inputClass} value={courseDraft.name} onChange={(event) => updateCourseName(event.target.value)} autoFocus />
@@ -2029,47 +2051,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         </div>
       )}
 
-      {segment === 'students' && (
-        <div className="space-y-6">
-          <div className={panelClass}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-kcs-blue-900 dark:text-white">Official Orbit student directory</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Active school records enriched with the teacher's verified academic indicators.</p></div><span className="rounded-full bg-kcs-blue-50 px-3 py-1.5 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">{registryStatus === 'loading' ? 'Synchronizing…' : `${visibleTeacherStudents.length} of ${officialStudentCatalog.length} students`}</span></div><div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]"><input className={inputClass} value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="Search name, student number, class, advisor, risk..."/><select className={inputClass} value={studentClassFilter} onChange={(event) => setStudentClassFilter(event.target.value)}><option>All</option>{studentClassOptions.map((className) => <option key={className}>{className}</option>)}</select></div>{registryStatus === 'error' && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 dark:bg-red-900/20 dark:text-red-300">The Orbit directory could not be loaded. Refresh the page to retry.</p>}</div>
-        <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <div className={panelClass}>
-            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Import from Super Admin registry</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Teacher-created rosters must be based on official school records.</p>
-            <div className="mt-4 grid gap-3">
-              <select className={inputClass} value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
-                {officialStudentCatalog.map((student) => <option key={student.id} value={student.id}>{student.name} - {canonicalClassLabel(student.grade, student.section)} - {student.studentNumber ?? 'No ID'}</option>)}
-              </select>
-              <button onClick={importStudent} className={compactButton}>Add to my students</button>
-            </div>
-            <div className="mt-5 rounded-xl bg-kcs-blue-50 p-4 text-sm text-kcs-blue-800 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">
-              {supportStudentPool.length} verified students in your assigned support scope.
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-          {visibleTeacherStudents.map((student) => (
-            <button type="button" onClick={() => setStudentDetail(student)} key={student.id} className="rounded-2xl border border-gray-100 bg-white p-5 text-left transition hover:border-kcs-blue-300 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-bold text-kcs-blue-900 dark:text-white">{student.name}</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{canonicalClassLabel(student.grade, student.section)} - advisor {student.advisor}</p>
-                </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(student.risk ?? 'low')}`}>{student.risk ?? 'low'} risk</span>
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{student.average == null ? 'N/A' : student.average + '%'}</p><p className="text-xs text-gray-500">Verified average</p></div>
-                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{student.attendance == null ? 'N/A' : student.attendance + '%'}</p><p className="text-xs text-gray-500">Teacher attendance</p></div>
-                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{student.rank == null ? 'N/A' : '#' + student.rank}</p><p className="text-xs text-gray-500">Measured rank</p></div>
-              </div>
-              <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{student.aiInsight}</p>
-            </button>
-          ))}
-          {registryStatus === 'ready' && visibleTeacherStudents.length === 0 && <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50 dark:text-gray-300">No active Orbit student matches this search and class filter.</div>}
-          </div>
-        </div>
-        {studentDetail && <div className="fixed inset-0 z-[130] flex items-center justify-center bg-kcs-blue-950/75 p-2 backdrop-blur-sm sm:p-5"><div className="min-h-[70vh] max-h-[96vh] w-[96vw] max-w-6xl overflow-y-auto rounded-3xl border border-kcs-blue-100 bg-white p-5 shadow-2xl sm:p-8 dark:border-kcs-blue-700 dark:bg-kcs-blue-950"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">Official student profile</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{studentDetail.name}</h3></div><button type="button" onClick={() => setStudentDetail(null)} aria-label="Close student profile" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border-2 border-kcs-blue-900 bg-kcs-gold-400 p-2 text-kcs-blue-950 shadow-lg ring-2 ring-white transition hover:scale-105 hover:bg-kcs-gold-300 dark:border-white dark:bg-kcs-gold-300 dark:text-kcs-blue-950 dark:ring-kcs-blue-700"><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Class', canonicalClassLabel(studentDetail.grade, studentDetail.section)], ['Average', studentDetail.average == null ? 'N/A' : `${studentDetail.average}%`], ['Attendance', studentDetail.attendance == null ? 'N/A' : `${studentDetail.attendance}%`], ['Rank', studentDetail.rank == null ? 'N/A' : `#${studentDetail.rank}`], ['Risk', studentDetail.risk ?? 'unassessed'], ['Advisor', studentDetail.advisor ?? 'Pending']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><p className="mt-4 rounded-xl bg-kcs-blue-50 p-4 text-sm dark:bg-kcs-blue-800/30 dark:text-white">{studentDetail.aiInsight}</p></div></div>}
-        </div>
-      )}
+      {segment === 'students' && <TeacherStudentDirectory key={user?.id} students={officialStudentCatalog} myIds={teacherStudents.map(s=>s.id)} homeroomIds={homeroomClassName ? supportStudentPool.filter(s=>toClassKey(canonicalClassLabel(s.grade,s.section))===toClassKey(homeroomClassName)).map(s=>s.id) : []} followupIds={studentFollowupIds} status={registryStatus} onExport={exportWorkspacePdf} onImport={importStudent} onVisible={rows=>{studentExportRef.current=rows as RegistryStudent[]}}/>}
 
       {segment === 'attendance' && (
         <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
@@ -2118,7 +2100,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       )}
 
       {segment === 'assignments' && (
-        <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+          <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <div className={panelClass}>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Create assignment</h3>
             <div className="mt-4 grid gap-3">
@@ -2462,9 +2444,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       )}
 
       {segment === 'reports' && (
-        <div className="space-y-6">
+        <div className="space-y-5" data-teacher-activity-summary>
           <div className={panelClass}>
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="nexus-activity-report-heading flex flex-col gap-4 rounded-2xl p-5 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">{tr('Rapport opérationnel vérifié', 'Verified operational report')}</p>
                 <h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{tr('Activités réelles de la classe et suivi des élèves', 'Real class activity and learner follow-up')}</h3>
@@ -2497,7 +2479,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </label>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="mt-5 grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-6">
               {[
                 [tr('Élèves', 'Learners'), reportPreview.students],
                 [tr('Activités', 'Activities'), reportPreview.activitiesPublished],
@@ -2538,12 +2520,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
                 {submittedTeacherReports.slice(0, 6).map((report: any) => <article key={String(report.id)} className="rounded-xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/60">
                   <div className="flex items-start justify-between gap-3"><div><p className="font-bold text-kcs-blue-900 dark:text-white">{report.period} · {report.scopeLabel ?? tr('Tous les cours', 'All courses')}</p><p className="text-xs text-gray-500">{report.dateFrom ?? ''} — {report.dateTo ?? ''}</p></div><span className="badge-blue text-xs">{String(report.status ?? 'Saved')}</span></div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-gray-600 dark:text-gray-300"><span>{report.students ?? 0} {tr('élèves', 'learners')}</span><span>{report.activitiesPublished ?? 0} {tr('activités', 'activities')}</span><span>{report.learnersRequiringFollowUp ?? 0} {tr('à suivre', 'follow-up')}</span></div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-gray-600 dark:text-gray-300"><span>{report.students ?? 0} {tr('élèves', 'learners')}</span><span>{report.activitiesPublished ?? 0} {tr('activités', 'activities')}</span><span>{report.learnersRequiringFollowUp ?? 0} {tr('à suivre', 'follow-up')}</span></div><button type="button" onClick={()=>exportClassActivityReport(report,language)} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-sky-200 px-3 py-2 text-xs font-bold text-sky-900 dark:border-sky-700 dark:text-sky-100"><Download size={15}/>{tr('Ouvrir / télécharger le PDF','Open / download PDF')}</button>
                 </article>)}
               </div>
             </div>}
           </div>
           <div className={panelClass}><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Rapports IA et recommandations des élèves', 'AI student reports and recommendations')}</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Seuls les élèves du cours ou du périmètre sélectionné ci-dessus apparaissent ici.', 'Only learners from the course or scope selected above appear here.')}</p></div><span className="w-fit rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">{reportScopedStudents.length} {tr('élève(s)', 'learner(s)')}</span></div>{reportScopedStudents.length ? <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{reportScopedStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p><p className="mt-1 text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} · {tr('Moyenne', 'Average')} {student.average ?? 'N/A'} · {tr('Présence', 'Attendance')} {student.attendance ?? 'N/A'}%</p></button>)}</div> : <p className="mt-4 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">{tr('Aucun élève n’est inscrit dans le périmètre sélectionné.', 'No learner is enrolled in the selected scope.')}</p>}</div>
+          <details className="nexus-workspace-card overflow-hidden"><summary className="cursor-pointer px-5 py-4 text-sm font-bold">{tr('Brouillons individuels de suivi et de bulletin','Individual follow-up and report-card drafts')}</summary><div className="border-t border-sky-100 p-4 dark:border-sky-800">
           <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <div className={panelClass} data-teacher-save-region>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Brouillon du bulletin', 'Draft report card')}</h3>
@@ -2575,7 +2558,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           ))}
           </div>
           </div>
-          {selectedAiStudent && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">AI learner report</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedAiStudent.name}</h3></div><button onClick={() => setSelectedAiStudent(null)}><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Average', `${selectedAiStudent.average ?? 'N/A'}%`], ['Attendance', `${selectedAiStudent.attendance ?? 'N/A'}%`], ['Risk', selectedAiStudent.risk ?? 'Not classified']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><div className="mt-4 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">AI analysis</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{selectedAiStudent.aiInsight || `${selectedAiStudent.name} requires continued monitoring based on academic performance and attendance trends.`}</p><p className="mt-3 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">Recommendation: reinforce {selectedAiStudent.weaknesses?.join(', ') || 'the lowest-performing competencies'}, maintain family follow-up, and review progress within two weeks.</p></div><button type="button" onClick={exportWorkspacePdf} className={`${compactButton} mt-5`}><Download size={16}/> Print / Download official PDF</button></div></div>}
+          </div></details>
+          {selectedAiStudent && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">AI learner report</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedAiStudent.name}</h3></div><button onClick={() => setSelectedAiStudent(null)}><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Average', `${selectedAiStudent.average ?? 'N/A'}%`], ['Attendance', `${selectedAiStudent.attendance ?? 'N/A'}%`], ['Risk', selectedAiStudent.risk ?? 'Not classified']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><div className="mt-4 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">AI analysis</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{selectedAiStudent.aiInsight || `${selectedAiStudent.name} requires continued monitoring based on academic performance and attendance trends.`}</p><p className="mt-3 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">Recommendation: reinforce {selectedAiStudent.weaknesses?.join(', ') || 'the lowest-performing competencies'}, maintain family follow-up, and review progress within two weeks.</p></div><button type="button" onClick={()=>exportLearnerFollowup(selectedAiStudent,[user?.lastName,user?.middleName,user?.firstName].filter(Boolean).join(' '),language)} className={`${compactButton} mt-5`}><Download size={16}/> Print / Download official PDF</button></div></div>}
         </div>
       )}
 

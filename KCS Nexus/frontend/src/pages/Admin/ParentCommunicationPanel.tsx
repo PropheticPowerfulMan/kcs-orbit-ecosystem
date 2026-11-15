@@ -361,7 +361,9 @@ export default function ParentCommunicationPanel() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-communications-workspace>
+      <header className="nexus-workspace-heading"><Mail size={34}/><div><span className="nexus-workspace-kicker">KCS ORBIT · {language==='fr'?'Communication institutionnelle':'Institutional communications'}</span><h2>{language==='fr'?'Un message précis, les bons destinataires':'A precise message, the right recipients'}</h2><p className="mt-2 max-w-3xl text-sm">{language==='fr'?'Ciblez les familles et les entités, préparez votre message et consultez l’historique des échanges et de leur livraison.':'Target families and identities, prepare your message and review correspondence and delivery history.'}</p></div></header>
+      <nav className="flex flex-wrap gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950" aria-label={language==='fr'?'Étapes de communication':'Communication steps'}>{[['communication-recipients',language==='fr'?'1 · Destinataires':'1 · Recipients'],['communication-compose',language==='fr'?'2 · Rédaction et envoi':'2 · Compose and send'],['communication-history',language==='fr'?'3 · Historique et suivi':'3 · History and follow-up']].map(([id,label])=><button key={id} type="button" onClick={()=>document.getElementById(id)?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})} className="rounded-xl border border-sky-200 bg-sky-100 px-4 py-2 text-xs font-bold text-sky-950 dark:border-sky-700 dark:bg-sky-900 dark:text-sky-100">{label}</button>)}</nav>
       {notice ? <div className="rounded-2xl border border-kcs-blue-200 bg-kcs-blue-50 p-4 text-sm font-semibold text-kcs-blue-800 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60 dark:text-kcs-blue-100">{notice}</div> : null}
       {usingCachedData ? <div className="flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
         <span className="flex items-center gap-2"><AlertTriangle size={18} />{c.cachedData}</span>
@@ -370,8 +372,8 @@ export default function ParentCommunicationPanel() {
         </button>
       </div> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.05fr_.95fr]">
-        <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)]">
+        <section id="communication-recipients" data-communications-step className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-800 dark:bg-kcs-blue-900/50">
           <div className="flex justify-between gap-3">
             <div><p className="text-xs font-bold uppercase text-kcs-gold-600">{c.recipients}</p><h2 className="text-2xl font-bold dark:text-white">{c.families}</h2></div>
             <b className="text-kcs-blue-700 dark:text-white">{selectedParents.length} {c.selected}</b>
@@ -410,7 +412,7 @@ export default function ParentCommunicationPanel() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+        <section id="communication-compose" data-communications-step className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-800 dark:bg-kcs-blue-900/50">
           <p className="text-xs font-bold uppercase text-kcs-gold-600">{c.official}</p>
           <h2 className="text-2xl font-bold dark:text-white">{c.channels}</h2>
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -425,7 +427,7 @@ export default function ParentCommunicationPanel() {
         </section>
       </div>
 
-      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+      <section id="communication-history" data-communications-step className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-800 dark:bg-kcs-blue-900/50">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div><p className="text-xs font-bold uppercase text-kcs-gold-600">{c.history}</p><h2 className="text-2xl font-bold dark:text-white">{c.oldMessages}</h2><p className="mt-1 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-200">{c.archiveCount(history.length, historyTotal || history.length)}</p></div>
           <div className="grid w-full gap-2 sm:grid-cols-2 xl:max-w-4xl xl:grid-cols-3">

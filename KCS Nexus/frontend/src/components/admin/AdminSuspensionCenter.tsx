@@ -648,7 +648,7 @@ function SuspensionWorkspace({
             );
           })}
           {!records.length ? (
-            <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500 dark:text-slate-300">
+            <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600 dark:border-sky-800 dark:bg-sky-950 dark:text-slate-200">
               {tr("Aucune suspension enregistrée.", "No suspension recorded.")}
             </p>
           ) : null}
@@ -870,7 +870,7 @@ function DismissalWorkspace({
             </article>
           ))}
           {!archives.length ? (
-            <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500 dark:text-slate-300">
+            <p className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600 dark:border-sky-800 dark:bg-sky-950 dark:text-slate-200">
               {tr(
                 "Aucun dossier de renvoi archivé.",
                 "No dismissed record archived.",

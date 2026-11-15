@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DiagnosticDifficulty, DiagnosticQuestionType } from '@prisma/client'
-import { buildLocalInteractiveAssignmentDraft, gradeInteractiveAssignment } from './assignmentAssessment.service.js'
+import { generateInteractiveAssignmentDraft, gradeSubjectiveAssignmentAnswers, buildLocalInteractiveAssignmentDraft, gradeInteractiveAssignment } from './assignmentAssessment.service.js'
 
 const questions = [
   { id: 'q1', questionText: '2 + 2', questionType: DiagnosticQuestionType.NUMERIC, options: null, correctAnswer: 4, points: 2, difficulty: DiagnosticDifficulty.EASY, competencyTag: 'Addition', explanation: '2 + 2 = 4.' },
@@ -33,3 +33,9 @@ test('local assessment engine creates a complete teacher-reviewable draft', () =
   assert.equal(draft.source, 'kcs-nexus:local-assessment-engine')
   assert.ok(draft.questions.every((question) => question.questionText && question.correctAnswer !== ''))
 })
+
+test('missing AI provider does not invent an assessment or essay grade',async()=>{
+ assert.equal(await generateInteractiveAssignmentDraft({courseName:'Algebra',grade:'Grade 11',topic:'quadratics',questionCount:3,difficulty:DiagnosticDifficulty.MEDIUM,language:'en',questionTypes:[DiagnosticQuestionType.NUMERIC]}),null);
+ assert.deepEqual(await gradeSubjectiveAssignmentAnswers({questions:[{...questions[0],questionType:DiagnosticQuestionType.ESSAY_OPTIONAL}],answers:[{questionId:'q1',answer:'because therefore evidence '.repeat(30)}]}),[]);
+});
+test('invalid subjective score never becomes a non-finite official result',()=>{const result=gradeInteractiveAssignment({questions:[{...questions[0],questionType:DiagnosticQuestionType.ESSAY_OPTIONAL}],answers:[{questionId:'q1',answer:'My reasoning'}],subjectiveGrades:[{questionId:'q1',pointsAwarded:NaN,feedback:'Invalid'}]});assert.equal(result.pendingTeacherReview,true);assert.equal(result.score,0)});

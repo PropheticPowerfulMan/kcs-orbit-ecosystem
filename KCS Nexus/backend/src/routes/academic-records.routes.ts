@@ -1,3 +1,5 @@
+import {coursePeriodStates} from '../services/courseTeachingPeriods.service.js'
+import {courseMatchesPeriod} from '../utils/courseTeachingPeriods.js'
 import {reportCardSubmissionHistories,emptyReportCardSubmissionHistory} from '../services/reportCardSubmissionHistory.js'
 import {loadOfficialTranscript} from '../services/officialTranscript.service.js'
 import {officialTranscriptDocument} from '../utils/officialTranscriptPdf.js'
@@ -120,7 +122,9 @@ const homeroomReportContext=async(userId:string,studentId:string,academicYear:st
  const resultByCourse=aggregateReportCardResults(submittedGrades,academicYear,term)
  const latestGradeByCourse=new Map<string,(typeof submittedGrades)[number]>()
  for(const grade of submittedGrades)if(!latestGradeByCourse.has(grade.courseId))latestGradeByCourse.set(grade.courseId,grade)
- const uniqueEnrollments=[...student.enrollments.reduce((bySubject,enrollment)=>{
+ const teachingPeriods=await coursePeriodStates(student.enrollments.map(e=>e.courseId),db)
+ const eligibleEnrollments=student.enrollments.filter(e=>resultByCourse.has(studentId+':'+e.courseId)||courseMatchesPeriod(teachingPeriods.get(e.courseId)?.periods||[],academicYear,term))
+ const uniqueEnrollments=[...eligibleEnrollments.reduce((bySubject,enrollment)=>{
   const subjectKey=[enrollment.course.name,enrollment.course.grade,enrollment.course.teacherId].join('|').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()
   const current=bySubject.get(subjectKey)
   const currentGrade=current?resultByCourse.get(studentId+':'+current.courseId):null
@@ -416,8 +420,10 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
  const resultByEnrollment=aggregateReportCardResults(submittedGrades,cycle.academicYear,cycle.term)
  const sourceGradeByEnrollment=new Map<string,(typeof submittedGrades)[number]>()
  for(const item of submittedGrades){const key=item.studentId+':'+item.courseId;if(!sourceGradeByEnrollment.has(key))sourceGradeByEnrollment.set(key,item)}
+ const teachingPeriods=await coursePeriodStates(students.flatMap(s=>s.enrollments.map(e=>e.course.id)))
  const learners=students.map(student=>{
-  const uniqueEnrollments=[...student.enrollments.reduce((bySubject,enrollment)=>{
+  const eligibleEnrollments=student.enrollments.filter(e=>resultByEnrollment.has(student.id+':'+e.course.id)||courseMatchesPeriod(teachingPeriods.get(e.course.id)?.periods||[],cycle.academicYear,cycle.term))
+  const uniqueEnrollments=[...eligibleEnrollments.reduce((bySubject,enrollment)=>{
    const subjectKey=[
     enrollment.course.name,
     enrollment.course.grade,

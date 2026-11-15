@@ -17,7 +17,7 @@ export type InteractiveAnswerInput = { questionId: string; answer: unknown }
 export type SubjectiveGrade = { questionId: string; pointsAwarded: number; feedback: string }
 
 const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
-const normalize = (value: unknown) => String(value ?? '').trim().toLocaleLowerCase()
+const normalize = (value: unknown) => String(value ?? '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase()
 const unwrap = (value: Prisma.JsonValue | null) => value && typeof value === 'object' && !Array.isArray(value) && 'value' in value
   ? (value as { value?: unknown }).value
   : value
@@ -54,7 +54,7 @@ export function gradeInteractiveAssignment(input: {
     let feedback = unanswered ? 'No answer was submitted.' : question.explanation || 'Review this competency.'
 
     if (!unanswered && subjective) {
-      if (aiGrade) {
+      if (aiGrade && Number.isFinite(aiGrade.pointsAwarded)) {
         pointsAwarded = Math.max(0, Math.min(question.points, round(aiGrade.pointsAwarded)))
         isCorrect = pointsAwarded >= question.points * 0.6
         feedback = aiGrade.feedback
@@ -151,7 +151,7 @@ export async function generateInteractiveAssignmentDraft(input: {
   questionTypes: DiagnosticQuestionType[]
 }) {
   const { client, model } = await openAiClient()
-  if (!client) return buildLocalInteractiveAssignmentDraft(input)
+  if (!client) return null
   try {
     const completion = await client.chat.completions.create({
     model,
@@ -179,9 +179,13 @@ export async function generateInteractiveAssignmentDraft(input: {
     ],
   })
     const content = completion.choices[0]?.message?.content
-    if (!content) return buildLocalInteractiveAssignmentDraft(input)
+    if (!content) return null
     const parsed = generatedAssignmentSchema.parse(jsonFrom(content))
+    if(parsed.questions.length!==input.questionCount || new Set(parsed.questions.map(q=>normalize(q.questionText))).size!==parsed.questions.length)throw new Error('Invalid question count or duplicate prompts');
     for (const question of parsed.questions) {
+      if(!input.questionTypes.includes(question.questionType))throw new Error('Unrequested question type');
+      if(question.questionType===DiagnosticQuestionType.NUMERIC&&!Number.isFinite(Number(question.correctAnswer)))throw new Error('Invalid numerical answer');
+      if(question.questionType===DiagnosticQuestionType.TRUE_FALSE&&!['true','false'].includes(normalize(question.correctAnswer)))throw new Error('Invalid true/false answer');
       if (question.questionType === DiagnosticQuestionType.MULTIPLE_CHOICE) {
         if (!question.options || question.options.length < 2) throw new Error('AI returned a multiple-choice question without enough options')
         if (!question.options.some((option) => normalize(option) === normalize(question.correctAnswer))) throw new Error('AI returned a multiple-choice answer outside its options')
@@ -189,8 +193,8 @@ export async function generateInteractiveAssignmentDraft(input: {
     }
     return { ...parsed, source: `openai:${model}` }
   } catch (error) {
-    console.warn('[assignment-ai] OpenAI draft unavailable; using the local KCS assessment engine.', error)
-    return buildLocalInteractiveAssignmentDraft(input)
+    console.warn('[assignment-ai] Provider draft unavailable; manual composition remains available.')
+    return null
   }
 }
 
@@ -198,30 +202,9 @@ export async function gradeSubjectiveAssignmentAnswers(input: {
   questions: InteractiveQuestion[]
   answers: InteractiveAnswerInput[]
 }) {
-  const localGrades = () => {
-    const answerMap = new Map(input.answers.map((item) => [item.questionId, item.answer]))
-    const meaningfulTokens = (value: unknown) => normalize(value).split(/[^\p{L}\p{N}]+/u).filter((token) => token.length >= 4)
-    return input.questions.map((question) => {
-      const answer = String(answerMap.get(question.id) ?? '').trim()
-      if (!answer) return { questionId: question.id, pointsAwarded: 0, feedback: 'No response was submitted. Teacher review remains available.' }
-      const words = answer.split(/\s+/).filter(Boolean)
-      const rubricTokens = [...new Set(meaningfulTokens(unwrap(question.correctAnswer)))]
-      const answerTokens = new Set(meaningfulTokens(answer))
-      const coverage = rubricTokens.length ? rubricTokens.filter((token) => answerTokens.has(token)).length / rubricTokens.length : 0.5
-      const effort = Math.min(1, words.length / 90)
-      const structured = /(?:because|therefore|for example|evidence|conclusion|parce que|donc|par exemple|preuve|conclusion)/i.test(answer) ? 1 : 0.45
-      const ratio = Math.min(1, Math.max(0.1, effort * 0.35 + coverage * 0.45 + structured * 0.2))
-      const pointsAwarded = round(question.points * ratio)
-      return {
-        questionId: question.id,
-        pointsAwarded,
-        feedback: `KCS provisional rubric score: effort ${Math.round(effort * 100)}%, rubric coverage ${Math.round(coverage * 100)}%, structure ${Math.round(structured * 100)}%. The teacher may revise this score before Gradebook transfer.`,
-      }
-    })
-  }
   const { client, model } = await openAiClient()
   if (!input.questions.length) return []
-  if (!client) return localGrades()
+  if (!client) return []
   const answerMap = new Map(input.answers.map((item) => [item.questionId, item.answer]))
   try {
     const completion = await client.chat.completions.create({
@@ -244,11 +227,14 @@ export async function gradeSubjectiveAssignmentAnswers(input: {
       ],
     })
     const content = completion.choices[0]?.message?.content
-    if (!content) return localGrades()
+    if (!content) return []
     const schema = z.object({ grades: z.array(z.object({ questionId: z.string(), pointsAwarded: z.number(), feedback: z.string().min(1).max(2000) })) })
-    return schema.parse(jsonFrom(content)).grades
+    const grades=schema.parse(jsonFrom(content)).grades;
+    const known=new Map(input.questions.map(q=>[q.id,q]));
+    if(new Set(grades.map(g=>g.questionId)).size!==grades.length||grades.some(g=>!known.has(g.questionId)||!Number.isFinite(g.pointsAwarded)||g.pointsAwarded<0||g.pointsAwarded>known.get(g.questionId)!.points))return [];
+    return grades
   } catch (error) {
-    console.warn('[assignment-ai] Subjective grading unavailable; using the auditable local rubric engine.', error)
-    return localGrades()
+    console.warn('[assignment-ai] Provider grading unavailable; open responses require teacher review.')
+    return []
   }
 }

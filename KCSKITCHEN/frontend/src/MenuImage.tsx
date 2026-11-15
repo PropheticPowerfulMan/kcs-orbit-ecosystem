@@ -1,0 +1,3 @@
+import variants from './menuImageVariants.json'
+type Props={src:string;alt:string;priority?:boolean}
+export default function MenuImage({src,alt,priority=false}:Props){const image=(variants as Record<string,{sources:Array<{src:string;width:number}>;width:number;height:number}>)[src];return <picture className="kitchen-menu-picture">{image&&<source type="image/webp" srcSet={image.sources.map(v=>`${v.src} ${v.width}w`).join(', ')} sizes="(max-width:600px) calc(50vw - 32px), (max-width:1000px) 30vw, 280px"/>}<img src={src} alt={alt} width={image?.width||640} height={image?.height||480} loading={priority?'eager':'lazy'} decoding="async" fetchPriority={priority?'high':'auto'}/></picture>}
