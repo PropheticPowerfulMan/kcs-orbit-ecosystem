@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link,useParams } from 'react-router-dom'
 import { motion, useInView } from 'framer-motion'
 import { Calendar, ArrowRight, Clock, Search } from 'lucide-react'
 import SearchField from '@/components/shared/SearchField'
@@ -110,6 +110,7 @@ const eventTypeColors: Record<string, string> = {
 }
 
 const NewsPage = () => {
+  const {id:articleKey}=useParams<{id:string}>()
   const language = useUIStore((state) => state.language)
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -158,6 +159,9 @@ const NewsPage = () => {
   })
 
   const featured = allPosts[0]
+
+  const article = livePosts.find(post=>post.id===articleKey||post.slug===articleKey)
+  if(articleKey)return <div className="min-h-[65vh] bg-sky-50 px-4 pb-16 pt-28 text-kcs-blue-950 dark:bg-kcs-blue-950 dark:text-sky-50"><article className="mx-auto max-w-5xl overflow-hidden rounded-3xl border border-sky-200 bg-sky-50 shadow-lg dark:border-sky-800 dark:bg-[#0b2b43]" data-public-news-article><div className="p-5 sm:p-9"><Link to="/news" className="inline-flex rounded-xl border border-sky-300 px-4 py-2 text-sm font-bold text-sky-800 dark:border-sky-700 dark:text-cyan-200">← {language==='fr'?'Retour aux actualités':'Back to news'}</Link>{loading?<p className="py-12">{language==='fr'?'Chargement de l’article…':'Loading article…'}</p>:article?<><p className="mt-7 text-xs font-bold uppercase tracking-widest text-sky-700 dark:text-cyan-200">KCS · {language==='fr'?'Publications officielles':'Official publications'}</p><h1 className="mt-3 font-display text-2xl font-bold leading-tight sm:text-4xl">{article.title}</h1><p className="mt-4 text-sm text-slate-500 dark:text-sky-200">{new Date(article.publishedAt||article.createdAt).toLocaleDateString(language==='fr'?'fr-FR':'en-US',{dateStyle:'long'})} · {[article.author?.lastName,article.author?.firstName].filter(Boolean).join(' ')||'KCS Administration'}</p>{article.coverImage&&<img src={article.coverImage} alt={article.title} className="mt-7 max-h-[480px] w-full rounded-2xl object-cover"/>}<p className="mt-7 border-l-4 border-cyan-500 pl-5 text-base font-semibold leading-7 text-sky-900 dark:text-sky-100">{article.excerpt}</p><div className="mt-7 whitespace-pre-wrap break-words text-sm leading-7 text-slate-700 dark:text-sky-100 sm:text-base" data-news-full-content>{article.content}</div></>:<div className="py-12"><h1 className="text-2xl font-bold">{language==='fr'?'Article indisponible':'Article unavailable'}</h1><p className="mt-3 text-sm">{language==='fr'?'Il a été retiré ou la connexion n’a pas permis son chargement. Retournez à la liste des actualités.':'It has been removed or could not be loaded. Return to the news list.'}</p></div>}</div></article></div>
 
   return (
     <div className="pt-20">
