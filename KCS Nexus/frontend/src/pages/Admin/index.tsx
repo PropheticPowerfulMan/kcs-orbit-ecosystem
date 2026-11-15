@@ -1,3 +1,4 @@
+import '@/components/admin/adminOverview.css'
 import { confirmPortalAction, promptPortalAction } from '@/utils/portalActionDialogs'
 import RegistryRecordBanner, { useRegistryDialogFocus } from '@/components/admin/RegistryRecordBanner'
 import PeopleRegistryHeader from '@/components/admin/PeopleRegistryHeader'
@@ -3629,7 +3630,6 @@ const AdminSectionView = ({
   if (segment === 'settings') {
     return (
       <div className="space-y-6">
-        <AcademicCalendarSettings />
         <AccountSettingsPanel roleLabel="Compte super administrateur" />
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -3670,6 +3670,7 @@ const AdminDashboard = () => {
   const activeSegment = getAdminSegment(location.pathname)
   const [officialRoster, setOfficialRoster] = useState<AdminStudentRecord[]>(readStoredRoster)
   const [admissionRequests, setAdmissionRequests] = useState<AdminAdmissionRequest[]>(readStoredAdmissions)
+  const [dashboardTab,setDashboardTab]=useState<'overview'|'operations'|'governance'|'community'>('overview')
   const [dashboardFinance, setDashboardFinance] = useState<EduPayFinanceSummary | null>(null)
   const [dashboardDirectory, setDashboardDirectory] = useState<SharedDirectoryPayload | null>(null)
   const [dashboardOverview, setDashboardOverview] = useState<any>(null)
@@ -3807,15 +3808,10 @@ const AdminDashboard = () => {
             activeSegment === 'reports' ? <AdminReportsHub administrativeReports={sectionView}/> : sectionView
           ) : (
             <>
-          <PortalSectionPanel />
-          <ShiningStudentWeekWidget />
-          <SuggestionBox />
-          <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">Super Admin quick actions</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">Communication and reporting</h2></div><div className="grid grid-cols-3 gap-2"><button type="button" onClick={openEmailAction} className={`${adminButton} flex items-center justify-center gap-2`}><Mail size={16}/> Email</button><button type="button" onClick={openSmsAction} className={`${adminButton} flex items-center justify-center gap-2`}><Phone size={16}/> SMS</button><button type="button" onClick={() => { exportAdminReport('executive', 'weekly', 'pdf', officialRoster, admissionRequests); setDashboardAction('The official weekly Super Admin report was generated.') }} className={`${adminButton} flex items-center justify-center gap-2`}><FileSpreadsheet size={16}/> Report</button></div></div>
-            {dashboardAction && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{dashboardAction}</p>}
-          </section>
-
-          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <section data-admin-overview className="space-y-4">
+            <nav role="tablist" aria-label={language==='fr'?'Rubriques du tableau de bord':'Dashboard sections'} className="admin-overview-tabs">{([['overview',language==='fr'?'Vue d’ensemble':'Overview'],['operations',language==='fr'?'Études et opérations':'Academics and operations'],['governance',language==='fr'?'Pilotage et contrôles':'Governance and controls'],['community',language==='fr'?'Vie de la communauté':'Community']] as const).map(([key,label])=><button type="button" key={key} role="tab" id={'admin-tab-'+key} aria-controls={'admin-panel-'+key} aria-selected={dashboardTab===key} tabIndex={dashboardTab===key?0:-1} onClick={()=>setDashboardTab(key)} onKeyDown={event=>{const tabs=Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]')),index=tabs.indexOf(event.currentTarget);let next=-1;if(event.key==='ArrowRight')next=(index+1)%tabs.length;if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;if(event.key==='Home')next=0;if(event.key==='End')next=tabs.length-1;if(next>=0){event.preventDefault();tabs[next].click();tabs[next].focus()}}}><span className="admin-tab-dot" aria-hidden="true"/>{label}</button>)}</nav>
+            <div id="admin-panel-overview" role="tabpanel" aria-labelledby="admin-tab-overview" hidden={dashboardTab!=='overview'} className="space-y-4">
+          <div className="admin-summary-metrics grid grid-cols-2 gap-3 lg:grid-cols-4">
             {[
               { label: 'Official Registry', value: String(dashboardDirectory?.counts?.students ?? officialRoster.length), icon: GraduationCap, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300', sub: 'students controlled by Super Admin' },
               { label: 'School Classes', value: String(new Set(officialRoster.map((student) => formatClassName(student.grade, student.section)).filter(Boolean)).size || dashboardOverview?.stats?.classes || 0), icon: BookOpen, tone: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300', sub: 'K3 to Grade 12' },
@@ -3831,7 +3827,7 @@ const AdminDashboard = () => {
                   key={item.label}
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"
+                  className="admin-summary-metric rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"
                 >
                   <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${item.tone}`}>
                     <Icon size={18} />
@@ -3844,6 +3840,34 @@ const AdminDashboard = () => {
             })}
           </div>
 
+          <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">{language==='fr'?'Raccourcis institutionnels':'Institutional shortcuts'}</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{language==='fr'?'Communiquer et rendre compte':'Communications and reporting'}</h2></div><div className="grid grid-cols-3 gap-2"><button type="button" onClick={openEmailAction} className={`${adminButton} flex items-center justify-center gap-2`}><Mail size={16}/> Email</button><button type="button" onClick={openSmsAction} className={`${adminButton} flex items-center justify-center gap-2`}><Phone size={16}/> SMS</button><button type="button" onClick={() => { exportAdminReport('executive', 'weekly', 'pdf', officialRoster, admissionRequests); setDashboardAction('The official weekly Super Admin report was generated.') }} className={`${adminButton} flex items-center justify-center gap-2`}><FileSpreadsheet size={16}/> Report</button></div></div>
+            {dashboardAction && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{dashboardAction}</p>}
+          </section>
+
+          <div className="rounded-2xl border border-gray-100 bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-6 text-white dark:border-kcs-blue-800">
+            <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
+              <div>
+                <p className="mb-2 text-sm font-semibold text-kcs-gold-300">Operational Pulse</p>
+                <h2 className="font-display text-2xl font-bold">
+                  {hasOperationalData
+                    ? 'Operational indicators are calculated from the current official registry.'
+                    : 'No operational data is available yet. The indicators will populate after the first registrations.'}
+                </h2>
+              </div>
+              <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-5">
+                {dashboardRecentActivity.map((item: string) => (
+                  <div key={item} className="flex items-start gap-3 text-sm text-kcs-blue-100">
+                    <ArrowUpRight size={16} className="mt-0.5 flex-shrink-0 text-kcs-gold-300" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+            </div>
+            <div id="admin-panel-operations" role="tabpanel" aria-labelledby="admin-tab-operations" hidden={dashboardTab!=='operations'} className="space-y-4">
           <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
@@ -3984,27 +4008,8 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-6 text-white dark:border-kcs-blue-800">
-            <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
-              <div>
-                <p className="mb-2 text-sm font-semibold text-kcs-gold-300">Operational Pulse</p>
-                <h2 className="font-display text-2xl font-bold">
-                  {hasOperationalData
-                    ? 'Operational indicators are calculated from the current official registry.'
-                    : 'No operational data is available yet. The indicators will populate after the first registrations.'}
-                </h2>
-              </div>
-              <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-5">
-                {dashboardRecentActivity.map((item: string) => (
-                  <div key={item} className="flex items-start gap-3 text-sm text-kcs-blue-100">
-                    <ArrowUpRight size={16} className="mt-0.5 flex-shrink-0 text-kcs-gold-300" />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
             </div>
-          </div>
-
+            <div id="admin-panel-governance" role="tabpanel" aria-labelledby="admin-tab-governance" hidden={dashboardTab!=='governance'} className="space-y-4">
           <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
@@ -4210,6 +4215,13 @@ const AdminDashboard = () => {
               ))}
             </div>
           </div>
+            </div>
+            <div id="admin-panel-community" role="tabpanel" aria-labelledby="admin-tab-community" hidden={dashboardTab!=='community'} className="space-y-4">
+          <PortalSectionPanel />
+          <ShiningStudentWeekWidget />
+          <SuggestionBox />
+            </div>
+          </section>
           {reportCardControl && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4" role="dialog" aria-modal="true" aria-label="Report card control">
               <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900">

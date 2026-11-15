@@ -94,7 +94,7 @@ const AboutPage = () => {
 
   return (
     <div className="pt-20">
-      <section className="relative overflow-hidden bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-900 to-kcs-blue-800 py-24">
+      <section className="relative overflow-hidden bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-900 to-kcs-blue-800 py-24" data-public-hero>
         <div className="absolute inset-0 dots-bg opacity-10" style={{ backgroundSize: '40px 40px' }} />
         <div className="relative container-custom grid items-center gap-12 lg:grid-cols-[1.05fr_.95fr]">
           <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.75 }}>

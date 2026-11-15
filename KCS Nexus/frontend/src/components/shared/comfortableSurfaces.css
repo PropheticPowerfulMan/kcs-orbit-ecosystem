@@ -58,3 +58,9 @@ html:not(.dark) :is(.portal-shell,.public-site-shell) :is(input,select,textarea)
 [data-communications-workspace] [data-communications-step]{scroll-margin-top:100px}
 @media(max-width:640px){[data-transcript-workspace]>[data-transcript-intro]{padding:18px}[data-gradebook-focus] .nexus-gradebook-focus-heading{padding:10px}.nexus-activity-report-heading button{width:100%}}
 }
+
+/* Text-only navigation on dark dashboard panels needs a readable accent. */
+@media screen {
+.dark .portal-shell :is(a,button).text-kcs-blue-600:not([class*="bg-"]):not(:where([data-official-document] *,[data-report-card-document] *,.report-card-paper *)){color:#96d9fa}
+.dark .portal-shell :is(a,button).text-kcs-blue-600:not([class*="bg-"]):hover{color:#d9f3ff}
+}

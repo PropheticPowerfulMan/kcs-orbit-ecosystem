@@ -54,7 +54,7 @@ const Footer = () => {
   ]
 
   return (
-    <footer className="public-footer bg-kcs-blue-950 dark:bg-gray-950 text-white">
+    <footer data-public-footer className="public-footer bg-kcs-blue-950 dark:bg-gray-950 text-white">
       {/* CTA Banner */}
       <div className="public-footer-cta bg-gradient-to-r from-kcs-blue-700 via-kcs-blue-600 to-kcs-blue-800 py-12">
         <div className="container-custom">

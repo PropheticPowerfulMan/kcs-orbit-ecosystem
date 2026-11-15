@@ -143,7 +143,7 @@ const HomePage = () => {
   return (
     <div className="overflow-x-hidden">
       {/* ── HERO ──────────────────────────────────────────────────────────── */}
-      <section className="relative min-h-screen flex items-center overflow-hidden">
+      <section className="relative min-h-screen flex items-center overflow-hidden" data-public-hero>
         {/* Background */}
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"

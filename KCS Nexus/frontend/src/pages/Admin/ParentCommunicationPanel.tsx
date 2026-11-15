@@ -386,8 +386,8 @@ export default function ParentCommunicationPanel() {
             <div className="mt-3 flex max-h-40 flex-wrap gap-2 overflow-y-auto pr-1">
               {parentAudienceGroups.map((group) => {
                 const active = quickClasses.includes(group.label)
-                return <button type="button" key={group.label} aria-pressed={active} onClick={() => selectQuickAudience(active ? quickClasses.filter((item) => item !== group.label) : [...quickClasses, group.label])} className={'inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ' + (active ? 'border-kcs-gold-500 bg-kcs-gold-300 text-kcs-blue-950 shadow-sm' : 'border-kcs-blue-200 bg-white text-kcs-blue-900 hover:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white')}>
-                  {active ? <CheckSquare size={16}/> : <Square size={16}/>}<span>{group.label}</span><span className={'rounded-full px-2 py-0.5 text-[11px] ' + (active ? 'bg-kcs-blue-950 text-white' : 'bg-kcs-blue-100 text-kcs-blue-800 dark:bg-kcs-blue-700 dark:text-white')}>{group.count}</span>
+                return <button type="button" key={group.label} data-communication-class data-selected={active} aria-pressed={active} onClick={() => selectQuickAudience(active ? quickClasses.filter((item) => item !== group.label) : [...quickClasses, group.label])} className={'inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ' + (active ? 'border-kcs-gold-500 bg-kcs-gold-300 text-kcs-blue-950 shadow-sm' : 'border-kcs-blue-200 bg-white text-kcs-blue-900 hover:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white')}>
+                  {active ? <CheckSquare size={16}/> : <Square size={16}/>}<span data-class-label>{group.label}</span><span className={'rounded-full px-2 py-0.5 text-[11px] ' + (active ? 'bg-kcs-blue-950 text-white' : 'bg-kcs-blue-100 text-kcs-blue-800 dark:bg-kcs-blue-700 dark:text-white')}>{group.count}</span>
                 </button>
               })}
             </div>

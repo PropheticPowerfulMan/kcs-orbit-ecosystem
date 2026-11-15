@@ -1,3 +1,4 @@
+import {kcsPublicImages} from '@/data/kcsPublicImages'
 import { useState, useRef } from 'react'
 import { motion, useInView } from 'framer-motion'
 import { useForm } from 'react-hook-form'
@@ -81,7 +82,7 @@ const ContactPage = () => {
 
   return (
     <div className="min-h-screen bg-white dark:bg-kcs-blue-950">
-      <section className="relative overflow-hidden bg-kcs-blue-950 pb-16 pt-28 text-white sm:py-24">
+      <section className="relative overflow-hidden bg-kcs-blue-950 pb-16 pt-28 text-white sm:py-24" data-public-hero data-public-photo-hero style={{backgroundImage:`url(${kcsPublicImages.campusGlory})`}}>
         <div className="absolute inset-0 hero-overlay" />
         <div className="absolute inset-0 dots-bg opacity-30" />
         <div className="relative container-custom">

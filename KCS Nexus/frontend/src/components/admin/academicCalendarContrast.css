@@ -1,0 +1,17 @@
+@media screen {
+[data-calendar-settings]{--cal-ink:#173e56;--cal-muted:#456b82;--cal-paper:#e5eff6;--cal-card:#edf4f9;--cal-line:#b9d1e1;background:var(--cal-paper)!important;color:var(--cal-ink)!important}
+.dark [data-calendar-settings]{--cal-ink:#e3f1fa;--cal-muted:#b4cfdf;--cal-paper:#0b2c43;--cal-card:#10374e;--cal-line:#356078}
+[data-calendar-settings] :is(h2,h3,h4,p,label,legend,li,small,strong,b){color:var(--cal-ink)!important;opacity:1}
+[data-calendar-settings] :is(span,svg){color:inherit;opacity:1}
+[data-calendar-settings] .text-slate-500,[data-calendar-settings] .text-slate-600{color:var(--cal-muted)!important}
+[data-calendar-settings] :is(input,select,textarea){background:var(--cal-card)!important;color:var(--cal-ink)!important;border-color:var(--cal-line)!important}
+[data-calendar-settings] button{background:var(--cal-card);color:var(--cal-ink)!important;border-color:var(--cal-line)}
+[data-calendar-settings] button:is(.btn-primary,[class*="bg-kcs-blue-700"],[class*="bg-emerald-700"],[class*="bg-amber-700"]){background:#125878!important;color:#fff!important;border-color:#2c809b!important}
+[data-calendar-settings] button[class*="bg-amber-500"]{background:#edc77f!important;color:#2c3e4b!important}
+[data-calendar-settings] button :is(span,svg){color:inherit!important;opacity:1!important}
+[data-calendar-settings] button:disabled{opacity:.7;cursor:not-allowed}
+[data-calendar-settings] button:has(svg.lucide-trash2),[data-calendar-settings] button:has(svg.lucide-trash-2){background:#fbe3e8!important;border:1px solid #db9aad!important;color:#9f2448!important}
+.dark [data-calendar-settings] button:has(svg.lucide-trash2),.dark [data-calendar-settings] button:has(svg.lucide-trash-2){background:#50283e!important;border-color:#ac6e8a!important;color:#ffe0ea!important}
+[data-calendar-settings] :is(button,input,select):focus-visible{outline:3px solid #2cb2d2;outline-offset:2px}
+[data-calendar-settings] table thead :is(th,span){color:#f3faff!important}
+}

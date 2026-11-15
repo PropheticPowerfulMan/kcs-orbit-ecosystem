@@ -1,3 +1,5 @@
+import DashboardPanels from '@/components/shared/DashboardPanels'
+import {exportTeacherDirectory} from '@/utils/teacherDirectoryDocument'
 import {exportClassActivityReport,exportLearnerFollowup} from '@/utils/classActivityDocuments'
 import TeacherStudentDirectory from '@/components/teacher/TeacherStudentDirectory'
 import CoursePeriodToolbar,{CoursePeriodFields} from '@/components/teacher/CoursePeriodToolbar'
@@ -1193,7 +1195,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     return superAdminStudentPool.map((officialStudent) => {
       const assignedStudent = assignedById.get(officialStudent.id)
         ?? (officialStudent.studentNumber ? assignedByNumber.get(officialStudent.studentNumber.trim().toLowerCase()) : undefined)
-      return assignedStudent ? { ...officialStudent, ...assignedStudent, id: officialStudent.id } : officialStudent
+      return assignedStudent ? { ...officialStudent, ...assignedStudent, id: officialStudent.id, name:officialStudent.name, grade:officialStudent.grade, section:officialStudent.section, studentNumber:officialStudent.studentNumber } : officialStudent
     }).sort((left, right) => {
       const classDifference = compareClassLabels(
         canonicalClassLabel(left.grade, left.section),
@@ -2051,7 +2053,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         </div>
       )}
 
-      {segment === 'students' && <TeacherStudentDirectory key={user?.id} students={officialStudentCatalog} myIds={teacherStudents.map(s=>s.id)} homeroomIds={homeroomClassName ? supportStudentPool.filter(s=>toClassKey(canonicalClassLabel(s.grade,s.section))===toClassKey(homeroomClassName)).map(s=>s.id) : []} followupIds={studentFollowupIds} status={registryStatus} onExport={exportWorkspacePdf} onImport={importStudent} onVisible={rows=>{studentExportRef.current=rows as RegistryStudent[]}}/>}
+      {segment === 'students' && <TeacherStudentDirectory key={user?.id} students={enrollmentStudentCatalog} myIds={teacherStudents.map(s=>s.id)} homeroomIds={homeroomClassName ? supportStudentPool.filter(s=>toClassKey(canonicalClassLabel(s.grade,s.section))===toClassKey(homeroomClassName)).map(s=>s.id) : []} followupIds={studentFollowupIds} status={registryStatus} onExport={(rows,scope)=>void exportTeacherDirectory(rows,[user?.lastName,user?.middleName,user?.firstName].filter(Boolean).join(' '),scope,language)} onImport={importStudent} onVisible={rows=>{studentExportRef.current=rows as RegistryStudent[]}}/>}
 
       {segment === 'attendance' && (
         <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
@@ -2690,6 +2692,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
 const TeacherDashboardHome = () => {
   const location = useLocation()
+  const dashboardLanguage=useUIStore(state=>state.language)
+  const [dashboardTab,setDashboardTab]=useState('overview')
   const [activeAiTool, setActiveAiTool] = useState<TeacherAiTool | null>(null)
   const [aiResult, setAiResult] = useState('')
   const [aiInstruction, setAiInstruction] = useState('')
@@ -2735,7 +2739,7 @@ const TeacherDashboardHome = () => {
   })
   const messages = dashboardMessages.map((message: any) => ({ id: message.id, from: ((message.sender?.firstName ?? '') + ' ' + (message.sender?.lastName ?? '')).trim() || 'KCS Nexus', subject: message.subject, time: new Date(message.createdAt).toLocaleString() }))
   const metricCards = [
-    { label: isHomeroomTeam ? 'Homeroom Students' : 'Course Students', value: String(assignedStudents.length), sub: isHomeroomTeam ? homeroomScope.label + ' · ' + taughtStudents.length + ' taught across all courses' : assignedCourses.length + ' assigned course(s)', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
+    { label: isHomeroomTeam ? 'Homeroom Students' : 'Course Students', value: String(assignedStudents.length), sub: isHomeroomTeam ? (homeroomScope.label || (dashboardLanguage==='fr'?'Classe principale':'Homeroom')) + ' · ' + taughtStudents.length + ' taught across all courses' : assignedCourses.length + ' assigned course(s)', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
     { label: 'Pending Actions', value: String(pendingActions), sub: pendingActions ? 'Submissions to review' : 'No pending action', icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
     { label: 'Risk Alerts', value: String(atRiskStudents.length), sub: atRiskStudents.length ? 'Attendance or GPA signal' : 'No active alert', icon: AlertTriangle, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
     { label: 'Class Average', value: classAverage + '%', sub: assignedGrades.length ? assignedGrades.length + ' registered grades' : 'No registered grade', icon: TrendingUp, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
@@ -2758,6 +2762,7 @@ const TeacherDashboardHome = () => {
   ]
 
   const generateTeacherAi = async (tool: TeacherAiTool, context = '') => {
+    setDashboardTab('teaching')
     setActiveAiTool(tool)
     setAiInstruction(context)
     setAiResult('')
@@ -2782,9 +2787,30 @@ const TeacherDashboardHome = () => {
     return () => window.removeEventListener('kcs:open-teacher-ai-insights', openInsights)
   }, [location.search])
 
-  return (
-    <>
-      <section className="overflow-hidden rounded-2xl border border-kcs-blue-100 bg-white shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950">
+  return (<div data-teacher-home><DashboardPanels id="teacher-dashboard" value={dashboardTab} onChange={setDashboardTab} label={dashboardLanguage==='fr'?'Rubriques du tableau de bord':'Dashboard sections'} items={[
+{key:'overview',label:dashboardLanguage==='fr'?'Vue d’ensemble':'Overview',content:<>      <div className="teacher-home-metrics grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {metricCards.map((item, index) => {
+          const Icon = item.icon
+          return (
+            <motion.div
+              key={item.label}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.04 }}
+              className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"
+            >
+              <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${item.tone}`}>
+                <Icon size={18} />
+              </div>
+              <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{item.value}</p>
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{item.label}</p>
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{item.sub}</p>
+            </motion.div>
+          )
+        })}
+      </div>
+
+      <section className="teacher-home-intro overflow-hidden rounded-2xl border border-kcs-blue-100 bg-white shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950">
         <div className="grid gap-6 p-6 xl:grid-cols-[1.35fr_0.65fr]">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-600 dark:text-kcs-gold-400">AI Teacher Command Center</p>
@@ -2840,29 +2866,72 @@ const TeacherDashboardHome = () => {
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {metricCards.map((item, index) => {
-          const Icon = item.icon
-          return (
-            <motion.div
-              key={item.label}
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.04 }}
-              className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"
-            >
-              <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${item.tone}`}>
-                <Icon size={18} />
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <h2 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
+            <Calendar size={18} className="text-kcs-blue-500" /> Daily And Weekly Schedule
+          </h2>
+          <div className="space-y-3">
+            {todayClasses.map((item: any, index: number) => (
+              <div key={item.time} className={`rounded-xl border p-4 ${index === 0 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20'}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500">{item.time}</p>
+                  <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">{item.students} students</span>
+                </div>
+                <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{item.course}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{item.room} - no conflict detected</p>
               </div>
-              <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{item.value}</p>
-              <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{item.label}</p>
-              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{item.sub}</p>
-            </motion.div>
-          )
-        })}
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
+              <CheckCircle2 size={18} className="text-green-500" /> Action Queue
+            </h2>
+            <Link to="/portal/teacher/assignments" className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">Open tasks</Link>
+          </div>
+          <div className="space-y-3">
+            {gradingQueue.map((task: any) => (
+              <div key={task.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{task.title}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{task.className} - due {task.due}</p>
+                  </div>
+                  <span className="badge-gold text-xs">{task.pending}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
+              <AlertTriangle size={18} className="text-red-500" /> Student Risk Radar
+            </h2>
+            <Link to="/portal/teacher/students" className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">Student profiles</Link>
+          </div>
+          <div className="space-y-3">
+            {studentAlerts.map((alert: any) => (
+              <div key={alert.student} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{alert.student}</p>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${alert.severity === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
+                    {alert.severity}
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300">{alert.note}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+</>},
+{key:'teaching',label:dashboardLanguage==='fr'?'Enseignement et IA':'Teaching and AI',content:<>      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -2930,71 +2999,20 @@ const TeacherDashboardHome = () => {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
-            <Calendar size={18} className="text-kcs-blue-500" /> Daily And Weekly Schedule
-          </h2>
-          <div className="space-y-3">
-            {todayClasses.map((item: any, index: number) => (
-              <div key={item.time} className={`rounded-xl border p-4 ${index === 0 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20'}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500">{item.time}</p>
-                  <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">{item.students} students</span>
-                </div>
-                <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{item.course}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{item.room} - no conflict detected</p>
-              </div>
-            ))}
+      <div className="rounded-2xl border border-gray-100 bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-6 text-white dark:border-kcs-blue-800">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-kcs-gold-300">Next-generation teaching layer</p>
+            <h2 className="font-display text-2xl font-bold">Generate interventions, grade faster, detect risk earlier, and keep families informed.</h2>
           </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
-              <CheckCircle2 size={18} className="text-green-500" /> Action Queue
-            </h2>
-            <Link to="/portal/teacher/assignments" className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">Open tasks</Link>
-          </div>
-          <div className="space-y-3">
-            {gradingQueue.map((task: any) => (
-              <div key={task.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{task.title}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{task.className} - due {task.due}</p>
-                  </div>
-                  <span className="badge-gold text-xs">{task.pending}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
-              <AlertTriangle size={18} className="text-red-500" /> Student Risk Radar
-            </h2>
-            <Link to="/portal/teacher/students" className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">Student profiles</Link>
-          </div>
-          <div className="space-y-3">
-            {studentAlerts.map((alert: any) => (
-              <div key={alert.student} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{alert.student}</p>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${alert.severity === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
-                    {alert.severity}
-                  </span>
-                </div>
-                <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300">{alert.note}</p>
-              </div>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            <Link to="/portal/teacher/grades" className="btn-gold whitespace-nowrap text-sm py-2.5">Open Gradebook</Link>
+            <Link to="/portal/teacher/reports" className="rounded-xl border border-white/20 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10">Build Reports</Link>
           </div>
         </div>
       </div>
-
-      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+</>},
+{key:'sync',label:dashboardLanguage==='fr'?'Messages et suivi':'Messages and follow-up',content:<>      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Ecosystem Sync</h2>
           <div className="space-y-3">
@@ -3052,21 +3070,12 @@ const TeacherDashboardHome = () => {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-100 bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-6 text-white dark:border-kcs-blue-800">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="mb-2 text-sm font-semibold text-kcs-gold-300">Next-generation teaching layer</p>
-            <h2 className="font-display text-2xl font-bold">Generate interventions, grade faster, detect risk earlier, and keep families informed.</h2>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link to="/portal/teacher/grades" className="btn-gold whitespace-nowrap text-sm py-2.5">Open Gradebook</Link>
-            <Link to="/portal/teacher/reports" className="rounded-xl border border-white/20 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10">Build Reports</Link>
-          </div>
-        </div>
-      </div>
-    </>
+</>},
+{key:'community',label:dashboardLanguage==='fr'?'Communauté':'Community',content:<><PortalSectionPanel/><SuggestionBox/></>}
+]} /></div>
   )
 }
+
 
 const TeacherPortal = () => {
   const { user } = useAuthStore()
@@ -3111,8 +3120,6 @@ const TeacherPortal = () => {
 
         <div className="min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6">
           <PublishedCalendarStrip/>
-          {isDashboard && <PortalSectionPanel />}
-          {isDashboard && <SuggestionBox />}
 
           {!isDashboard && (['reports', 'messages', 'discipline'].includes(activeSegment) ? <TeacherReportsHub academicReports={<TeacherSectionView segment="reports"/>} disciplineReports={<TeacherSectionView segment="discipline"/>}/> : <TeacherSectionView segment={activeSegment} />)}
 
