@@ -1,3 +1,4 @@
+import './employeeDirectory.css'
 import {useMemo,useState} from 'react'
 import {ArrowUpRight,Briefcase,Building2,CheckCircle2,Eye,FilterX,KeyRound,LayoutGrid,List,Mail,Phone,Pencil,Plus,RefreshCw,Search,ShieldCheck,Trash2,UserRound,UsersRound} from 'lucide-react'
 import {useUIStore} from '@/store/uiStore'
@@ -28,7 +29,7 @@ export default function EmployeeDirectory({rows,busy,notice,onRefresh,onCreate,o
   <header className="relative overflow-hidden rounded-3xl border border-sky-800 bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-900 to-sky-900 p-5 text-white shadow-lg sm:p-7">
    <UsersRound aria-hidden="true" className="pointer-events-none absolute -right-8 -top-8 size-56 text-sky-300/10"/>
    <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[.18em] text-sky-200"><ShieldCheck size={15}/>{tr('Super Administration · Ressources humaines','Super Administration · People')}</p><h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">{tr('Le personnel KCS','The people behind KCS')}</h2><p className="mt-2 max-w-xl text-sm leading-relaxed text-blue-100">{tr('Un répertoire clair pour retrouver un collaborateur, consulter son dossier et gérer ses accès.','One clear directory to find a colleague, review their profile and manage institutional access.')}</p></div><button type="button" onClick={onCreate} disabled={busy} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm font-black text-kcs-blue-950 shadow-sm transition hover:bg-sky-50 disabled:opacity-60"><Plus size={18}/>{tr('Nouvel employé','New employee')}</button></div>
-   <div data-people-metrics data-metric-count="4" className="relative mt-6">{[
+   <div data-people-metrics data-employee-metrics data-metric-count="4" className="relative mt-6">{[
     [UsersRound,tr('Dossiers du personnel','Staff records'),rows.length],
     [CheckCircle2,tr('En activité','Active employees'),rows.filter(row=>fold(row.employment_status)==='active').length],
     [Briefcase,tr('Enseignants','Teachers'),rows.filter(row=>fold(row.employee_type)==='teacher').length],

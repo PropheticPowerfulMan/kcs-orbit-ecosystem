@@ -22,14 +22,16 @@ export default function AcademicPeriodClosurePanel({
   const { access, loading } = useAcademicPeriodAccess();
   const [selected, setSelected] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [acknowledged,setAcknowledged]=useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [year, setYear] = useState(academicYear);
-  useEffect(() => { setYear(academicYear); setSelected(''); setConfirmation('') }, [academicYear]);
+  useEffect(() => { setYear(academicYear); setSelected(''); setConfirmation('');setAcknowledged(false) }, [academicYear]);
   const years = [...new Set([academicYear, ...(access?.calendars ?? []).map(calendar => calendar.name)])].sort().reverse();
+  const canClose=acknowledged&&confirmation.normalize('NFKC').replace(/[–—−]/g,'-').trim()===year;
   const required = year + " · " + academicPeriodLabel(selected, language);
   const closePeriod = async () => {
-    if (confirmation !== required || busy) return;
+    if (!canClose || busy) return;
     setBusy(true);
     try {
       await academicCalendarAPI.closePeriod(
@@ -39,7 +41,7 @@ export default function AcademicPeriodClosurePanel({
       );
       window.dispatchEvent(new Event("kcs-academic-period-closed"));
       setSelected("");
-      setConfirmation("");
+      setConfirmation("");setAcknowledged(false);setNotice("");
       setNotice(
         tr(
           "La période est clôturée. Les notes, bulletins et présences concernés sont désormais en lecture seule.",
@@ -75,7 +77,7 @@ export default function AcademicPeriodClosurePanel({
           "The SuperAdmin confirms closure of each quarter, semester and year after grades are finalized. Calendar dates never close a period. Closed records remain available read-only.",
         )}
       </p>
-      <label className="mt-4 block max-w-sm text-xs font-bold text-kcs-blue-950 dark:text-white">{tr('Année à examiner ou clôturer', 'Year to review or close')}<select className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-kcs-blue-950 dark:border-amber-700 dark:bg-kcs-blue-950 dark:text-white" value={year} disabled={busy} onChange={event => { setYear(event.target.value); setSelected(''); setConfirmation('') }}>{years.map(value => <option key={value}>{value}</option>)}</select></label>
+      <label className="mt-4 block max-w-sm text-xs font-bold text-kcs-blue-950 dark:text-white">{tr('Année à examiner ou clôturer', 'Year to review or close')}<select className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-kcs-blue-950 dark:border-amber-700 dark:bg-kcs-blue-950 dark:text-white" value={year} disabled={busy} onChange={event => { setYear(event.target.value); setSelected(''); setConfirmation('');setAcknowledged(false) }}>{years.map(value => <option key={value}>{value}</option>)}</select></label>
       {notice && (
         <p
           role="status"
@@ -112,7 +114,7 @@ export default function AcademicPeriodClosurePanel({
                   disabled={loading || readOnly || busy}
                   onClick={() => {
                     setSelected(term);
-                    setConfirmation("");
+                    setConfirmation("");setAcknowledged(false);setNotice("");
                   }}
                   className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
                 >
@@ -159,17 +161,22 @@ export default function AcademicPeriodClosurePanel({
                 )}
               </p>
               <label className="mt-4 grid gap-2 text-sm font-bold text-kcs-blue-950 dark:text-white">
-                {tr("Recopiez la période exacte", "Type the exact period")}
+                {tr("Période à clôturer · saisissez l’année scolaire ci-dessous", "Period to close · enter the school year below")}
                 <strong className="rounded-xl bg-amber-50 p-3 text-xs dark:bg-amber-950/50">
                   {required}
                 </strong>
                 <input
                   value={confirmation}
                   onChange={(event) => setConfirmation(event.target.value)}
+                  aria-label={tr("Année scolaire à confirmer", "School year confirmation")}
+                  placeholder={year}
                   autoComplete="off"
                   className="rounded-xl border border-amber-300 bg-white p-3 text-sm dark:border-amber-700 dark:bg-kcs-blue-900 dark:text-white"
                 />
               </label>
+              <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-kcs-blue-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"><input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={acknowledged} disabled={busy} onChange={event=>setAcknowledged(event.target.checked)}/><span>{tr('Je confirme que les notes et corrections sont finalisées pour cette période et j’autorise leur protection en lecture seule.','I confirm grades and corrections are finalized for this period and authorize read-only protection.')}</span></label>
+              {!canClose&&<p role="status" className="mt-3 text-xs font-semibold text-amber-800 dark:text-amber-200">{tr('Pour activer le bouton : saisissez '+year+' puis cochez la confirmation.','To enable the button: enter '+year+' and tick the confirmation.')}</p>}
+              {notice&&<p role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-900 dark:bg-rose-950 dark:text-rose-100">{notice}</p>}
               <div className="mt-5 flex justify-end gap-2">
                 <button
                   type="button"
@@ -181,7 +188,7 @@ export default function AcademicPeriodClosurePanel({
                 </button>
                 <button
                   type="button"
-                  disabled={busy || confirmation !== required}
+                  disabled={busy || !canClose}
                   onClick={() => void closePeriod()}
                   className="rounded-xl bg-amber-700 px-4 py-2.5 font-bold text-white disabled:opacity-40"
                 >

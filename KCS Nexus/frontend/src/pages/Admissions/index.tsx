@@ -1,3 +1,4 @@
+import {kcsPublicImages} from '@/data/kcsPublicImages'
 import DateSelect from '@/components/shared/DateSelect'
 import { Link } from 'react-router-dom'
 import { useState, useRef } from 'react'
@@ -365,7 +366,7 @@ const AdmissionsPage = () => {
   return (
     <div className="bg-white dark:bg-kcs-blue-950 min-h-screen">
       {/* Hero */}
-      <section className="relative bg-kcs-blue-900 text-white py-24 overflow-hidden">
+      <section className="relative bg-kcs-blue-900 text-white py-24 overflow-hidden" data-public-hero data-public-photo-hero style={{backgroundImage:`url(${kcsPublicImages.elementary})`}}>
         <div className="absolute inset-0 dots-bg opacity-30" />
         <div className="absolute inset-0 hero-overlay" />
         <div className="relative container-custom text-center">

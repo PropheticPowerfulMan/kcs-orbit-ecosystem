@@ -1,3 +1,4 @@
+import './academicCalendarContrast.css'
 import AttendanceCalendarSettings from './AttendanceCalendarSettings'
 import { useAuthStore } from '@/store/authStore'
 import { academicPeriodLabel } from '@/constants/academicPeriods'

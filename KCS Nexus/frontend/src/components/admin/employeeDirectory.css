@@ -1,0 +1,7 @@
+@media screen {
+[data-employee-directory] [data-employee-metrics]>div{background:#164762!important;border-color:#5a8aa45c!important}
+html:not(.dark) [data-employee-directory] [data-employee-metrics]>div{background:#164762!important}
+[data-employee-directory] [data-employee-metrics] :is(span,svg){color:#d7efff!important;opacity:1!important}
+[data-employee-directory] [data-employee-metrics] p{color:#fff!important;opacity:1!important}
+.dark [data-employee-directory] [data-employee-metrics]>div{background:#103c55!important;border-color:#407b965c!important}
+}

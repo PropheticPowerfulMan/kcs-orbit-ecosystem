@@ -69,7 +69,7 @@ const Header = () => {
   ]
 
   return (
-    <header
+    <header data-public-header
       ref={headerRef}
       className="fixed top-0 left-0 right-0 z-50 px-3 pt-3 transition-all duration-500"
     >
@@ -209,6 +209,8 @@ const Header = () => {
             {/* Mobile Menu Toggle */}
             <button
               ref={mobileMenuButtonRef}
+              aria-expanded={mobileOpen}
+              aria-controls="kcs-public-mobile-menu"
               type="button"
               onClick={() => setMobileOpen(!mobileOpen)}
               className={`public-menu-button flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-200 xl:hidden ${
@@ -235,7 +237,7 @@ const Header = () => {
             className="xl:hidden overflow-hidden"
           >
             <div className="container-custom py-3">
-              <div ref={mobileMenuRef} className="public-mobile-menu github-glass dark:github-glass-dark max-h-[calc(100dvh-96px)] space-y-1 overflow-y-auto rounded-[30px] p-2.5 shadow-2xl shadow-kcs-blue-950/15 sm:rounded-[34px] sm:p-3">
+              <div ref={mobileMenuRef} id="kcs-public-mobile-menu" className="public-mobile-menu github-glass dark:github-glass-dark max-h-[calc(100dvh-96px)] space-y-1 overflow-y-auto rounded-[30px] p-2.5 shadow-2xl shadow-kcs-blue-950/15 sm:rounded-[34px] sm:p-3">
               <div className="mb-2 grid grid-cols-2 gap-2 border-b border-gray-100 pb-3 dark:border-kcs-blue-800">
                 <button
                   type="button"

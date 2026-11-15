@@ -181,7 +181,7 @@ const GalleryPage = () => {
 
   return (
     <div className="bg-white dark:bg-kcs-blue-950 min-h-screen">
-      <section className="relative min-h-[78vh] overflow-hidden bg-kcs-blue-950 text-white">
+      <section className="relative min-h-[78vh] overflow-hidden bg-kcs-blue-950 text-white" data-public-hero>
         <div className="absolute inset-0 grid grid-cols-3 gap-3 p-3 opacity-25">
           {featuredItems.map((item) => (
             <div

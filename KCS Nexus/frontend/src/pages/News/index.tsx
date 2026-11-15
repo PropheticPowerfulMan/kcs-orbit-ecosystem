@@ -15,11 +15,11 @@ const fadeUp = {
 
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }
 
-const AnimSection = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => {
+const AnimSection = ({ children, className = '',hidden=false }: { children: React.ReactNode; className?: string;hidden?:boolean }) => {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: '-80px' })
   return (
-    <motion.div ref={ref} initial="hidden" animate={inView ? 'visible' : 'hidden'} variants={stagger} className={className}>
+    <motion.div ref={ref} hidden={hidden} initial="hidden" animate={inView ? 'visible' : 'hidden'} variants={stagger} className={className}>
       {children}
     </motion.div>
   )
@@ -115,6 +115,8 @@ const NewsPage = () => {
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [showFullCalendar, setShowFullCalendar] = useState(false)
+  const [calendarExpanded,setCalendarExpanded]=useState(false),[eventSearch,setEventSearch]=useState(''),[eventMonth,setEventMonth]=useState('all'),[eventWindow,setEventWindow]=useState('upcoming'),[eventPage,setEventPage]=useState(1)
+  useEffect(()=>setEventPage(1),[eventSearch,eventMonth,eventWindow])
   const [livePosts, setLivePosts] = useState<any[]>([])
   const [liveEvents, setLiveEvents] = useState<any[]>([])
   const [dateFrom, setDateFrom] = useState('')
@@ -148,6 +150,11 @@ const NewsPage = () => {
     location: event.location || '',
   })) : upcomingEvents
 
+  const schoolToday=new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Kinshasa'})
+  const eventKey=(event:{date:string;title:string})=>event.date+'-'+event.title
+  const monthOptions=[...new Set(displayedUpcomingEvents.map(event=>event.date.slice(0,7)))].sort()
+  const eventMatches=displayedUpcomingEvents.filter(event=>(eventWindow==='all'||String(event.endDate||event.date).slice(0,10)>=schoolToday)&&(eventMonth==='all'||event.date.startsWith(eventMonth))&&eventSearch.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().split(/\s+/).every(word=>[event.title,event.description,event.location,event.date].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(word)))
+  const eventPages=Math.max(1,Math.ceil(eventMatches.length/4)),currentEventPage=Math.min(eventPage,eventPages),visibleEventKeys=new Set(eventMatches.slice((currentEventPage-1)*4,currentEventPage*4).map(eventKey))
   const filtered = allPosts.filter((p) => {
     const terms = searchQuery.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().split(/\s+/).filter(Boolean)
     const haystack = [p.title, p.excerpt, p.author, p.category, p.date].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -167,7 +174,7 @@ const NewsPage = () => {
     <div className="pt-20">
       {loadError&&<p role="alert" className="mx-auto my-4 max-w-5xl rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">{language==='fr'?'Les publications sont temporairement indisponibles. Actualisez la page pour réessayer.':'Publications are temporarily unavailable. Refresh the page to retry.'}</p>}
       {/* HERO */}
-      <section className="relative py-20 kcs-gradient overflow-hidden">
+      <section className="relative py-20 kcs-gradient overflow-hidden" data-public-hero data-public-photo-hero style={{backgroundImage:`url(${kcsPublicImages.assembly})`}}>
         <div className="absolute inset-0 dots-bg opacity-10" style={{ backgroundSize: '40px 40px' }} />
         <div className="relative container-custom text-center">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
@@ -223,7 +230,8 @@ const NewsPage = () => {
       {/* FILTERS & GRID */}
       <section className="py-16 bg-white dark:bg-kcs-blue-950">
         <div className="container-custom">
-          <AnimSection className="mb-12">
+          <aside className="public-calendar-shortcut mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-kcs-blue-900"><div><b className="text-sm text-sky-950 dark:text-sky-50">{language==='fr'?'Calendrier et année scolaire':'Calendar and school year'} · {schoolYear2026_2027.name}</b><p className="text-xs text-slate-600 dark:text-slate-300">{language==='fr'?'Semestres, quarters et dates de référence dans un panneau repliable.':'Semesters, quarters and reference dates in a collapsible panel.'}</p></div><button type="button" aria-expanded={calendarExpanded} onClick={()=>setCalendarExpanded(value=>!value)} className="rounded-xl bg-sky-700 px-4 py-2.5 text-xs font-bold text-white">{calendarExpanded?(language==='fr'?'Masquer les repères':'Hide reference dates'):(language==='fr'?'Voir les repères scolaires':'View school dates')}</button></aside>
+          <AnimSection className="mb-12 public-calendar-reference" hidden={!calendarExpanded}>
             <motion.div variants={fadeUp} className="mb-6">
               <span className="badge-gold mb-3 inline-flex items-center gap-2 text-sm">
                 <Calendar size={14} /> Official 2026-2027 Calendar
@@ -338,12 +346,13 @@ const NewsPage = () => {
                   <div className="p-5 kcs-gradient">
                     <h3 className="flex items-center gap-2 font-bold text-white">
                       <Calendar size={18} className="text-kcs-gold-400" />
-                      Upcoming Official Events
+                      {language==='fr'?'Événements officiels':'Official events'}
                     </h3>
                   </div>
+                  <fieldset className="grid gap-2 border-b border-sky-200 p-4 dark:border-sky-800"><legend className="sr-only">{language==='fr'?'Rechercher dans le calendrier':'Search calendar'}</legend><input aria-label={language==='fr'?'Rechercher un événement':'Search events'} value={eventSearch} onChange={event=>setEventSearch(event.target.value)} placeholder={language==='fr'?'Titre, date, lieu…':'Title, date, location…'} className="min-w-0 rounded-xl border px-3 py-2 text-sm"/><div className="grid grid-cols-2 gap-2"><select aria-label={language==='fr'?'Période des événements':'Event range'} value={eventWindow} onChange={event=>setEventWindow(event.target.value)} className="min-w-0 rounded-xl border px-2 py-2 text-xs"><option value="upcoming">{language==='fr'?'À venir':'Upcoming'}</option><option value="all">{language==='fr'?'Tous':'All dates'}</option></select><select aria-label={language==='fr'?'Mois de l’événement':'Event month'} value={eventMonth} onChange={event=>setEventMonth(event.target.value)} className="min-w-0 rounded-xl border px-2 py-2 text-xs"><option value="all">{language==='fr'?'Tous les mois':'All months'}</option>{monthOptions.map(month=><option key={month} value={month}>{new Date(month+'-15T12:00:00Z').toLocaleDateString(language==='fr'?'fr-FR':'en-GB',{month:'short',year:'numeric'})}</option>)}</select></div></fieldset>
                   <div className="divide-y divide-gray-100 dark:divide-kcs-blue-800">
                     {displayedUpcomingEvents.length ? displayedUpcomingEvents.map((event) => (
-                      <article key={`${event.date}-${event.title}`} className="p-4 transition-colors hover:bg-white dark:hover:bg-kcs-blue-800/50">
+                      <article key={`${event.date}-${event.title}`} hidden={!visibleEventKeys.has(eventKey(event))} className="p-4 transition-colors hover:bg-white dark:hover:bg-kcs-blue-800/50">
                         <p className="text-xs font-bold text-kcs-gold-700 dark:text-kcs-gold-300">{formatSchoolCalendarDate(event)}</p>
                         <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{event.title}</p>
                         <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{event.description}</p>
@@ -356,9 +365,11 @@ const NewsPage = () => {
                       <p className="p-5 text-sm text-gray-500 dark:text-gray-400">The 2026-2027 official calendar is complete.</p>
                     )}
                   </div>
+                  {!eventMatches.length&&<p role="status" className="p-4 text-sm text-slate-600 dark:text-slate-200">{language==='fr'?'Aucun événement ne correspond à cette sélection.':'No events match this selection.'}</p>}
+                  <nav className="flex items-center justify-between gap-2 border-t border-sky-100 p-3 text-xs dark:border-sky-800" aria-label={language==='fr'?'Pages du calendrier':'Calendar pages'}><button type="button" aria-label={language==='fr'?'Événements précédents':'Previous events'} disabled={currentEventPage===1} onClick={()=>setEventPage(value=>Math.max(1,value-1))} className="rounded-lg border px-3 py-2 disabled:opacity-40">←</button><span>{eventMatches.length} {language==='fr'?'événement(s)':'event(s)'} · {currentEventPage}/{eventPages}</span><button type="button" aria-label={language==='fr'?'Événements suivants':'Next events'} disabled={currentEventPage===eventPages} onClick={()=>setEventPage(value=>Math.min(eventPages,value+1))} className="rounded-lg border px-3 py-2 disabled:opacity-40">→</button></nav>
                   <div className="border-t border-gray-100 p-4 dark:border-kcs-blue-800">
-                    <button type="button" onClick={() => setShowFullCalendar((visible) => !visible)} className="flex w-full items-center justify-center gap-1 text-center text-sm font-semibold text-kcs-blue-600 transition-all hover:gap-2 dark:text-kcs-blue-400">
-                      {showFullCalendar ? 'Hide Full Calendar' : 'View Full Calendar'} <ArrowRight size={14} className={showFullCalendar ? 'rotate-90' : ''} />
+                    <button type="button" onClick={() => {setEventWindow('all');setShowFullCalendar((visible) => !visible);requestAnimationFrame(()=>document.getElementById('news-full-calendar')?.scrollIntoView({block:'start',behavior:'smooth'}))}} className="flex w-full items-center justify-center gap-1 text-center text-sm font-semibold text-kcs-blue-600 transition-all hover:gap-2 dark:text-kcs-blue-400">
+                      {showFullCalendar?(language==='fr'?'Masquer le calendrier complet':'Hide Full Calendar'):(language==='fr'?'Calendrier complet':'View Full Calendar')} <ArrowRight size={14} className={showFullCalendar ? 'rotate-90' : ''} />
                     </button>
                   </div>
                 </div>
@@ -368,7 +379,7 @@ const NewsPage = () => {
 
           {showFullCalendar && (
             <AnimSection className="mt-12">
-              <motion.div variants={fadeUp} className="rounded-3xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40 sm:p-7">
+              <motion.div id="news-full-calendar" variants={fadeUp} className="max-h-[70dvh] overflow-y-auto rounded-3xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40 sm:p-7">
                 <div className="mb-6">
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-700 dark:text-kcs-gold-300">Approved source: KCS 2026-2027 School Event Calendar</p>
                   <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white">Full Official Calendar</h2>

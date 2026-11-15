@@ -101,7 +101,7 @@ const AcademicsPage = () => {
   return (
     <div className="pt-20">
       {/* HERO */}
-      <section className="relative py-24 kcs-gradient overflow-hidden">
+      <section className="relative py-24 kcs-gradient overflow-hidden" data-public-hero data-public-photo-hero style={{backgroundImage:`url(${kcsPublicImages.highSchool})`}}>
         <div className="absolute inset-0 dots-bg opacity-10" style={{ backgroundSize: '40px 40px' }} />
         <div className="relative container-custom text-center">
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
