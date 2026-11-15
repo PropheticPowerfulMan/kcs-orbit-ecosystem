@@ -30,3 +30,31 @@ html:not(.dark) :is(.bg-gray-50,.bg-slate-50){background-color:#eaf2f8}
 @media screen{html:not(.dark) [data-portal-workspace]{--nw-paper:#eaf2f8;--nw-card:#f2f7fb}html:not(.dark) [data-admin-workspace]{--admin-paper:#edf4fa}html:not(.dark) body[data-nexus-dashboard] [data-nexus-dialog]{--nd-paper:#e8f1f8;--nd-card:#f1f6fb}html:not(.dark) [data-entity-dialog]{--rd-paper:#e8f1f8;--rd-card:#f1f6fb}[data-site-media]{scroll-margin-top:120px}.nexus-shining-hero{border-color:#ba9c5b}}
 
 @media screen{html:not(.dark) [data-admin-hero] :is(.bg-white,.bg-slate-50,.bg-gray-50,[class~="bg-white/90"],[class~="bg-white/80"]) :is(p,span,small){color:#34576f!important}}
+
+/* Comfortable screen palette; generated/printed documents retain their own paper colours. */
+@media screen {
+html:not(.dark){--nexus-soft-paper:#dce8f2;--nexus-soft-card:#e4eef6;--nexus-soft-input:#eaf2f8}
+html:not(.dark) body{background:#dce8f2}
+html:not(.dark) :is(.portal-shell,.public-site-shell){background:#deebf4}
+html:not(.dark) [data-portal-workspace]{--nw-paper:#dce8f2;--nw-card:#e5eef6}
+html:not(.dark) [data-admin-workspace]{--admin-paper:#e3edf5}
+html:not(.dark) body[data-nexus-dashboard] [data-nexus-dialog],html:not(.dark) [data-entity-dialog]{--nd-paper:#dce8f2;--nd-card:#e6eff7;--rd-paper:#dce8f2;--rd-card:#e6eff7}
+html:not(.dark) :is(.portal-shell,.public-site-shell,[data-nexus-dialog],[data-entity-dialog]) :is(.bg-white,[class~="bg-white/95"],[class~="bg-white/90"],[class~="bg-white/80"],[class~="bg-white/70"],[class~="bg-white/65"],[class~="bg-white/60"],[class~="bg-white/50"]):not(:where([data-official-document] *,[data-official-document],.report-card-paper *,.report-card-paper,.official-report-card *,.official-report-card,.transcript-paper *,.transcript-paper,[data-report-card-document] *,[data-report-card-document])){background-color:#e3edf5}
+html:not(.dark) :is(.portal-shell,.public-site-shell) :is(input,select,textarea):not([type=checkbox]):not([type=radio]){background-color:#e9f1f8;border-color:#b4cadc;color:#133650}
+.dark .portal-shell :is(.bg-white,.bg-slate-50,.bg-gray-50,.bg-rose-50):not([class*="dark:bg-"]):not(:where([data-official-document] *,[data-official-document],.report-card-paper *,.report-card-paper,.official-report-card *,.official-report-card,.transcript-paper *,.transcript-paper,[data-report-card-document] *,[data-report-card-document])){background-color:#10314a;color:#dbeaf4}
+.nexus-activity-report-heading{background:linear-gradient(120deg,#082e4e,#14556d);color:#f1faff;border:1px solid #377c97}
+.nexus-activity-report-heading :is(h3,p){color:#ddf3fd!important}.nexus-activity-report-heading p:first-child{color:#83dfef!important}
+.nexus-activity-report-heading button{flex-shrink:0}.nexus-activity-report-heading button:not([class*="bg-"]){color:#e2f5ff;border-color:#82b8cf}
+[data-teacher-activity-summary]>[class]>.grid{min-width:0}[data-teacher-activity-summary] [class*="grid"]>*{min-width:0}
+[data-gradebook-focus] [hidden],[data-assignment-studio] [hidden]{display:none!important}
+[data-gradebook-focus]>.flex-1{min-height:0;overscroll-behavior:contain}
+[data-gradebook-focus] table input{scroll-margin:70px 15px}
+[data-gradebook-focus] .nexus-gradebook-focus-heading :is(h3,p){color:inherit}
+[data-transcript-workspace]{border-color:#bdd5e5;border-radius:25px;background:#e5eff7;box-shadow:0 8px 28px #082b490a}
+.dark [data-transcript-workspace]{border-color:#28516b;background:#09273e}
+[data-transcript-workspace]>[data-transcript-intro]{border-radius:21px;background:linear-gradient(120deg,#082e4e,#14556d);padding:24px;color:#eaf7ff}
+[data-transcript-intro] :is(h2,p){color:#e0f3ff!important}[data-transcript-intro] button{color:#d9f7ff;border-color:#599cb8;background:#ffffff0e}
+[data-transcript-workspace]>section{border-radius:20px}[data-communications-workspace]>section{border-radius:22px}
+[data-communications-workspace] [data-communications-step]{scroll-margin-top:100px}
+@media(max-width:640px){[data-transcript-workspace]>[data-transcript-intro]{padding:18px}[data-gradebook-focus] .nexus-gradebook-focus-heading{padding:10px}.nexus-activity-report-heading button{width:100%}}
+}

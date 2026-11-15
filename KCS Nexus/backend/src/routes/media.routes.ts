@@ -1,3 +1,6 @@
+import {createHash} from 'node:crypto'
+import {z} from 'zod'
+import {Prisma} from '@prisma/client'
 import { databaseActorId } from '../utils/databaseActor.js'
 import { Router } from 'express'
 import multer from 'multer'
@@ -14,11 +17,12 @@ const upload = multer({
   limits: { fileSize: MAX_MEDIA_UPLOAD_BYTES, files: 1 },
 })
 
+const mediaVersion=(item:{id:string;title:string;description:string|null;category:string;tags:string[]})=>createHash('sha256').update(JSON.stringify([item.id,item.title,item.description,item.category,item.tags])).digest('hex')
 export const mediaRouter = Router()
 
 mediaRouter.get('/', asyncHandler(async (_req, res) => {
   const items = await prisma.mediaItem.findMany({ orderBy: { uploadedAt: 'desc' } })
-  return success(res, items.map(item => ({ ...item, url: publicMediaUrl(item.url), thumbnailUrl: item.thumbnailUrl ? publicMediaUrl(item.thumbnailUrl) : item.thumbnailUrl })))
+  return success(res, items.map(item => ({ ...item, version:mediaVersion(item), url: publicMediaUrl(item.url), thumbnailUrl: item.thumbnailUrl ? publicMediaUrl(item.thumbnailUrl) : item.thumbnailUrl })))
 }))
 
 mediaRouter.get('/categories', asyncHandler(async (_req, res) => {
@@ -53,8 +57,21 @@ mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('
         : String(req.body.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean),
     },
   })
-  return success(res, item, 'Media uploaded', 201)
+  return success(res, {...item,version:mediaVersion(item)}, 'Media uploaded', 201)
 }))
+
+mediaRouter.put('/:id',authenticate,requireRoles('admin'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const id=getRouteParam(req.params.id),input=z.object({title:z.string().trim().min(2).max(200),description:z.string().trim().max(5000).nullable(),category:z.string().trim().min(1).max(120),tags:z.array(z.string().trim().min(1).max(80)).max(30),version:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(req.body);
+ const actorId=await databaseActorId(req.user!.sub);
+ const item=await prisma.$transaction(async tx=>{
+  await tx.$queryRaw(Prisma.sql`SELECT id FROM "MediaItem" WHERE id = ${id} FOR UPDATE`);
+  const previous=await tx.mediaItem.findUnique({where:{id}});if(!previous)throw new ApiError(404,'This media no longer exists. Reload the library.');
+  if(mediaVersion(previous)!==input.version)throw new ApiError(409,'This media changed in another session. Reload the library before editing.');
+  const updated=await tx.mediaItem.update({where:{id},data:{title:input.title,description:input.description,category:input.category,tags:[...new Set(input.tags)]}});
+  await tx.auditLog.create({data:{actorId,action:'MEDIA_METADATA_UPDATED',targetType:'MediaItem',targetId:id,metadata:{previous:{title:previous.title,description:previous.description,category:previous.category,tags:previous.tags},next:{title:updated.title,description:updated.description,category:updated.category,tags:updated.tags}}}});return updated;
+ });
+ return success(res,{...item,version:mediaVersion(item),url:publicMediaUrl(item.url)},'Media details saved and visible on the public website');
+}));
 
 mediaRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const mediaItemId = getRouteParam(req.params.id)

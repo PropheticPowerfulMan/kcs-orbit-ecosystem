@@ -1,0 +1,13 @@
+import fs from 'node:fs';import {createRequire} from 'node:module';import {createHash} from 'node:crypto';
+const require=createRequire(process.cwd()+'/package.json'),{PrismaClient,Prisma}=require('@prisma/client'),db=new PrismaClient();
+const file=process.argv.find(x=>x.startsWith('--manifest='))?.slice(11);if(!file)throw Error('Supply the reviewed catalogue with --manifest=absolute-path');
+const source=fs.readFileSync(file,'utf8'),catalogue=JSON.parse(source),key='nexus-publication-catalog-v1';
+for(const row of catalogue.gallery)if(!/^\/images\/kcs\/[a-z0-9._-]+$/i.test(row.url))throw Error('Unexpected legacy asset path');
+try{const prior=await db.auditLog.findUnique({where:{id:key}});if(prior){console.log(JSON.stringify({status:'ALREADY_ADOPTED',changed:false}));process.exitCode=0}else if(!process.argv.includes('--apply'))console.log(JSON.stringify({status:'DRY_RUN',gallery:catalogue.gallery.length,posts:catalogue.posts.length,events:catalogue.events.length}));else{
+ const actor=await db.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{id:true}});if(!actor)throw Error('Publishing account must already exist; no account is created by this operation');
+ const result=await db.$transaction(async tx=>{await tx.$queryRaw(Prisma.sql`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${key}))`);if(await tx.auditLog.findUnique({where:{id:key}}))return {alreadyAdopted:true};const counts={gallery:await tx.mediaItem.count({where:{category:{equals:'Gallery',mode:'insensitive'}}}),posts:await tx.newsPost.count(),events:await tx.event.count()},created={gallery:[],posts:[],events:[]};
+ if(!counts.gallery)for(const row of catalogue.gallery){await tx.mediaItem.create({data:row});created.gallery.push(row.id)}
+ if(!counts.posts)for(const row of catalogue.posts){await tx.newsPost.create({data:{...row,publishedAt:new Date(row.publishedAt),authorId:actor.id}});created.posts.push(row.id)}
+ if(!counts.events)for(const row of catalogue.events){await tx.event.create({data:{...row,startDate:new Date(row.startDate),endDate:new Date(row.endDate)}});created.events.push(row.id)}
+ await tx.auditLog.create({data:{id:key,actorId:actor.id,action:'PUBLIC_WEBSITE_CATALOG_ADOPTED',targetType:'SitePublicationCatalog',targetId:key,metadata:{previousCounts:counts,created,manifestSha256:createHash('sha256').update(source).digest('hex'),seededRemindersDisabled:true}}});return {preservedExisting:true,previousCounts:counts,createdCounts:Object.fromEntries(Object.entries(created).map(([k,v])=>[k,v.length]))};},{maxWait:10000,timeout:30000});console.log(JSON.stringify({status:'ADOPTED',...result}));
+}}finally{await db.$disconnect()}

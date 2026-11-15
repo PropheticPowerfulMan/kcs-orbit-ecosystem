@@ -1,0 +1,570 @@
+{
+  "source": "Existing public website fallback content, preserved for database management",
+  "gallery": [
+    {
+      "id": "kcs-public-gallery-1",
+      "title": "Morning Assembly in the Courtyard",
+      "description": "Students gather for prayer, worship, and announcements every morning.",
+      "url": "/images/kcs/assembly.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Faith",
+        "featured"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-2",
+      "title": "Robotics and Innovation Lab",
+      "description": "Hands-on STEM learning with coding, robotics, and prototyping.",
+      "url": "/images/kcs/quality-education.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Academics"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-3",
+      "title": "Varsity Basketball Tournament",
+      "description": "Competition, discipline, and school spirit in action.",
+      "url": "/images/kcs/usa-trip.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Sports"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-4",
+      "title": "Elementary Art Showcase",
+      "description": "Creative expression across painting, sculpture, and mixed media.",
+      "url": "/images/kcs/spring-concert.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Arts"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-5",
+      "title": "International Day Celebration",
+      "description": "A vibrant celebration of the cultures represented at KCS.",
+      "url": "/images/kcs/assembly.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Events",
+        "featured"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-6",
+      "title": "High School Science Fair",
+      "description": "Student-led experiments, inquiry, and presentation excellence.",
+      "url": "/images/kcs/middle-school.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Academics"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-7",
+      "title": "Choir Rehearsal Before Concert Night",
+      "description": "Preparing harmonies for the annual spring performance.",
+      "url": "/images/kcs/spring-concert.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Arts"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-8",
+      "title": "Library Research Session",
+      "description": "Quiet focus, collaboration, and deep reading across grade levels.",
+      "url": "/images/kcs/elementary.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Campus Life"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-9",
+      "title": "Student Leadership Retreat",
+      "description": "Formation, mentorship, and servant leadership development.",
+      "url": "/images/kcs/annual-retreat.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Faith"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-10",
+      "title": "Football Training Session",
+      "description": "Teamwork and athletic excellence on the KCS field.",
+      "url": "/images/kcs/usa-trip.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Sports"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-11",
+      "title": "Campus Green Spaces",
+      "description": "Safe, beautiful environments designed for growth and connection.",
+      "url": "/images/kcs/spiritual-life.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Campus Life"
+      ]
+    },
+    {
+      "id": "kcs-public-gallery-12",
+      "title": "Graduation Ceremony Highlights",
+      "description": "A milestone celebration for students and families.",
+      "url": "/images/kcs/graduation.jpg",
+      "type": "IMAGE",
+      "category": "Gallery",
+      "tags": [
+        "Events",
+        "featured"
+      ]
+    }
+  ],
+  "posts": [
+    {
+      "id": "kcs-public-news-official-calendar-2026-2027",
+      "slug": "official-calendar-2026-2027",
+      "title": "Official KCS 2026-2027 School Calendar",
+      "excerpt": "Classes begin September 7, 2026. The calendar includes official quarters, semester exams, school breaks, conferences, graduation, and closing ceremonies.",
+      "content": "Classes begin September 7, 2026. The calendar includes official quarters, semester exams, school breaks, conferences, graduation, and closing ceremonies.",
+      "category": "ANNOUNCEMENT",
+      "coverImage": "/images/kcs/spiritual-life.jpg",
+      "publishedAt": "2026-09-01T00:00:00Z",
+      "tags": []
+    },
+    {
+      "id": "kcs-public-news-first-day-2026",
+      "slug": "first-day-2026",
+      "title": "First Day of School — September 7",
+      "excerpt": "The official first day of classes for every KCS family is Monday, September 7, 2026.",
+      "content": "The official first day of classes for every KCS family is Monday, September 7, 2026.",
+      "category": "EVENT",
+      "coverImage": "/images/kcs/quality-education.jpg",
+      "publishedAt": "2026-09-07T00:00:00Z",
+      "tags": []
+    },
+    {
+      "id": "kcs-public-news-high-school-orientation-2026",
+      "slug": "high-school-orientation-2026",
+      "title": "High School Orientation — September 9-10",
+      "excerpt": "Upper School students begin the year with the official High School orientation program.",
+      "content": "Upper School students begin the year with the official High School orientation program.",
+      "category": "EVENT",
+      "coverImage": "/images/kcs/assembly.jpg",
+      "publishedAt": "2026-09-09T00:00:00Z",
+      "tags": []
+    },
+    {
+      "id": "kcs-public-news-parent-orientation-2026",
+      "slug": "parent-orientation-2026",
+      "title": "High School Parent Orientation — September 12",
+      "excerpt": "The official parent orientation meeting will be held online.",
+      "content": "The official parent orientation meeting will be held online.",
+      "category": "ANNOUNCEMENT",
+      "coverImage": "/images/kcs/spiritual-life.jpg",
+      "publishedAt": "2026-09-12T00:00:00Z",
+      "tags": []
+    },
+    {
+      "id": "kcs-public-news-parent-prayer-2026",
+      "slug": "parent-prayer-2026",
+      "title": "Parent Prayer Meeting — September 19",
+      "excerpt": "KCS parents are invited to the first official prayer meeting of the school year.",
+      "content": "KCS parents are invited to the first official prayer meeting of the school year.",
+      "category": "EVENT",
+      "coverImage": "/images/kcs/assembly.jpg",
+      "publishedAt": "2026-09-19T00:00:00Z",
+      "tags": []
+    },
+    {
+      "id": "kcs-public-news-legacy-day-2026",
+      "slug": "legacy-day-2026",
+      "title": "Legacy Day — October 19",
+      "excerpt": "The KCS community celebrates Legacy Day during Legacy Month.",
+      "content": "The KCS community celebrates Legacy Day during Legacy Month.",
+      "category": "EVENT",
+      "coverImage": "/images/kcs/graduation.jpg",
+      "publishedAt": "2026-10-19T00:00:00Z",
+      "tags": []
+    }
+  ],
+  "events": [
+    {
+      "id": "kcs-public-event-8b47512f5095f47b72f4",
+      "title": "Teachers Begin",
+      "description": "Official preparation day for KCS teachers.",
+      "startDate": "2026-08-31T00:00:00Z",
+      "endDate": "2026-08-31T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-640591570cfd6363ba02",
+      "title": "First Day of School",
+      "description": "Official opening of classes for the 2026-2027 school year.",
+      "startDate": "2026-09-07T00:00:00Z",
+      "endDate": "2026-09-07T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-9599a35f2103bb79f603",
+      "title": "High School Orientation",
+      "description": "Orientation program for Upper School students.",
+      "startDate": "2026-09-09T00:00:00Z",
+      "endDate": "2026-09-10T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-3b4c0dac71005a856212",
+      "title": "High School Parent Orientation",
+      "description": "Online orientation session for High School parents.",
+      "startDate": "2026-09-12T00:00:00Z",
+      "endDate": "2026-09-12T23:59:59Z",
+      "location": "Online",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-0f04547f83803189a8ae",
+      "title": "Parent Prayer Meeting",
+      "description": "Prayer gathering for KCS parents.",
+      "startDate": "2026-09-19T00:00:00Z",
+      "endDate": "2026-09-19T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "SPIRITUAL",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-84d753ade8f239065fd7",
+      "title": "Legacy Day",
+      "description": "Official KCS Legacy Month celebration.",
+      "startDate": "2026-10-19T00:00:00Z",
+      "endDate": "2026-10-19T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-097473fcdd8e25f2dfc8",
+      "title": "Edulastic Tests",
+      "description": "Scheduled Edulastic assessment days.",
+      "startDate": "2026-11-04T00:00:00Z",
+      "endDate": "2026-11-05T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-347b6206e26b6b1915ae",
+      "title": "End of First Quarter",
+      "description": "Official end of Quarter 1.",
+      "startDate": "2026-11-06T00:00:00Z",
+      "endDate": "2026-11-06T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-2a01287ee9c85c5acdbc",
+      "title": "Parent-Teacher Conference",
+      "description": "Conference between families and teachers.",
+      "startDate": "2026-11-14T00:00:00Z",
+      "endDate": "2026-11-14T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-1e8522d5cfb8a86bbabc",
+      "title": "Thanksgiving",
+      "description": "Thanksgiving observance.",
+      "startDate": "2026-11-26T00:00:00Z",
+      "endDate": "2026-11-26T23:59:59Z",
+      "location": "School closed",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-c654783c33627d0c79bc",
+      "title": "Thanksgiving Dinner",
+      "description": "KCS community Thanksgiving dinner.",
+      "startDate": "2026-11-28T00:00:00Z",
+      "endDate": "2026-11-28T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-f03ffe10d3af85bb2236",
+      "title": "Last Day Before Christmas Break",
+      "description": "Final day of classes before Christmas break.",
+      "startDate": "2026-12-18T00:00:00Z",
+      "endDate": "2026-12-18T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-e8bda3a4f289f86b5d34",
+      "title": "Christmas Concert",
+      "description": "Official KCS Christmas concert.",
+      "startDate": "2026-12-19T00:00:00Z",
+      "endDate": "2026-12-19T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-daa6057402cb7da7a434",
+      "title": "Christmas Break",
+      "description": "Christmas school break.",
+      "startDate": "2026-12-21T00:00:00Z",
+      "endDate": "2027-01-04T23:59:59Z",
+      "location": "School closed",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-ba24030cba61b5f81e72",
+      "title": "New Year's Day",
+      "description": "New Year's Day holiday.",
+      "startDate": "2027-01-01T00:00:00Z",
+      "endDate": "2027-01-01T23:59:59Z",
+      "location": "School closed",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-b5b7bf5eb8fd116f1b22",
+      "title": "Independence Martyrs' Day",
+      "description": "National holiday.",
+      "startDate": "2027-01-04T00:00:00Z",
+      "endDate": "2027-01-04T23:59:59Z",
+      "location": "School closed",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-ea86464934f8ecf8abb3",
+      "title": "Back to School",
+      "description": "Classes resume after Christmas break.",
+      "startDate": "2027-01-05T00:00:00Z",
+      "endDate": "2027-01-05T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-bc8dd7ffb6f9539dfe7e",
+      "title": "Mzee Kabila Day",
+      "description": "National remembrance day.",
+      "startDate": "2027-01-16T00:00:00Z",
+      "endDate": "2027-01-16T23:59:59Z",
+      "location": "School closed",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-41edaebeffafa034e792",
+      "title": "Lumumba Day",
+      "description": "National remembrance day.",
+      "startDate": "2027-01-17T00:00:00Z",
+      "endDate": "2027-01-17T23:59:59Z",
+      "location": "School closed",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-a2b11da9aaea565e0adb",
+      "title": "End of Second Quarter",
+      "description": "Official end of Quarter 2.",
+      "startDate": "2027-01-22T00:00:00Z",
+      "endDate": "2027-01-22T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-5956fae2bfcc9c584025",
+      "title": "First Semester Exams - Upper School",
+      "description": "First semester examination period for Upper School.",
+      "startDate": "2027-01-28T00:00:00Z",
+      "endDate": "2027-01-29T23:59:59Z",
+      "location": "Upper School",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-1995ead11d4ec2ac5bac",
+      "title": "Parent-Teacher Conference",
+      "description": "Conference between families and teachers.",
+      "startDate": "2027-02-06T00:00:00Z",
+      "endDate": "2027-02-06T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-2e28394ad51d82fe07af",
+      "title": "Lower School Field Trip",
+      "description": "Official field trip for Lower School.",
+      "startDate": "2027-02-26T00:00:00Z",
+      "endDate": "2027-02-26T23:59:59Z",
+      "location": "Off campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-165b29565cb9a6fff5a5",
+      "title": "Teacher Prayer Meeting",
+      "description": "Prayer meeting for KCS teachers.",
+      "startDate": "2027-02-27T00:00:00Z",
+      "endDate": "2027-02-27T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "SPIRITUAL",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-3ddae87435b0ae190ddc",
+      "title": "Edulastic Tests",
+      "description": "Scheduled Edulastic assessment days.",
+      "startDate": "2027-03-04T00:00:00Z",
+      "endDate": "2027-03-05T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-78346e92ba85c0ea3ec3",
+      "title": "Upper School Retreat",
+      "description": "Official Upper School retreat.",
+      "startDate": "2027-03-19T00:00:00Z",
+      "endDate": "2027-03-21T23:59:59Z",
+      "location": "KCS Retreat",
+      "type": "SPIRITUAL",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-4267bfeae0dc5b13046b",
+      "title": "Spring Break",
+      "description": "Official spring school break.",
+      "startDate": "2027-03-22T00:00:00Z",
+      "endDate": "2027-04-04T23:59:59Z",
+      "location": "School closed",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-c8f2293da8f90d1563c1",
+      "title": "Back to School",
+      "description": "Classes resume after spring break.",
+      "startDate": "2027-04-05T00:00:00Z",
+      "endDate": "2027-04-05T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-675f70c757e3c1315bd3",
+      "title": "End of Third Quarter",
+      "description": "Official end of Quarter 3.",
+      "startDate": "2027-04-09T00:00:00Z",
+      "endDate": "2027-04-09T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-cf69e2c4b6f087ff104d",
+      "title": "Parent-Teacher Conference",
+      "description": "Conference between families and teachers.",
+      "startDate": "2027-04-17T00:00:00Z",
+      "endDate": "2027-04-17T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-ca4c80d23e2c4586d0b2",
+      "title": "Education Day",
+      "description": "KCS Education Day.",
+      "startDate": "2027-04-30T00:00:00Z",
+      "endDate": "2027-04-30T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-08afca17f4b1947e83e2",
+      "title": "All-Section Field Trip",
+      "description": "Official field trip for all school sections.",
+      "startDate": "2027-06-04T00:00:00Z",
+      "endDate": "2027-06-04T23:59:59Z",
+      "location": "Off campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-26b686e7bce4d98ae1ce",
+      "title": "Second Semester Exams - Upper School",
+      "description": "Second semester examination period for Upper School.",
+      "startDate": "2027-06-09T00:00:00Z",
+      "endDate": "2027-06-11T23:59:59Z",
+      "location": "Upper School",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-bf9fd06fe04efa8834c3",
+      "title": "Last Official Day of School",
+      "description": "Official end of classes and Quarter 4.",
+      "startDate": "2027-06-11T00:00:00Z",
+      "endDate": "2027-06-11T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-fb7a9ff361ae489625e7",
+      "title": "Graduation",
+      "description": "Official KCS graduation ceremony.",
+      "startDate": "2027-06-19T00:00:00Z",
+      "endDate": "2027-06-19T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    },
+    {
+      "id": "kcs-public-event-876357f25c51b0814109",
+      "title": "Closing Ceremonies",
+      "description": "Official closing ceremonies for the 2026-2027 school year.",
+      "startDate": "2027-06-26T00:00:00Z",
+      "endDate": "2027-06-26T23:59:59Z",
+      "location": "KCS Campus",
+      "type": "ACADEMIC",
+      "reminderEnabled": false
+    }
+  ]
+}

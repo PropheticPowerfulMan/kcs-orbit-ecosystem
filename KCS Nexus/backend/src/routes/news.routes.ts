@@ -13,7 +13,7 @@ const newsSchema = z.object({
   excerpt: z.string().min(10),
   content: z.string().min(20),
   category: z.enum(['NEWS', 'EVENT', 'ANNOUNCEMENT', 'ACHIEVEMENT', 'SPORTS', 'ARTS']),
-  coverImage: z.string().trim().refine((value) => /^https?:\/\//i.test(value) || /\/uploads\/media\//i.test(value), 'Cover image must be an HTTPS URL or an uploaded KCS media path').nullable().optional(),
+  coverImage: z.string().trim().refine((value) => /^https?:\/\//i.test(value) || /\/uploads\/media\//i.test(value) || /^\/images\/kcs\/[a-z0-9._-]+$/i.test(value), 'Cover image must be an HTTPS URL, an uploaded KCS media path or a school website image').nullable().optional(),
   tags: z.array(z.string()).default([]),
 })
 

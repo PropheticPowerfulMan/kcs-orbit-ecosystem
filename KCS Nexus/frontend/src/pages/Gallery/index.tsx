@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import { Play, X, Camera, Film, ChevronRight } from 'lucide-react'
 import { kcsPublicImages } from '@/data/kcsPublicImages'
-import { mediaAPI } from '@/services/api'
+import { api,mediaAPI } from '@/services/api'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -36,6 +36,7 @@ type GalleryItem = {
   type: 'image' | 'video'
   image: string
   subtitle: string
+  videoUrl?:string
   featured?: boolean
 }
 
@@ -145,9 +146,11 @@ const GalleryPage = () => {
   const [activeCategory, setActiveCategory] = useState<Category>('All')
   const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null)
   const [publishedGallery, setPublishedGallery] = useState<GalleryItem[]>([])
+  const [managed,setManaged]=useState<boolean|null>(null)
 
   useEffect(() => {
-    mediaAPI.getAll().then(({ data }) => {
+    Promise.all([mediaAPI.getAll(),api.get('/site-content/publication-status')]).then(([{data},status])=>{
+      setManaged(status.data.data?.managed===true)
       const records = Array.isArray(data?.data) ? data.data : []
       setPublishedGallery(records
         .filter((item: any) => String(item.category || '').toLowerCase() === 'gallery')
@@ -157,13 +160,14 @@ const GalleryPage = () => {
           subtitle: item.description || 'A moment from life at Kinshasa Christian School.',
           category: (item.tags || []).map((tag: string) => categories.find((category) => category.toLowerCase() === String(tag).toLowerCase())).find(Boolean) || 'Campus Life',
           type: String(item.type).toUpperCase() === 'VIDEO' ? 'video' : 'image',
-          image: item.thumbnailUrl || item.url,
+          image: item.thumbnailUrl || (String(item.type).toUpperCase()==='VIDEO'?kcsPublicImages.campusGlory:item.url),
+          videoUrl:String(item.type).toUpperCase()==='VIDEO'?item.url:undefined,
           featured: (item.tags || []).some((tag: string) => String(tag).toLowerCase() === 'featured'),
         })))
     }).catch(() => setPublishedGallery([]))
   }, [])
 
-  const allGalleryItems = useMemo(() => publishedGallery.length ? publishedGallery : galleryItems, [publishedGallery])
+  const allGalleryItems = useMemo(() => (managed!==false||publishedGallery.length) ? publishedGallery : galleryItems, [publishedGallery,managed])
 
   const filteredItems = useMemo(() => {
     if (activeCategory === 'All') return allGalleryItems
@@ -381,7 +385,7 @@ const GalleryPage = () => {
               >
                 <div className="relative min-h-[320px] bg-black">
                   {selectedItem.type === 'video'
-                    ? <video src={selectedItem.image} aria-label={selectedItem.title} controls autoPlay className="h-full w-full object-contain" />
+                    ? <video src={selectedItem.videoUrl||selectedItem.image} aria-label={selectedItem.title} controls autoPlay className="h-full w-full object-contain" />
                     : <img src={selectedItem.image} alt={selectedItem.title} className="h-full w-full object-cover" />}
                 </div>
                 <div className="flex flex-col justify-between p-8 text-white">

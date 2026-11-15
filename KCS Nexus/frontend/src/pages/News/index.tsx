@@ -6,7 +6,7 @@ import SearchField from '@/components/shared/SearchField'
 import { kcsPublicImages } from '@/data/kcsPublicImages'
 import { formatSchoolCalendarDate, getUpcomingSchoolEvents, schoolCalendarEvents2026_2027, schoolYear2026_2027 } from '@/data/schoolCalendar2026_2027'
 import { useUIStore } from '@/store/uiStore'
-import { eventsAPI, newsAPI } from '@/services/api'
+import { api, eventsAPI, newsAPI } from '@/services/api'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -119,24 +119,27 @@ const NewsPage = () => {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [loading, setLoading] = useState(true)
+  const [managed,setManaged]=useState<boolean|null>(null),[loadError,setLoadError]=useState(false)
 
   useEffect(() => {
-    Promise.all([newsAPI.getAll(), eventsAPI.getAll()])
-      .then(([news, events]) => {
+    Promise.all([newsAPI.getAll(), eventsAPI.getAll(),api.get('/site-content/publication-status')])
+      .then(([news, events,status]) => {
+        setManaged(status.data.data?.managed===true);setLoadError(false)
         setLivePosts(Array.isArray(news.data?.data) ? news.data.data : [])
         setLiveEvents(Array.isArray(events.data?.data) ? events.data.data : [])
       })
+      .catch(()=>setLoadError(true))
       .finally(() => setLoading(false))
   }, [])
 
-  const allPosts = useMemo(() => livePosts.length ? livePosts.map((post) => ({
+  const allPosts = useMemo(() => (managed!==false||livePosts.length) ? livePosts.map((post) => ({
     id: post.slug || post.id, category: String(post.category || 'news').toLowerCase(), title: post.title, excerpt: post.excerpt,
     date: new Date(post.publishedAt || post.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { dateStyle: 'long' }),
     rawDate: post.publishedAt || post.createdAt, author: [post.author?.lastName, post.author?.firstName].filter(Boolean).join(' ') || 'KCS Administration',
     image: post.coverImage || kcsPublicImages.campusGlory, readTime: Math.max(1, Math.ceil(String(post.content || '').split(/\s+/).length / 220)) + ' min',
-  })) : fallbackPosts, [language, livePosts])
+  })) : fallbackPosts, [language, livePosts,managed])
 
-  const displayedUpcomingEvents = liveEvents.length ? liveEvents.map((event) => ({
+  const displayedUpcomingEvents = managed!==false||liveEvents.length ? liveEvents.map((event) => ({
     ...event,
     date: event.startDate,
     type: String(event.type || 'academic').toLowerCase(),
@@ -145,8 +148,8 @@ const NewsPage = () => {
   })) : upcomingEvents
 
   const filtered = allPosts.filter((p) => {
-    const terms = searchQuery.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().trim().split(/\\s+/).filter(Boolean)
-    const haystack = [p.title, p.excerpt, p.author, p.category, p.date].filter(Boolean).join(' ').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase()
+    const terms = searchQuery.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().split(/\s+/).filter(Boolean)
+    const haystack = [p.title, p.excerpt, p.author, p.category, p.date].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     const published = (p as any).rawDate ? new Date((p as any).rawDate) : null
     const from = dateFrom ? new Date(dateFrom + 'T00:00:00') : null
     const to = dateTo ? new Date(dateTo + 'T23:59:59.999') : null
@@ -154,10 +157,11 @@ const NewsPage = () => {
       && (!from || !published || published >= from) && (!to || !published || published <= to)
   })
 
-  const featured = allPosts[0] || fallbackPosts[0]
+  const featured = allPosts[0]
 
   return (
     <div className="pt-20">
+      {loadError&&<p role="alert" className="mx-auto my-4 max-w-5xl rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">{language==='fr'?'Les publications sont temporairement indisponibles. Actualisez la page pour réessayer.':'Publications are temporarily unavailable. Refresh the page to retry.'}</p>}
       {/* HERO */}
       <section className="relative py-20 kcs-gradient overflow-hidden">
         <div className="absolute inset-0 dots-bg opacity-10" style={{ backgroundSize: '40px 40px' }} />
@@ -175,7 +179,7 @@ const NewsPage = () => {
       </section>
 
       {/* FEATURED POST */}
-      <section className="py-12 bg-gray-50 dark:bg-kcs-blue-950/50">
+      {featured&&<section className="py-12 bg-gray-50 dark:bg-kcs-blue-950/50">
         <div className="container-custom">
           <AnimSection>
             <motion.div
@@ -210,7 +214,7 @@ const NewsPage = () => {
             </motion.div>
           </AnimSection>
         </div>
-      </section>
+      </section>}
 
       {/* FILTERS & GRID */}
       <section className="py-16 bg-white dark:bg-kcs-blue-950">
@@ -367,7 +371,7 @@ const NewsPage = () => {
                   <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">All dates below come from the school calendar supplied by KCS administration.</p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {schoolCalendarEvents2026_2027.map((event) => (
+                  {(managed?liveEvents.map(event=>({date:event.startDate,endDate:event.endDate,title:event.title,description:event.description,type:String(event.type).toLowerCase(),location:event.location})):schoolCalendarEvents2026_2027).map((event) => (
                     <article key={`full-${event.date}-${event.title}`} className="rounded-xl border border-white bg-white p-4 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950/60">
                       <p className="text-xs font-bold text-kcs-gold-700 dark:text-kcs-gold-300">{formatSchoolCalendarDate(event)}</p>
                       <h3 className="mt-1 font-bold text-kcs-blue-950 dark:text-white">{event.title}</h3>

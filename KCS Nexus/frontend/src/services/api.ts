@@ -431,6 +431,7 @@ export const admissionsAPI = {
 
 // --- Media API ---
 export const mediaAPI = {
+  update: (id:string,data:object) => api.put(`/media/${encodeURIComponent(id)}`,data),
   getAll: (params?: object) => api.get('/media', { params }),
   getCategories: () => api.get('/media/categories'),
   upload: (formData: FormData) =>

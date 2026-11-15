@@ -1,3 +1,4 @@
+import GradebookFocusHost from './GradebookFocusHost'
 import AcademicPeriodConfirmationSummary from '@/components/shared/AcademicPeriodConfirmationSummary'
 import { gradebookScorePercentage as parseScore, gradebookWeightedAverage, zeroWeightScoredAssessments, proposeScoredCategoryWeights } from '@/utils/gradebookCalculations'
 import GradebookWeightScopeDialog from './GradebookWeightScopeDialog'
@@ -204,6 +205,7 @@ const downloadFile = (fileName: string, content: string, type: string) => {
 
 const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse, onAction, onRegisterSave }: Props) => {
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false)
+  const [focusPeriodsOpen,setFocusPeriodsOpen]=useState(false)
   const [commandCenterOpen, setCommandCenterOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:command-center') !== 'closed')
   const [taskPanelOpen, setTaskPanelOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:task-panel') !== 'closed')
   const [weightPanelOpen, setWeightPanelOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:weight-panel') !== 'closed')
@@ -1022,7 +1024,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       </div>, document.body)}
       {weightScopeOpen && <GradebookWeightScopeDialog key={cycleKey} courses={courses} currentCourseId={selectedCourseId} academicYear={academicYear} term={term} categories={categories} onApply={applyWeightsToCourses} onClose={() => setWeightScopeOpen(false)}/>}
       {periodReadOnly && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{periodNotice}</p>}
-      <section className="rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
+      <section hidden={spreadsheetOpen&&!focusPeriodsOpen} className="shrink-0 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
         <p className="text-sm font-bold text-kcs-blue-950 dark:text-sky-100">{academicYear} · {tr('Période affichée', 'Displayed period')} {term}</p>
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{loadedScope !== cycleKey ? tr('Chargement sécurisé des notes enregistrées…', 'Loading saved gradebook securely…') : tr('Vos notes restent conservées dans leur période. Choisissez une période ci-dessous pour les retrouver.', 'Your grades remain saved in their original period. Choose a period below to view them.')} {officialTerm !== term && <strong>{tr('Période de saisie ouverte', 'Open grade-entry period')} {officialTerm}.</strong>}</p>
         {recoveredCells > 0 && <p className="mt-2 text-xs font-bold text-amber-800 dark:text-amber-200">{tr('Notes retrouvées dans les anciens formats', 'Grades recovered from older formats')} · {recoveredCells}. {tr('Enregistrez pour confirmer leur synchronisation.', 'Save to confirm synchronization.')}</p>}
@@ -1203,9 +1205,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         </div>
       </div>
 
-      {spreadsheetOpen && <div className="fixed inset-0 z-40 bg-kcs-blue-950/85 backdrop-blur-sm" aria-hidden="true" />}
-      <div className={spreadsheetOpen ? "gradebook-focus-window fixed inset-0 z-[9990] flex flex-col overflow-hidden border border-kcs-blue-300 bg-[#e8f1fc] text-kcs-blue-950 shadow-2xl dark:border-kcs-gold-500/60 dark:bg-slate-950 dark:text-white" : "overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"}>
-      <section className="rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
+      <GradebookFocusHost expanded={spreadsheetOpen}>
+      <div data-kcs-gradebook data-gradebook-focus={spreadsheetOpen||undefined} className={spreadsheetOpen ? "gradebook-focus-window fixed inset-0 z-[9990] flex flex-col overflow-hidden bg-[#e2edf7] text-kcs-blue-950 shadow-2xl dark:bg-[#081e31] dark:text-white" : "overflow-hidden rounded-2xl border border-sky-100 bg-white dark:border-sky-800 dark:bg-kcs-blue-900/50"}>
+      {spreadsheetOpen&&<header className="nexus-gradebook-focus-heading flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-sky-600/40 bg-gradient-to-r from-[#082e4e] to-[#12536c] px-4 py-3 text-white"><div className="flex min-w-0 items-center gap-3"><span className="rounded-xl border border-white/20 bg-white/10 p-2"><FileSpreadsheet size={23}/></span><div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[.15em] text-cyan-200">KCS Nexus · {tr('Espace de cotation','Grading workspace')}</p><h3 className="truncate text-base font-black sm:text-lg">{selectedCourse?.name}</h3><p className="text-[11px] text-sky-100">{academicYear} · {term} · {studentAnalytics.length} {tr('élèves','learners')}</p></div></div><div className="flex items-center gap-2"><button type="button" aria-expanded={focusPeriodsOpen} onClick={()=>setFocusPeriodsOpen(v=>!v)} className="rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-xs font-bold text-white">{tr('Choisir la période','Choose period')} <ChevronDown size={13} className="inline"/></button><button type="button" onClick={()=>setSpreadsheetOpen(false)} className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white hover:bg-rose-700"><Minimize2 size={15}/>{tr('Fermer','Close')} <span className="hidden opacity-70 sm:inline">Esc</span></button></div></header>}
+      <section hidden={spreadsheetOpen&&!focusPeriodsOpen} className="shrink-0 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
         <p className="text-sm font-bold text-kcs-blue-950 dark:text-sky-100">{academicYear} · {tr('Période affichée', 'Displayed period')} {term}</p>
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{loadedScope !== cycleKey ? tr('Chargement sécurisé des notes enregistrées…', 'Loading saved gradebook securely…') : tr('Vos notes restent conservées dans leur période. Choisissez une période ci-dessous pour les retrouver.', 'Your grades remain saved in their original period. Choose a period below to view them.')} {officialTerm !== term && <strong>{tr('Période actuelle du calendrier', 'Current calendar period')} {officialTerm}.</strong>}</p>
         {recoveredCells > 0 && <p className="mt-2 text-xs font-bold text-amber-800 dark:text-amber-200">{tr('Notes retrouvées dans les anciens formats', 'Grades recovered from older formats')} · {recoveredCells}. {tr('Enregistrez pour confirmer leur synchronisation.', 'Save to confirm synchronization.')}</p>}
@@ -1214,7 +1217,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           return <button key={period} type="button" disabled={loadedScope !== cycleKey} aria-pressed={term === period} onClick={() => chooseTerm(period)} className={`rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${term === period ? 'border-kcs-blue-700 bg-kcs-blue-700 text-white' : 'border-sky-200 bg-white text-kcs-blue-900 dark:border-sky-800 dark:bg-kcs-blue-900 dark:text-sky-100'}`}>{period} · {count} {tr('travaux', 'tasks')}</button>
         })}</div>
       </section>
-        <div className={`flex flex-col gap-2 border-b p-3 dark:border-kcs-blue-800 lg:flex-row lg:items-center lg:justify-between ${spreadsheetOpen ? 'border-kcs-blue-200 bg-[#dceaf9] dark:border-kcs-blue-700 dark:bg-kcs-blue-950' : 'border-gray-100'}`}>
+        <div className={`flex flex-col gap-2 border-b p-3 dark:border-kcs-blue-800 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between ${spreadsheetOpen ? 'border-kcs-blue-200 bg-[#dceaf9] dark:border-kcs-blue-700 dark:bg-kcs-blue-950' : 'border-gray-100'}`}>
           <div>
             <h4 className="font-bold text-kcs-blue-900 dark:text-white">Live spreadsheet</h4>{periodReadOnly && <p className="text-xs font-bold text-amber-800 dark:text-amber-300">{periodNotice}</p>}
             <p className="text-xs text-gray-500 dark:text-gray-400">Sticky roster, editable cells, comments, missing detection, weighted final average, and predictive final grade.</p>
@@ -1224,7 +1227,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             {skipDeleteConfirmation && <button type="button" onClick={() => { localStorage.removeItem('kcs:nexus:gradebook:skip-delete-confirmation'); setSkipDeleteConfirmation(false) }} className="inline-flex items-center rounded-xl border border-amber-300 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-700 dark:text-amber-200">{tr('Réactiver la confirmation', 'Restore delete prompts')}</button>}
             <button type="button" onClick={() => void exportGradebook('PDF', false, true)} className="inline-flex items-center justify-center gap-1 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800"><FileText size={15}/>{tr('PDF détaillé', 'Detailed PDF')}</button>
             {!spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><Maximize2 size={15}/> Dedicated window</button>}
-            {spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(false)} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white"><Minimize2 size={14}/> Close</button>}
+
             <label className="grid gap-1 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-300"><span>Assignment to fill</span><select aria-label="Assignment for bulk score" className="input-kcs py-2 text-sm" value={selectedAssignmentId} disabled={!visibleAssignments.length} onChange={(event) => setSelectedAssignmentId(event.target.value)}>
               {visibleAssignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.title}</option>)}
             </select></label>
@@ -1344,6 +1347,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </table>
         </div>
       </div>
+      </GradebookFocusHost>
       {rankingOpen && createPortal(<div className="fixed inset-0 z-[10010] flex items-center justify-center bg-kcs-blue-950/80 p-3" role="dialog" data-gradebook-overlay aria-modal="true" aria-label={tr('Classement des élèves', 'Learner ranking')}>
         <section className="flex max-h-[92dvh] w-full max-w-4xl flex-col rounded-3xl bg-white p-5 shadow-2xl dark:bg-kcs-blue-950">
         <h3 className="text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Classement des élèves', 'Learner ranking')} · {selectedCourse?.name}</h3>

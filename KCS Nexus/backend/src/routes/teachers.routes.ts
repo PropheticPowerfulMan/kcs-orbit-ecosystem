@@ -1,3 +1,5 @@
+import {teacherCoursePeriodsRouter,teachingPeriodSchema} from './teacher-course-periods.routes.js'
+import {saveCoursePeriods} from '../services/courseTeachingPeriods.service.js'
 import { parentMeetingsRouter } from './parent-meetings.routes.js'
 import {allowsTeacherCourseCredits} from '../utils/courseCreditHours.js'
 import { academicEntryPeriod, futureGradebookChanged } from '../utils/academicPeriodPolicy.js'
@@ -20,11 +22,12 @@ import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { academicScheduleForTeacher } from '../utils/academicSchedule.js'
 import { ensureOrbitStudentProfile } from '../services/orbitStudentMaterialization.js'
 import { generateInteractiveAssignmentDraft } from '../services/assignmentAssessment.service.js'
-import { academicCycleFromDate, mergeAssignmentIntoGradebookCycle } from '../services/gradebookCycle.service.js'
+import { mergeAssignmentIntoGradebookCycle } from '../services/gradebookCycle.service.js'
 import { attendanceRateFromStatuses } from '../utils/attendancePolicy.js'
 
 export const teachersRouter = Router()
 teachersRouter.use('/parent-meetings', parentMeetingsRouter)
+teachersRouter.use('/me/course-periods', teacherCoursePeriodsRouter)
 
 type OrbitDirectoryStudent = {
   id: string
@@ -244,6 +247,7 @@ const assignmentAiDraftSchema = z.object({
 })
 
 const teacherCourseSyncSchema = z.object({
+  teachingPeriod: teachingPeriodSchema.optional(),
   id: z.string().min(3).max(120),
   name: z.string().trim().min(2).max(180),
   abbreviation: z.string().trim().max(30).optional().default(''),
@@ -464,6 +468,7 @@ teachersRouter.put('/me/workspace', authenticate, requireRoles('teacher'), async
 teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = teacherCourseSyncSchema.parse(req.body)
   if (new Set(payload.studentIds).size !== payload.studentIds.length) throw new ApiError(400, 'Duplicate learner in course enrollment')
+  if(payload.teachingPeriod){const access=await academicPeriodAccess();if(!(access.calendars||[]).some(c=>c.name===payload.teachingPeriod!.academicYear))throw new ApiError(400,'Choose a school year published by Super Administration.');payload.teachingPeriod.semesters.forEach(s=>assertAcademicPeriodOpen(access,payload.teachingPeriod!.academicYear,'Semester '+s))}
   const teacher = await ensureTeacherProfile(req.user!.sub)
   const requestedExisting = await prisma.course.findUnique({ where: { id: payload.id }, select: { id: true, teacherId: true, code: true, credits: true } })
   if (requestedExisting && requestedExisting.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
@@ -535,6 +540,7 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
           code,
         },
       })
+    if(payload.teachingPeriod&&!isSubmissionPreflight)await saveCoursePeriods(tx,{courseId:saved.id,actorId:req.user!.sub,...payload.teachingPeriod,mode:requestedExisting?'replace':'add'})
     await tx.enrollment.deleteMany({ where: { courseId: saved.id, studentId: { notIn: resolvedStudentIds } } })
     if (resolvedStudentIds.length) await tx.enrollment.createMany({ data: resolvedStudentIds.map((studentId) => ({ courseId: saved.id, studentId })), skipDuplicates: true })
     await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_COURSE_SYNCHRONIZED', targetType: 'Course', targetId: saved.id, metadata: { grade: payload.grade, credits: payload.credits ?? 'preserved', room: payload.room, enrolledStudents: resolvedStudentIds.length } } })
@@ -854,6 +860,8 @@ teachersRouter.post('/me/assignments', authenticate, requireRoles('teacher'), as
   return success(res, assignment, 'Assignment published to enrolled students', 201)
 }))
 
+teachersRouter.get('/me/assignments/ai-capabilities', authenticate, requireRoles('teacher'), asyncHandler(async (_req,res)=>{res.setHeader('Cache-Control','private, no-store');return success(res,{compositionConfigured:Boolean(env.OPENAI_API_KEY),objectiveGrading:true,teacherReview:true})}))
+
 teachersRouter.post('/me/assignments/ai-draft', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = assignmentAiDraftSchema.parse(req.body)
   const course = await ownedCourse(req.user!.sub, payload.courseId)
@@ -914,21 +922,30 @@ teachersRouter.post('/me/assignments/:assignmentId/sync-gradebook', authenticate
   })
   if (!assignment) throw new ApiError(403, 'This assignment is not assigned to the authenticated teacher')
   if (!assignment.submissions.length) throw new ApiError(409, 'No corrected result is ready for the Gradebook')
-  const inferredCycle = academicCycleFromDate(assignment.dueDate)
-  const academicYear = requestedCycle.academicYear ?? inferredCycle.academicYear
-  const term = requestedCycle.term ?? inferredCycle.term
+  const inferredCycle = await academicCycleForDate(assignment.dueDate)
+  const access = await academicPeriodAccess()
+  const academicYear = requestedCycle.academicYear ?? inferredCycle?.academicYear ?? access.activeAcademicYear
+  const term = requestedCycle.term ?? inferredCycle?.term ?? access.activeEntryTerm
+  if(!academicYear||!term)throw new ApiError(409,'Choose the official school year and quarter before transferring results.')
+  if(!(access.calendars||[]).some(c=>c.name===academicYear))throw new ApiError(409,'Choose an official school year published by Super Administration.')
   const synchronizedAt = new Date()
   await academicPeriodAccess()
   const result = await prisma.$transaction(async (tx) => {
     await protectGradebookEntry(tx, academicYear, term)
-    await tx.grade.deleteMany({ where: { assignmentId, courseId: assignment.courseId } })
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "Assignment" WHERE id = ${assignmentId} FOR UPDATE`)
+    const targetPeriod=`${academicYear}::${term}`
+    const foreignPeriod=await tx.grade.findFirst({where:{assignmentId,courseId:assignment.courseId,period:{notIn:[targetPeriod,'CURRENT']}}})
+    if(foreignPeriod)throw new ApiError(409,'This assignment is already linked to another academic period. Select its original period; no historical grade was removed.')
+    await tx.grade.deleteMany({ where: { assignmentId, courseId: assignment.courseId,period:{in:[targetPeriod,'CURRENT']} } })
     await tx.grade.createMany({ data: assignment.submissions.map((submission) => {
       const score = Number(submission.score)
       const percentage = Number(((score / assignment.maxScore) * 100).toFixed(2))
       const letterGrade = percentage >= 90 ? 'A' : percentage >= 80 ? 'B' : percentage >= 70 ? 'C' : percentage >= 60 ? 'D' : 'F'
       return { assignmentId, studentId: submission.studentId, courseId: assignment.courseId, score, maxScore: assignment.maxScore, percentage, letterGrade, period: `${academicYear}::${term}` }
     }) })
-    const workspace = await tx.teacherWorkspace.findUnique({ where: { userId: req.user!.sub } })
+    const initial=await tx.teacherWorkspace.upsert({where:{userId:req.user!.sub},create:{userId:req.user!.sub,state:{}},update:{},select:{id:true}})
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "TeacherWorkspace" WHERE id = ${initial.id} FOR UPDATE`)
+    const workspace = await tx.teacherWorkspace.findUniqueOrThrow({ where: { id: initial.id } })
     const nextWorkspaceState = mergeAssignmentIntoGradebookCycle(workspace?.state, {
       courseId: assignment.courseId,
       assignmentId,
@@ -959,7 +976,7 @@ teachersRouter.post('/me/assignments/:assignmentId/sync-gradebook', authenticate
     if (notificationRows.length) await tx.notification.createMany({ data: notificationRows })
     await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'ASSIGNMENT_RESULTS_SYNCED_TO_GRADEBOOK', targetType: 'Assignment', targetId: assignmentId, metadata: { resultCount: assignment.submissions.length, academicYear, term, synchronizedAt: synchronizedAt.toISOString() } } })
     return { synchronized: assignment.submissions.length, academicYear, term, synchronizedAt }
-  })
+  }, {maxWait:10000,timeout:30000})
   return success(res, result, `${result.synchronized} corrected result(s) sent to the ${academicYear} · ${term} Gradebook`)
 }))
 

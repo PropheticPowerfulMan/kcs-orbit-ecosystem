@@ -1,0 +1,338 @@
+{
+  "./images/menu-items/bavaria.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/bavaria-480-40456a4f22.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/bavaria-960-d0a2fe0db4.webp",
+        "width": 960
+      }
+    ],
+    "width": 1080,
+    "height": 1080
+  },
+  "./images/menu-items/beef-skewers.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/beef-skewers-480-0260cb2e55.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/beef-skewers-960-ed97a4b708.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/bisap.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/bisap-480-71d54464f6.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/bisap-960-df6ab5555a.webp",
+        "width": 960
+      }
+    ],
+    "width": 1080,
+    "height": 1080
+  },
+  "./images/menu-items/bora.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/bora-480-f7e8e937ff.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/bora-960-3fa7408b85.webp",
+        "width": 960
+      }
+    ],
+    "width": 1080,
+    "height": 1080
+  },
+  "./images/menu-items/chicken-fries.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/chicken-fries-480-f6a05e2b51.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/chicken-fries-960-55197f51c1.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/chicken-kcs.png": {
+    "sources": [
+      {
+        "src": "./images/optimized/chicken-kcs-480-606d3602ad.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/chicken-kcs-960-f561f7132d.webp",
+        "width": 960
+      }
+    ],
+    "width": 1254,
+    "height": 1254
+  },
+  "./images/menu-items/chicken-meatballs.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/chicken-meatballs-480-0954f9a9f3.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/chicken-meatballs-960-c25ff93465.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/coca.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/coca-480-85f90544fc.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/coca-960-4167d810ef.webp",
+        "width": 960
+      }
+    ],
+    "width": 1080,
+    "height": 1080
+  },
+  "./images/menu-items/crepes.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/crepes-480-04aa301f34.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/crepes-960-22b2db5340.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/fanta.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/fanta-480-5ff0e416b2.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/fanta-960-3c62e51802.webp",
+        "width": 960
+      }
+    ],
+    "width": 1080,
+    "height": 1080
+  },
+  "./images/menu-items/flavored-rice.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/flavored-rice-480-f08ca3f8b7.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/flavored-rice-960-2817d30ee5.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/french-toast.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/french-toast-480-f4ada08ea4.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/french-toast-960-84decd4fb6.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/fries-kcs.png": {
+    "sources": [
+      {
+        "src": "./images/optimized/fries-kcs-480-a07046bcc3.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/fries-kcs-960-23bae8c75f.webp",
+        "width": 960
+      }
+    ],
+    "width": 1254,
+    "height": 1254
+  },
+  "./images/menu-items/lait-caille.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/lait-caille-480-2d3a68d67f.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/lait-caille-960-14f4f44370.webp",
+        "width": 960
+      }
+    ],
+    "width": 1080,
+    "height": 1080
+  },
+  "./images/menu-items/macaronis.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/macaronis-480-aa8b874b69.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/macaronis-960-490ea2a865.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/plantain.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/plantain-480-f22b6a8bb8.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/plantain-960-75c26d4d53.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/samoussas.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/samoussas-480-84fd025915.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/samoussas-960-5fbae14dae.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/sandwich.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/sandwich-480-b2fe8da012.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/sandwich-960-8d8cb60313.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/shawarma-meat.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/shawarma-meat-480-a694b89408.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/shawarma-meat-960-90112357ba.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/vitalo.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/vitalo-480-e29da40f1e.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/vitalo-960-ed27c26525.webp",
+        "width": 960
+      }
+    ],
+    "width": 1080,
+    "height": 1080
+  },
+  "./images/menu-items/waffles.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/waffles-480-063e9812e6.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/waffles-960-e1baf06eb9.webp",
+        "width": 960
+      }
+    ],
+    "width": 1280,
+    "height": 960
+  },
+  "./images/menu-items/water.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/water-480-d0ba66c282.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/water-960-0b6eb1933f.webp",
+        "width": 960
+      }
+    ],
+    "width": 1080,
+    "height": 1080
+  },
+  "./images/menu-items/yaourt.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/yaourt-480-2cb0bbe0ea.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/yaourt-960-fb270a9c8e.webp",
+        "width": 960
+      }
+    ],
+    "width": 1080,
+    "height": 1080
+  },
+  "./images/kitchen-culinary-hero.jpg": {
+    "sources": [
+      {
+        "src": "./images/optimized/kitchen-culinary-hero-480-59261927ad.webp",
+        "width": 480
+      },
+      {
+        "src": "./images/optimized/kitchen-culinary-hero-960-7f0b3c2998.webp",
+        "width": 960
+      }
+    ],
+    "width": 1600,
+    "height": 900
+  }
+}

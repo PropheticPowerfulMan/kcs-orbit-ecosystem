@@ -13,7 +13,8 @@ const DEMO_MODE_ENABLED = IS_GITHUB_PAGES
   || String(import.meta.env.VITE_ENABLE_DEMO_MODE || '').trim().toLowerCase() === 'true';
 const DIRECTORY_CACHE_TTL_MS = 15 * 1000;
 const DIRECTORY_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
-const DIRECTORY_STORAGE_KEY = 'savanex:shared-directory:v4';
+const DIRECTORY_STORAGE_KEY = 'savanex:shared-directory:v5';
+const directoryOwner = () => String(useAuthStore.getState().user?.id || useAuthStore.getState().user?.email || '');
 
 const normalizeSharedDirectory = (directory) => {
   const payload = directory && typeof directory === 'object' ? directory : {};
@@ -40,7 +41,7 @@ const readStoredDirectory = () => {
   if (typeof window === 'undefined') return null;
   try {
     const value = JSON.parse(window.localStorage.getItem(DIRECTORY_STORAGE_KEY) || 'null');
-    return value?.loadedAt && Date.now() - value.loadedAt < DIRECTORY_CACHE_MAX_AGE_MS
+    return value?.owner === directoryOwner() && value?.loadedAt && Date.now() - value.loadedAt < DIRECTORY_CACHE_MAX_AGE_MS
       ? { ...value, data: normalizeSharedDirectory(value.data) }
       : null;
   } catch {
@@ -685,11 +686,13 @@ export const studentsService = {
 
 export const sharedDirectoryService = {
   async get({ force = false } = {}) {
+    const owner = directoryOwner();
+    if(sharedDirectoryCache?.owner!==owner)sharedDirectoryCache=null;
     const now = Date.now();
     if (!force && sharedDirectoryCache && now - sharedDirectoryCache.loadedAt < DIRECTORY_CACHE_TTL_MS) {
       return sharedDirectoryCache.data;
     }
-    if (!force && sharedDirectoryRequest) return sharedDirectoryRequest;
+    if (!force && sharedDirectoryRequest && sharedDirectoryRequest.owner===owner) return sharedDirectoryRequest;
 
     const staleDirectory = sharedDirectoryCache?.data || null;
     const request = api
@@ -700,22 +703,25 @@ export const sharedDirectoryService = {
       })
       .then((res) => {
         const data = normalizeSharedDirectory(res.data);
-        sharedDirectoryCache = { data, loadedAt: Date.now() };
+        if(directoryOwner()!==owner)throw new Error('Identity changed during directory loading');
+        sharedDirectoryCache = { data, owner, loadedAt: Date.now() };
         storeDirectory(sharedDirectoryCache);
         return data;
       })
       .catch((error) => {
-        if (!force && staleDirectory && error?.response?.status !== 401) return staleDirectory;
+        if (directoryOwner()===owner && !force && staleDirectory && ![401,403].includes(error?.response?.status)) return staleDirectory;
         throw error;
       })
       .finally(() => {
         if (sharedDirectoryRequest === request) sharedDirectoryRequest = null;
       });
+    request.owner=owner;
     if (!force) sharedDirectoryRequest = request;
     return request;
   },
   clear() {
     sharedDirectoryCache = null;
+    sharedDirectoryRequest = null;
     if (typeof window !== 'undefined') window.localStorage.removeItem(DIRECTORY_STORAGE_KEY);
   },
 };
