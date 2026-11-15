@@ -1,10 +1,11 @@
+import {usePublishedAcademicCalendar} from '@/hooks/usePublishedAcademicCalendar'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link,useParams } from 'react-router-dom'
 import { motion, useInView } from 'framer-motion'
 import { Calendar, ArrowRight, Clock, Search } from 'lucide-react'
 import SearchField from '@/components/shared/SearchField'
 import { kcsPublicImages } from '@/data/kcsPublicImages'
-import { formatSchoolCalendarDate, getUpcomingSchoolEvents, schoolCalendarEvents2026_2027, schoolYear2026_2027 } from '@/data/schoolCalendar2026_2027'
+import { formatSchoolCalendarDate, getUpcomingSchoolEvents, schoolCalendarEvents2026_2027 } from '@/data/schoolCalendar2026_2027'
 import { useUIStore } from '@/store/uiStore'
 import { api, eventsAPI, newsAPI } from '@/services/api'
 
@@ -112,6 +113,8 @@ const eventTypeColors: Record<string, string> = {
 const NewsPage = () => {
   const {id:articleKey}=useParams<{id:string}>()
   const language = useUIStore((state) => state.language)
+  const {calendar:officialCalendar}=usePublishedAcademicCalendar(true)
+  const schoolYear=officialCalendar?{name:officialCalendar.name,firstDay:officialCalendar.startDate,lastOfficialDay:officialCalendar.endDate,semesters:officialCalendar.periods.filter(p=>p.type==='SEMESTER'),quarters:officialCalendar.periods.filter(p=>p.type==='QUARTER')}:null
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [showFullCalendar, setShowFullCalendar] = useState(false)
@@ -230,11 +233,11 @@ const NewsPage = () => {
       {/* FILTERS & GRID */}
       <section className="py-16 bg-white dark:bg-kcs-blue-950">
         <div className="container-custom">
-          <aside className="public-calendar-shortcut mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-kcs-blue-900"><div><b className="text-sm text-sky-950 dark:text-sky-50">{language==='fr'?'Calendrier et année scolaire':'Calendar and school year'} · {schoolYear2026_2027.name}</b><p className="text-xs text-slate-600 dark:text-slate-300">{language==='fr'?'Semestres, quarters et dates de référence dans un panneau repliable.':'Semesters, quarters and reference dates in a collapsible panel.'}</p></div><button type="button" aria-expanded={calendarExpanded} onClick={()=>setCalendarExpanded(value=>!value)} className="rounded-xl bg-sky-700 px-4 py-2.5 text-xs font-bold text-white">{calendarExpanded?(language==='fr'?'Masquer les repères':'Hide reference dates'):(language==='fr'?'Voir les repères scolaires':'View school dates')}</button></aside>
+          <aside className="public-calendar-shortcut mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-kcs-blue-900"><div><b className="text-sm text-sky-950 dark:text-sky-50">{language==='fr'?'Calendrier et année scolaire':'Calendar and school year'} · {(schoolYear?.name||'—')}</b><p className="text-xs text-slate-600 dark:text-slate-300">{language==='fr'?'Semestres, quarters et dates de référence dans un panneau repliable.':'Semesters, quarters and reference dates in a collapsible panel.'}</p></div><button type="button" aria-expanded={calendarExpanded} onClick={()=>setCalendarExpanded(value=>!value)} className="rounded-xl bg-sky-700 px-4 py-2.5 text-xs font-bold text-white">{calendarExpanded?(language==='fr'?'Masquer les repères':'Hide reference dates'):(language==='fr'?'Voir les repères scolaires':'View school dates')}</button></aside>
           <AnimSection className="mb-12 public-calendar-reference" hidden={!calendarExpanded}>
             <motion.div variants={fadeUp} className="mb-6">
               <span className="badge-gold mb-3 inline-flex items-center gap-2 text-sm">
-                <Calendar size={14} /> Official 2026-2027 Calendar
+                <Calendar size={14} /> {language==='fr'?'Calendrier scolaire publié':'Published school calendar'}
               </span>
               <h2 className="font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">
                 One verified calendar for the whole KCS ecosystem
@@ -247,19 +250,19 @@ const NewsPage = () => {
             <div className="grid gap-5 lg:grid-cols-3">
               <motion.article variants={fadeUp} className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
                 <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">School year</p>
-                <h3 className="mt-2 text-xl font-bold text-kcs-blue-950 dark:text-white">{schoolYear2026_2027.name}</h3>
-                <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">First day: {formatSchoolCalendarDate({ date: schoolYear2026_2027.firstDay })}</p>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Last official day: {formatSchoolCalendarDate({ date: schoolYear2026_2027.lastOfficialDay })}</p>
+                <h3 className="mt-2 text-xl font-bold text-kcs-blue-950 dark:text-white">{(schoolYear?.name||'—')}</h3>
+                <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">First day: {formatSchoolCalendarDate({ date: (schoolYear?.firstDay||'') })}</p>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Last official day: {formatSchoolCalendarDate({ date: (schoolYear?.lastOfficialDay||'') })}</p>
               </motion.article>
               <motion.article variants={fadeUp} className="rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
                 <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Semesters</p>
-                <div className="mt-3 space-y-3">{schoolYear2026_2027.semesters.map((period) => (
+                <div className="mt-3 space-y-3">{(schoolYear?.semesters||[]).map((period) => (
                   <div key={period.code}><p className="font-bold text-kcs-blue-950 dark:text-white">{period.code} · {period.name}</p><p className="text-xs text-gray-500 dark:text-gray-400">{formatSchoolCalendarDate({ date: period.startDate, endDate: period.endDate })}</p></div>
                 ))}</div>
               </motion.article>
               <motion.article variants={fadeUp} className="rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
                 <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Quarters · 45 instructional days each</p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">{schoolYear2026_2027.quarters.map((period) => (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">{(schoolYear?.quarters||[]).map((period) => (
                   <div key={period.code}><p className="font-bold text-kcs-blue-950 dark:text-white">{period.code} · {period.name}</p><p className="text-xs text-gray-500 dark:text-gray-400">{formatSchoolCalendarDate({ date: period.startDate, endDate: period.endDate })}</p></div>
                 ))}</div>
               </motion.article>
@@ -381,9 +384,9 @@ const NewsPage = () => {
             <AnimSection className="mt-12">
               <motion.div id="news-full-calendar" variants={fadeUp} className="max-h-[70dvh] overflow-y-auto rounded-3xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40 sm:p-7">
                 <div className="mb-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-700 dark:text-kcs-gold-300">Approved source: KCS 2026-2027 School Event Calendar</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-700 dark:text-kcs-gold-300">{language==='fr'?'Événements publiés par KCS':'Events published by KCS'}</p>
                   <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white">Full Official Calendar</h2>
-                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">All dates below come from the school calendar supplied by KCS administration.</p>
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{language==='fr'?'Les dates ci-dessous proviennent des événements publiés par la direction.':'The dates below come from events published by school leadership.'}</p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {(managed?liveEvents.map(event=>({date:event.startDate,endDate:event.endDate,title:event.title,description:event.description,type:String(event.type).toLowerCase(),location:event.location})):schoolCalendarEvents2026_2027).map((event) => (

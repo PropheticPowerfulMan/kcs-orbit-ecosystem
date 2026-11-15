@@ -12,3 +12,44 @@
 @media(max-width:700px){.admin-overview-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-overview-tabs button{justify-content:flex-start;font-size:11px;padding:9px}.admin-summary-metric{gap:5px 8px;padding:12px}.admin-summary-metric>div:first-child{width:34px;height:34px}.admin-summary-metric>p:first-of-type{font-size:23px!important}}
 @media(prefers-reduced-motion:reduce){.admin-overview-tabs button{transition:none}}
 }
+@media screen {
+html:not(.dark) [data-admin-overview] .admin-summary-metric{background:#e2eef6!important;border-color:#b2ccdd!important}
+html:not(.dark) [data-admin-overview] .admin-summary-metric>p{color:#183e56!important}
+html:not(.dark) [data-admin-overview] .admin-summary-metric>p:last-child{color:#45667e!important}
+}
+
+@media screen {
+[data-communications-workspace] [hidden]{display:none!important}
+.communications-workspace-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;padding:7px;border:1px solid #abcbdc;border-radius:20px;background:#dcebf4}
+.communications-workspace-tabs button{display:flex;justify-content:space-between;align-items:center;gap:8px;min-width:0;padding:14px 16px;border-radius:14px;color:#1b4760;font-size:12px;font-weight:800}
+.communications-workspace-tabs button b{display:grid;place-items:center;min-width:25px;height:25px;padding:0 6px;background:#c5dfe9;border-radius:9px;font-variant-numeric:tabular-nums}
+.communications-workspace-tabs [aria-selected=true]{background:#125979;color:#fff;box-shadow:0 5px 14px #08374f22}
+.communications-workspace-tabs [aria-selected=true] b{background:#ffffff1c;color:#eafaff}
+.dark .communications-workspace-tabs{background:#082b41;border-color:#2b5d75}.dark .communications-workspace-tabs button{color:#d8edf8}.dark .communications-workspace-tabs button b{background:#15465e;color:#edfaff}
+.communications-history-list{max-height:62dvh;overflow:auto;overscroll-behavior:contain;border:1px solid #abcbdc;border-radius:16px}
+.communications-history-list thead{position:sticky;top:0;z-index:2;background:#dfedf5}.dark .communications-history-list thead{background:#0c3048}
+@media(max-width:640px){.communications-workspace-tabs{gap:4px;padding:5px;border-radius:16px}.communications-workspace-tabs button{flex-direction:column;align-items:flex-start;padding:10px;font-size:11px;gap:6px}.communications-history-list{max-height:58dvh}}
+}
+
+@media screen {
+html:not(.dark) [data-admin-analysis]{color:#163d55}
+html:not(.dark) [data-admin-analysis] :is(h2,h3,p,b,strong,span,li):not(button *){color:#234a61}
+html:not(.dark) [data-admin-analysis] :is(article,section,[class*="bg-cyan-50"],[class*="bg-gray-50"],[class*="bg-kcs-blue-50"]){background:#e2eef6;border-color:#b4ccde}
+html:not(.dark) [data-admin-analysis] button{background:#105576;color:#fff;border-color:#2a7895}
+html:not(.dark) [data-admin-analysis] button :is(span,svg){color:inherit}
+}
+
+@media screen and (max-width:640px){
+.communications-history-list table{display:block;min-width:0!important;width:100%}.communications-history-list thead{display:none}.communications-history-list tbody{display:block;padding:8px}.communications-history-list tbody tr{display:grid;grid-template-columns:32px minmax(0,1fr);gap:3px 9px;padding:12px;border:1px solid #abcbdc;border-radius:14px;margin-bottom:8px}.communications-history-list td{padding:4px;min-width:0}.communications-history-list td:first-child{grid-column:1;grid-row:1}.communications-history-list td:nth-child(2){grid-column:2}.communications-history-list td:nth-child(n+3){grid-column:1/-1}.communications-history-list td:nth-child(4){font-size:11px}.communications-history-list td:last-child{display:flex;justify-content:flex-end}.dark .communications-history-list tbody tr{border-color:#28556e}
+}
+
+@media screen {
+.communications-audience-summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;margin-top:16px;padding:12px;border:1px solid #aac9db;border-radius:14px;background:#dcebf4;color:#153e57;font-size:12px}.communications-audience-summary>span{font-weight:800}.communications-audience-summary p{overflow-wrap:anywhere}.communications-audience-summary button{padding:8px 12px;border-radius:9px;background:#145d7d;color:#fff;font-weight:700}.dark .communications-audience-summary{background:#0c3048;border-color:#2d6279;color:#e7f5ff}.communications-workspace-tabs button:focus-visible{outline:3px solid #28a1be;outline-offset:3px}@media(max-width:640px){.communications-audience-summary{grid-template-columns:1fr}.communications-audience-summary button{justify-self:start}}
+}
+
+@media screen {
+html:not(.dark) .portal-shell [data-admin-analysis]{background:#e6f0f7!important;color:#173e56!important}
+html:not(.dark) .portal-shell [data-admin-analysis] :is(h1,h2,h3,p,b,strong,span,li){color:#234a61!important}
+html:not(.dark) .portal-shell [data-admin-analysis] :is(article,section,div[class*="bg-"],p[class*="bg-"]){background:#dcebf4!important;border-color:#b4ccde!important}
+html:not(.dark) .portal-shell [data-admin-analysis] button,html:not(.dark) .portal-shell [data-admin-analysis] button :is(span,svg){background:#105576!important;color:#fff!important}
+}

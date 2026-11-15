@@ -1,3 +1,7 @@
+import {createPortal} from 'react-dom'
+import {useUIStore} from '@/store/uiStore'
+import PublicBroadcastGallery from '@/components/shared/PublicBroadcastGallery'
+import SchoolVideoPlayer from '@/components/shared/SchoolVideoPlayer'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import { Play, X, Camera, Film, ChevronRight } from 'lucide-react'
@@ -143,8 +147,10 @@ const galleryItems: GalleryItem[] = [
 ]
 
 const GalleryPage = () => {
+  const language=useUIStore(state=>state.language)
   const [activeCategory, setActiveCategory] = useState<Category>('All')
   const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null)
+  useEffect(()=>{if(!selectedItem)return;const previous=document.activeElement as HTMLElement|null,overflow=document.body.style.overflow;document.body.style.overflow='hidden';const close=(event:KeyboardEvent)=>{if(event.key==='Escape')setSelectedItem(null)};document.addEventListener('keydown',close);return()=>{document.body.style.overflow=overflow;document.removeEventListener('keydown',close);previous?.focus()}},[selectedItem])
   const [publishedGallery, setPublishedGallery] = useState<GalleryItem[]>([])
   const [managed,setManaged]=useState<boolean|null>(null)
 
@@ -272,7 +278,7 @@ const GalleryPage = () => {
                 >
                   <div className="relative overflow-hidden">
                     {item.type === 'video'
-                      ? <video src={item.image} aria-label={item.title} muted preload="metadata" className="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      ? <img src={item.image} alt={item.title} loading="lazy" className="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105" />
                       : <img src={item.image} alt={item.title} className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-90" />
                     <div className="absolute top-4 left-4 flex items-center gap-2">
@@ -308,7 +314,7 @@ const GalleryPage = () => {
             </motion.div>
             <div className="grid lg:grid-cols-3 gap-6">
               {allGalleryItems
-                .filter((item) => item.type === 'video')
+                .filter((item) => item.type === 'video' && Boolean(item.videoUrl))
                 .map((item) => (
                   <motion.button
                     data-site-exclude key={item.id}
@@ -332,6 +338,7 @@ const GalleryPage = () => {
                   </motion.button>
                 ))}
             </div>
+          <PublicBroadcastGallery/>
           </AnimSection>
         </div>
       </section>
@@ -355,13 +362,13 @@ const GalleryPage = () => {
         </div>
       </section>
 
-      <AnimatePresence>
+      {createPortal(<AnimatePresence>
         {selectedItem && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md p-4 md:p-8"
+            role="dialog" aria-modal="true" aria-label={selectedItem.title} data-gallery-viewer className="fixed inset-0 z-[210] bg-black/85 backdrop-blur-md p-4 md:p-8"
             onClick={() => setSelectedItem(null)}
           >
             <div className="relative mx-auto flex h-full max-w-6xl items-center justify-center">
@@ -370,6 +377,7 @@ const GalleryPage = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 onClick={() => setSelectedItem(null)}
+                autoFocus aria-label={language==='fr'?'Fermer la vidéo ou la photo':'Close video or photo'}
                 className="absolute right-0 top-0 z-10 w-12 h-12 rounded-full bg-white/10 text-white border border-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
               >
                 <X size={20} />
@@ -381,11 +389,11 @@ const GalleryPage = () => {
                 exit={{ opacity: 0, y: 20, scale: 0.96 }}
                 transition={{ duration: 0.25 }}
                 onClick={(event) => event.stopPropagation()}
-                className="grid w-full overflow-hidden rounded-[2rem] border border-white/10 bg-kcs-blue-950 lg:grid-cols-[1.35fr_0.65fr]"
+                className="grid max-h-[calc(100dvh-6rem)] w-full overflow-y-auto rounded-[2rem] border border-white/10 bg-kcs-blue-950 lg:grid-cols-[1.35fr_0.65fr]"
               >
                 <div className="relative min-h-[320px] bg-black">
                   {selectedItem.type === 'video'
-                    ? <video src={selectedItem.videoUrl||selectedItem.image} aria-label={selectedItem.title} controls autoPlay className="h-full w-full object-contain" />
+                    ? <SchoolVideoPlayer url={selectedItem.videoUrl||selectedItem.image} title={selectedItem.title} poster={selectedItem.image}/>
                     : <img src={selectedItem.image} alt={selectedItem.title} className="h-full w-full object-cover" />}
                 </div>
                 <div className="flex flex-col justify-between p-8 text-white">
@@ -412,7 +420,7 @@ const GalleryPage = () => {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
     </div>
   )
 }

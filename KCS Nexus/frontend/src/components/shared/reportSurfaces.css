@@ -1,0 +1,20 @@
+@media screen {
+[data-report-surface]{--rp-card:#eaf2f8;--rp-field:#f0f6fa;--rp-ink:#153e56;--rp-muted:#4a6b80;--rp-line:#b5d0df;min-width:0;color:var(--rp-ink)}
+.dark [data-report-surface]{--rp-card:#0d3047;--rp-field:#08263b;--rp-ink:#eaf5fd;--rp-muted:#b1ccdc;--rp-line:#315d74}
+[data-report-surface] :is(section,article,form){border-radius:25px;border-color:var(--rp-line)}
+[data-report-surface] :is(section,article,form)[class*="bg-white"]{background:var(--rp-card);border:1px solid var(--rp-line);box-shadow:0 10px 28px #052b4510}
+[data-report-surface] :is(header,section)[class*="bg-gradient-to-r"]{background:linear-gradient(120deg,#062b45,#13516b);border:1px solid #38748d;box-shadow:0 14px 32px #062a4520;position:relative;overflow:hidden}
+[data-report-surface] :is(header,section)[class*="bg-gradient-to-r"] :is(h1,h2,p,span){color:#eaf7ff}
+[data-report-surface] :is(header,section)[class*="bg-gradient-to-r"] p:first-child{color:#8cdeea;letter-spacing:.16em;font-size:10px;text-transform:uppercase}
+[data-report-surface] :is(input,select,textarea):not([type=checkbox]):not([type=radio]){min-width:0;max-width:100%;background:var(--rp-field);color:var(--rp-ink);border:1px solid var(--rp-line);border-radius:13px;box-shadow:inset 0 1px 2px #052b4505}
+[data-report-surface] :is(input,textarea)::placeholder{color:var(--rp-muted);opacity:1}
+[data-report-surface] :is(input,select,textarea):focus-visible{outline:3px solid #28acbe48;border-color:#2ca8bd;outline-offset:1px}
+[data-report-surface] .report-field{display:grid;min-width:0;gap:7px;font-size:12px;font-weight:700;color:var(--rp-ink)}
+[data-report-surface] .report-field-wide{grid-column:1/-1}
+[data-report-surface] :is(.text-gray-400,.text-gray-500){color:var(--rp-muted)}
+[data-report-surface] button{border-radius:12px;transition:background .18s,box-shadow .18s;min-height:38px}
+[data-report-surface] button:is([class*="bg-kcs-blue-700"],[class*="bg-green-700"]){box-shadow:0 5px 14px #073b5b20}
+[data-report-surface] :is(.grid,.flex)>*{min-width:0}
+@media(max-width:640px){[data-report-surface] :is(section,form,article)[class*="p-6"]{padding:18px}[data-report-surface] :is(h1,h2){font-size:23px;line-height:1.25}}
+@media(prefers-reduced-motion:reduce){[data-report-surface] button{transition:none}}
+}

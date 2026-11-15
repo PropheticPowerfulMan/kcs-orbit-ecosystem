@@ -5,7 +5,7 @@ const fr = {
     academics: 'Programmes académiques',
     news: 'Actualités et événements',
     admissions: 'Admissions',
-    gallery: 'Galerie',
+    gallery: 'Galerie et vidéos',
     contact: 'Contact',
     portal: 'Portail',
     login: 'Se connecter',

@@ -39,7 +39,7 @@ export default function AdminAnalyticsPanel() {
     [tr('E-mails envoyés', 'Emails sent'), data.communications.emailSent, Mail],
   ] : []
 
-  return <section className="space-y-5">
+  return <section data-admin-analysis className="space-y-5">
     <div className={card}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>

@@ -1,3 +1,7 @@
+import {databaseActorId} from '../utils/databaseActor.js'
+import {academicCalendars} from '../services/reportAttendance.service.js'
+import {nonSchoolSettings} from '../services/attendanceCalendarSettings.service.js'
+import {schoolDayDecision} from '../utils/schoolDayPolicy.js'
 import { createHash } from 'node:crypto'
 import { Router } from 'express'
 import { z } from 'zod'
@@ -78,6 +82,9 @@ shiningStudentsRouter.post('/generate', requireAdmin(), asyncHandler(async (req:
   const end = utcDate(payload.endDate)
   if (end < start) throw new ApiError(400, 'The end date must be on or after the start date.')
   if ((end.getTime() - start.getTime()) / 86_400_000 > 370) throw new ApiError(400, 'Generation is limited to one school year.')
+  const calendars=await academicCalendars()
+  if(!calendars.length)throw new ApiError(503,'Publish the official school calendar before generating presentations.')
+  const rules=new Map(await Promise.all(calendars.map(async c=>[c.name,(await nonSchoolSettings(c.name)).ranges] as const)))
   const excluded = new Set(payload.excludedDates)
   const students = await prisma.studentProfile.findMany({
     where: { status: { equals: 'active', mode: 'insensitive' } },
@@ -99,16 +106,18 @@ shiningStudentsRouter.post('/generate', requireAdmin(), asyncHandler(async (req:
   const counts = new Map<string, number>()
   const history = await prisma.shiningStudentSchedule.groupBy({ by: ['studentId'], _count: { studentId: true } })
   history.forEach((item) => counts.set(item.studentId, item._count.studentId))
+  const actorId=await databaseActorId(req.user!.sub)
   const createdIds: string[] = []
   for (let date = start; date <= end; date = addDay(date)) {
-    if (!isWeekday(date) || excluded.has(isoDay(date))) continue
+    const day=isoDay(date),year=calendars.find(c=>day>=c.startDate.slice(0,10)&&day<=c.endDate.slice(0,10))
+    if (!isWeekday(date) || excluded.has(day)||!schoolDayDecision(day,calendars,year?rules.get(year.name)||[]:[]).allowed) continue
     for (const division of ['LOWER', 'MIDDLE_UPPER'] as const) {
       if (occupied.has(`${isoDay(date)}:${division}`)) continue
       const minimum = Math.min(...pools[division].map((student) => counts.get(student.id) || 0))
       const fairCandidates = pools[division].filter((student) => (counts.get(student.id) || 0) === minimum)
       const student = fairCandidates[deterministicIndex(date, division, fairCandidates.length)]
       const created = await prisma.shiningStudentSchedule.create({
-        data: { date, division, studentId: student.id, createdById: req.user!.sub },
+        data: { date, division, studentId: student.id, createdById: actorId },
         select: { id: true },
       })
       createdIds.push(created.id)

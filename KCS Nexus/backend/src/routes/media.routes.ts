@@ -60,6 +60,26 @@ mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('
   return success(res, {...item,version:mediaVersion(item)}, 'Media uploaded', 201)
 }))
 
+// Links are stored as public viewing URLs; the API never fetches external video content.
+mediaRouter.post('/video-link',authenticate,requireRoles('admin'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const https=z.string().trim().url().max(2000).refine(value=>{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password},'Use a public HTTPS viewing URL');
+ const input=z.object({id:z.string().optional(),version:z.string().regex(/^[a-f0-9]{64}$/).optional(),title:z.string().trim().min(2).max(200),description:z.string().trim().max(5000).default(''),url:https,thumbnailUrl:https.nullable().optional()}).strict().parse(req.body);
+ const actorId=await databaseActorId(req.user!.sub);
+ const item=await prisma.$transaction(async tx=>{
+  const details={title:input.title,description:input.description,url:input.url,thumbnailUrl:input.thumbnailUrl||null,category:'Gallery',type:'VIDEO' as const,tags:['gallery','video']};
+  if(input.id){
+   await tx.$queryRaw(Prisma.sql`SELECT id FROM "MediaItem" WHERE id = ${input.id} FOR UPDATE`);
+   const current=await tx.mediaItem.findUnique({where:{id:input.id}});
+   if(!current||current.type!=='VIDEO')throw new ApiError(404,'This video no longer exists.');
+   if(!input.version||mediaVersion(current)!==input.version)throw new ApiError(409,'This video changed elsewhere. Reload the library.');
+   const updated=await tx.mediaItem.update({where:{id:input.id},data:{...details,tags:current.tags}});
+   await tx.auditLog.create({data:{actorId,action:'WEBSITE_VIDEO_LINK_UPDATED',targetType:'MediaItem',targetId:updated.id,metadata:{previousUrl:current.url,url:updated.url}}});return updated;
+  }
+  const created=await tx.mediaItem.create({data:details});
+  await tx.auditLog.create({data:{actorId,action:'WEBSITE_VIDEO_LINK_CREATED',targetType:'MediaItem',targetId:created.id,metadata:{url:created.url}}});return created;
+ });return success(res,{...item,version:mediaVersion(item)},'Video published',input.id?200:201);
+}));
+
 mediaRouter.put('/:id',authenticate,requireRoles('admin'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const id=getRouteParam(req.params.id),input=z.object({title:z.string().trim().min(2).max(200),description:z.string().trim().max(5000).nullable(),category:z.string().trim().min(1).max(120),tags:z.array(z.string().trim().min(1).max(80)).max(30),version:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(req.body);
  const actorId=await databaseActorId(req.user!.sub);
@@ -109,6 +129,6 @@ mediaRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(asy
     await tx.auditLog.create({ data: { actorId, action: existing ? 'MEDIA_ITEM_DELETED' : 'MEDIA_ITEM_DELETE_ALREADY_ABSENT', targetType: 'MediaItem', targetId: mediaItemId, metadata: existing ? { title: existing.title, type: existing.type, url: existing.url } : { alreadyAbsent: true } } })
     return existing
   })
-  if (item) await unlink(path.resolve(process.cwd(), 'uploads', 'media', path.basename(item.url))).catch(() => undefined)
+  if (item && /^(?:\/nexus)?\/api\/uploads\/media\//.test(item.url)) await unlink(path.resolve(process.cwd(), 'uploads', 'media', path.basename(item.url))).catch(() => undefined)
   return success(res, { alreadyAbsent: !item }, item ? 'Media deleted' : 'Media was already deleted')
 }))

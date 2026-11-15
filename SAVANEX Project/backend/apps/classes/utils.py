@@ -73,20 +73,27 @@ def build_class_name(level_name: str, suffix: str | None = "") -> str:
 
 
 def current_or_default_academic_year() -> AcademicYear:
+    from django.db import transaction
+    from rest_framework.exceptions import ValidationError
+    from apps.integration.school_calendar import read_published_school_calendar
+    published = read_published_school_calendar()
+    if published:
+        with transaction.atomic():
+            year, _ = AcademicYear.objects.get_or_create(name=published['name'], defaults={'start_date': published['startDate'][:10], 'end_date': published['endDate'][:10], 'is_current': False})
+            start_date = date.fromisoformat(published['startDate'][:10])
+            end_date = date.fromisoformat(published['endDate'][:10])
+            is_current = bool(published.get('isCurrent'))
+            if year.start_date != start_date or year.end_date != end_date or year.is_current != is_current:
+                year.start_date, year.end_date, year.is_current = start_date, end_date, is_current
+                year.save(update_fields=['start_date', 'end_date', 'is_current'])
+            return year
     current_year = AcademicYear.objects.filter(is_current=True).first()
     if current_year:
         return current_year
-
-    today = date.today()
-    # Année scolaire commence en septembre (9) et finit en juin (6) de l’année suivante
-    start_year = today.year if today.month >= 9 else today.year - 1
-    start_date, end_date = default_academic_year_dates(start_year)
-    return AcademicYear.objects.create(
-        name=f"{start_year}-{start_year + 1}",
-        start_date=start_date,
-        end_date=end_date,
-        is_current=True,
-    )
+    historical = AcademicYear.objects.order_by('-start_date').first()
+    if historical:
+        return historical
+    raise ValidationError('Publish the official school calendar before creating classes.')
 
 
 def get_or_create_standard_class(level_name: str, suffix: str | None = "") -> Class:
@@ -94,6 +101,9 @@ def get_or_create_standard_class(level_name: str, suffix: str | None = "") -> Cl
     normalized_suffix = normalize_class_suffix(suffix)
     class_name = build_class_name(normalized_level, normalized_suffix)
     academic_year = current_or_default_academic_year()
+    if not academic_year.is_current:
+        from rest_framework.exceptions import ValidationError
+        raise ValidationError('The school year is closed. Activate the next year through school leadership.')
     level, _ = Level.objects.get_or_create(
         name=normalized_level,
         defaults={"order": STANDARD_CLASS_LEVELS.index(normalized_level) + 1},

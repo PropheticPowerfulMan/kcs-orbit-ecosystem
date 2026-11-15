@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import {
   ArrowRight, BookOpen, Users, Award, Globe,
   ChevronDown, Star, Play, GraduationCap, Heart,
-  Zap, Shield, TrendingUp, Calendar
+  Zap, Shield, TrendingUp, Calendar, Sprout
 } from 'lucide-react'
 import { SCHOOL_DIVISIONS } from '@/constants/schoolLevels'
 import { kcsPublicImages } from '@/data/kcsPublicImages'
@@ -58,7 +58,7 @@ const programs = [
     title: 'Kindergarten',
     desc: SCHOOL_DIVISIONS[0].description,
     color: 'from-kcs-gold-500 to-kcs-blue-500',
-    icon: '✦',
+    icon: Sprout,
     highlights: ['Early Literacy', 'Faith Formation', 'Creative Play', 'Character Growth'],
   },
   {
@@ -66,7 +66,7 @@ const programs = [
     title: 'Elementary',
     desc: SCHOOL_DIVISIONS[1].description,
     color: 'from-kcs-blue-600 to-blue-700',
-    icon: '✦',
+    icon: BookOpen,
     highlights: ['Core Academics', 'Bible Learning', 'Moral Integrity', 'Love of Learning'],
   },
   {
@@ -74,7 +74,7 @@ const programs = [
     title: 'Middle & High School',
     desc: 'Equipping students from Grade 6 through Grade 12 with rigorous academics, biblical principles, spiritual maturity, and servant leadership.',
     color: 'from-kcs-blue-800 to-kcs-blue-950',
-    icon: '✦',
+    icon: GraduationCap,
     highlights: ['Leadership', 'Academic Rigor', 'Spiritual Maturity', 'Future Readiness'],
   },
 ]
@@ -285,7 +285,7 @@ const HomePage = () => {
                 >
                   <div className={`h-2 bg-gradient-to-r ${program.color}`} />
                   <div className="p-8">
-                    <div className="text-4xl mb-4">{program.icon}</div>
+                    <div className="public-program-icon mb-4" data-home-program-icon aria-hidden="true"><program.icon size={30} strokeWidth={1.65}/></div>
                     <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r ${program.color} text-white mb-3`}>
                       {program.level}
                     </span>

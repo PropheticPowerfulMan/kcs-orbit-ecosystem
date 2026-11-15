@@ -1,3 +1,4 @@
+import {readPublishedSchoolCalendar,cachedPublishedSchoolCalendar} from "../../integrations/schoolCalendar";
 import {
   AgreementStatus,
   DebtStatus,
@@ -558,28 +559,17 @@ function serializePlanSchedule(academicYearName: string, schedule: ScheduleTempl
 }
 
 export async function ensureOfficialKcsCatalog(schoolId: string, client: DbClient = prisma) {
-  await client.academicYear.updateMany({
-    where: { schoolId, name: { not: OFFICIAL_ACADEMIC_YEAR_NAME }, isCurrent: true },
-    data: { isCurrent: false }
-  });
-
-  const academicYear = await client.academicYear.upsert({
-    where: { schoolId_name: { schoolId, name: OFFICIAL_ACADEMIC_YEAR_NAME } },
-    update: {
-      startDate: new Date(OFFICIAL_ACADEMIC_YEAR_START),
-      endDate: new Date(OFFICIAL_ACADEMIC_YEAR_END),
-      status: "ACTIVE",
-      isCurrent: true
-    },
-    create: {
-      schoolId,
-      name: OFFICIAL_ACADEMIC_YEAR_NAME,
-      startDate: new Date(OFFICIAL_ACADEMIC_YEAR_START),
-      endDate: new Date(OFFICIAL_ACADEMIC_YEAR_END),
-      status: "ACTIVE",
-      isCurrent: true
-    }
-  });
+  const published=client===prisma?await readPublishedSchoolCalendar():cachedPublishedSchoolCalendar();
+  const retained=published?null:await client.academicYear.findFirst({where:{schoolId},orderBy:[{isCurrent:'desc'},{startDate:'desc'}]});
+  const name=published?.name||retained?.name||OFFICIAL_ACADEMIC_YEAR_NAME;
+  const startDate=published?new Date(published.startDate):retained?.startDate||new Date(OFFICIAL_ACADEMIC_YEAR_START);
+  const endDate=published?new Date(published.endDate):retained?.endDate||new Date(OFFICIAL_ACADEMIC_YEAR_END);
+  const isCurrent=published?published.isCurrent:retained?.isCurrent??true;
+  const status=published?.status||retained?.status||'ACTIVE';
+  if(published||isCurrent)await client.academicYear.updateMany({where:{schoolId,name:{not:name},isCurrent:true},data:{isCurrent:false}});
+  const academicYear=await client.academicYear.upsert({where:{schoolId_name:{schoolId,name}},update:{startDate,endDate,status,isCurrent},create:{schoolId,name,startDate,endDate,status,isCurrent}});
+  // Published dates never copy old prices into another year or rewrite its agreements.
+  if(name!==OFFICIAL_ACADEMIC_YEAR_NAME)return {academicYear,plans:await client.tuitionPlan.findMany({where:{schoolId,academicYearId:academicYear.id}})};
 
   const plans = [] as any[];
   for (const [gradeGroup, entries] of Object.entries(OFFICIAL_KCS_PLANS) as Array<[GradeGroup, OfficialPlanTemplate[]]>) {

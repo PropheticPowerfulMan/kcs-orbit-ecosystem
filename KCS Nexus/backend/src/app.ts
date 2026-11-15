@@ -1,3 +1,4 @@
+import {publishedSchoolCalendarRouter} from './routes/published-school-calendar.routes.js'
 import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
@@ -50,6 +51,8 @@ const authRateLimit = (windowMs: number, maxFailures: number) => {
 }
 
 app.use(helmet())
+// Published dates are public across the school apps; private API CORS stays unchanged.
+app.use('/api/published-school-calendar',cors({origin:'*',credentials:false}),publishedSchoolCalendarRouter)
 const frontendOrigin = (() => { try { return new URL(env.FRONTEND_URL).origin } catch { return env.FRONTEND_URL } })()
 const trustedOrigins = new Set([
   frontendOrigin,

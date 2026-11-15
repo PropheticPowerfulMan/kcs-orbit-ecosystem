@@ -3621,7 +3621,7 @@ const AdminSectionView = ({
   }
 
   if (segment === 'account-access') return <AccountAccessCenter/>
-  if (segment === 'site' || segment === 'news' || segment === 'media') return <AdminSiteManager initial={segment==='news'?'news':segment==='media'?'media':'pages'}/>
+  if (segment === 'site' || segment === 'news' || segment === 'media' || segment === 'site-videos') return <AdminSiteManager initial={segment==='site-videos'?'videos':segment==='news'?'news':segment==='media'?'media':'pages'}/>
 
   if (segment === 'analytics') return <AdminAnalyticsPanel />
 

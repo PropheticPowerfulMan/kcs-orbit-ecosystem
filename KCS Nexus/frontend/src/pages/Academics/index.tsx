@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useInView } from 'framer-motion'
-import { ArrowRight, BookOpen, Microscope, Palette, Trophy, Calculator, Globe, Music, Code } from 'lucide-react'
+import { ArrowRight, BookOpen, Microscope, Palette, Trophy, Calculator, Globe, Music, Code, Sprout, GraduationCap } from 'lucide-react'
 import { SCHOOL_DIVISIONS } from '@/constants/schoolLevels'
 import { kcsPublicImages } from '@/data/kcsPublicImages'
 
@@ -27,7 +27,7 @@ const programs = [
     id: 'kindergarten',
     level: SCHOOL_DIVISIONS[0].levels,
     title: SCHOOL_DIVISIONS[0].title,
-    emoji: '🌱',
+    icon: Sprout,
     tagline: 'Nurturing Early Learners',
     color: 'from-green-500 to-emerald-600',
     textColor: 'text-green-700 dark:text-green-400',
@@ -41,7 +41,7 @@ const programs = [
     id: 'elementary',
     level: SCHOOL_DIVISIONS[1].levels,
     title: SCHOOL_DIVISIONS[1].title,
-    emoji: '📘',
+    icon: BookOpen,
     tagline: 'Building Strong Foundations',
     color: 'from-kcs-blue-500 to-blue-700',
     textColor: 'text-kcs-blue-600 dark:text-kcs-blue-400',
@@ -55,7 +55,7 @@ const programs = [
     id: 'middle',
     level: SCHOOL_DIVISIONS[2].levels,
     title: SCHOOL_DIVISIONS[2].title,
-    emoji: '🔬',
+    icon: Microscope,
     tagline: 'Growing in Knowledge & Character',
     color: 'from-cyan-500 to-kcs-blue-700',
     textColor: 'text-kcs-blue-600 dark:text-kcs-blue-400',
@@ -69,7 +69,7 @@ const programs = [
     id: 'high',
     level: SCHOOL_DIVISIONS[3].levels,
     title: SCHOOL_DIVISIONS[3].title,
-    emoji: '🎓',
+    icon: GraduationCap,
     tagline: 'Ready for the World Stage',
     color: 'from-kcs-blue-800 to-kcs-blue-950',
     textColor: 'text-kcs-blue-800 dark:text-kcs-blue-300',
@@ -128,13 +128,14 @@ const AcademicsPage = () => {
               <button
                 key={p.id}
                 onClick={() => setActiveTab(p.id as typeof activeTab)}
+                aria-pressed={activeTab === p.id}
                 className={`flex items-center gap-3 px-6 py-4 rounded-2xl font-semibold transition-all duration-300 ${
                   activeTab === p.id
                     ? `bg-gradient-to-r ${p.color} text-white shadow-kcs`
                     : 'bg-gray-100 dark:bg-kcs-blue-900/50 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-kcs-blue-800/50'
                 }`}
               >
-                <span className="text-2xl">{p.emoji}</span>
+                <span className="public-program-tab-icon" data-program-icon={p.id} aria-hidden="true"><p.icon size={25} strokeWidth={1.7}/></span>
                 <div className="text-left">
                   <p className="text-sm leading-tight">{p.title}</p>
                   <p className={`text-xs ${activeTab === p.id ? 'text-white/80' : 'text-gray-400'}`}>{p.level}</p>
