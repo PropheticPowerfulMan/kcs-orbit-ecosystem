@@ -137,6 +137,7 @@ services:
     image: kcs/nexus-api:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
     container_name: kcs-nexus-api-staging
     environment:
+      NEXUS_UPLOADS_DIR: /app/uploads
       NODE_ENV: production
       PORT: "5000"
       DATABASE_URL: postgresql://${NEXUS_STAGING_POSTGRES_USER}:${NEXUS_STAGING_POSTGRES_PASSWORD}@nexus_db:5432/${NEXUS_STAGING_POSTGRES_DB}?schema=public

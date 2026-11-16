@@ -3845,7 +3845,7 @@ const AdminDashboard = () => {
             {dashboardAction && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{dashboardAction}</p>}
           </section>
 
-          <div className="rounded-2xl border border-gray-100 bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-6 text-white dark:border-kcs-blue-800">
+          <div data-admin-tone="dark" className="rounded-2xl border border-gray-100 bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-6 text-white dark:border-kcs-blue-800">
             <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
               <div>
                 <p className="mb-2 text-sm font-semibold text-kcs-gold-300">Operational Pulse</p>

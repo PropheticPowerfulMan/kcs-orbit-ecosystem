@@ -1,3 +1,4 @@
+import {ensureUploadStorage} from './utils/uploadStorage.js'
 import {startSentinelStaffAttendanceSync} from './services/sentinelStaffAttendance.service.js'
 import { startOutboundSmsQueue } from './services/outboundSmsQueue.js'
 import { env } from './config/env.js'
@@ -9,6 +10,7 @@ import { startOutboundMailQueue } from './services/outboundMailQueue.js'
 import { startEventReminderWorker } from './services/eventReminder.service.js'
 
 const start = async () => {
+  await ensureUploadStorage()
   try {
     await prisma.$connect()
     await ensureUserAccessCodeColumn(prisma)

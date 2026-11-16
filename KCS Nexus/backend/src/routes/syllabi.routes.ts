@@ -1,3 +1,4 @@
+import {uploadPath} from '../utils/uploadStorage.js'
 import { randomUUID } from 'crypto'
 import { mkdir, unlink, writeFile } from 'fs/promises'
 import path from 'path'
@@ -9,7 +10,7 @@ import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { prisma } from '../config/prisma.js'
 
 export const syllabiRouter = Router()
-const root = path.resolve(process.env.UPLOAD_ROOT || '/app/uploads', 'syllabi')
+const root = uploadPath('syllabi')
 const accepted = new Set(['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
 const upload = multer({
   storage: multer.memoryStorage(),
