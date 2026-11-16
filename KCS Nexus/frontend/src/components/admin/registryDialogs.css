@@ -67,3 +67,10 @@
 [data-registry-compact="true"] .registry-dialog-footer{padding:7px 14px!important;gap:8px!important;flex-wrap:nowrap!important}
 [data-registry-compact="true"] .registry-dialog-footer button{min-height:36px!important;flex:1 1 0!important;min-width:0!important;padding:7px 9px!important;font-size:11px!important}
 [data-registry-compact="true"] .registry-dialog-body{padding:12px 14px!important}
+
+/* Family contact numbers need a complete row, even inside narrow contact cards. */
+.family-contact-phone.international-phone-input{width:100%;min-width:0;grid-template-columns:6rem minmax(0,1fr)!important;background:var(--rd-card,#fff)!important;color:var(--rd-ink,#0f172a)!important;border-color:var(--rd-line,#cbd5e1)!important}
+.family-contact-phone.international-phone-input>button{font-size:12px!important;gap:6px!important;padding:8px!important;border-right-color:var(--rd-line,#cbd5e1)!important}
+.family-contact-phone.international-phone-input>button>span:first-of-type{display:none}
+.family-contact-phone.international-phone-input>button>span{color:inherit!important}
+.family-contact-phone.international-phone-input>input{width:100%;min-width:0;box-sizing:border-box}
