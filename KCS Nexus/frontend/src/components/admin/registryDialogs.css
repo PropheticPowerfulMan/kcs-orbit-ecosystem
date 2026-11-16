@@ -57,3 +57,13 @@
 [data-entity-dialog="parent-edit"] .registry-dialog-footer,[data-entity-dialog="student-edit"] .registry-dialog-footer{position:relative!important;bottom:auto!important;margin:0!important;min-width:0;flex-shrink:0}
 @media(max-width:640px),(max-height:520px){[data-entity-dialog="parent-edit"],[data-entity-dialog="student-edit"]{--registry-edit-pad:8px}}
 @media(max-height:520px){[data-entity-dialog="parent-edit"] .registry-dialog-heading,[data-entity-dialog="student-edit"] .registry-dialog-heading{padding:10px 17px!important}[data-entity-dialog="parent-edit"] .registry-dialog-heading p:not(:first-child),[data-entity-dialog="student-edit"] .registry-dialog-heading p:not(:first-child){display:none}[data-entity-dialog="parent-edit"] .registry-dialog-footer,[data-entity-dialog="student-edit"] .registry-dialog-footer{padding:9px 17px!important}}
+
+/* Keep both actions on one row: a column flex-basis otherwise consumes the keyboard viewport. */
+[data-entity-dialog="parent-edit"] .registry-dialog-footer,[data-entity-dialog="student-edit"] .registry-dialog-footer{flex-direction:row!important}
+[data-registry-compact="true"] .registry-dialog-heading{padding:8px 14px!important;align-items:center!important}
+[data-registry-compact="true"] .registry-dialog-heading p{display:none!important}
+[data-registry-compact="true"] .registry-dialog-heading h2,[data-registry-compact="true"] .registry-dialog-heading h3{font-size:16px!important;margin:0!important}
+[data-registry-compact="true"] .registry-dialog-heading>button{min-height:32px!important;height:32px!important;padding:5px 9px!important}
+[data-registry-compact="true"] .registry-dialog-footer{padding:7px 14px!important;gap:8px!important;flex-wrap:nowrap!important}
+[data-registry-compact="true"] .registry-dialog-footer button{min-height:36px!important;flex:1 1 0!important;min-width:0!important;padding:7px 9px!important;font-size:11px!important}
+[data-registry-compact="true"] .registry-dialog-body{padding:12px 14px!important}
