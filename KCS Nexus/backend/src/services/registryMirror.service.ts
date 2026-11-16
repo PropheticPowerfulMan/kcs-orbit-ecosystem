@@ -7,6 +7,8 @@ const clean=(v:unknown)=>typeof v==='string'?v.trim():v??null
 const inactive=(v:unknown)=>['ARCHIVED','GRADUATED','DISMISSED','EXPELLED','DELETED','INACTIVE'].includes(String(v??'').toUpperCase())
 export function canonicalIdentityPatch(entity:OrbitRegistryEntitySnapshot,user:any,type:OrbitRegistryEntityType){
  const patch:Record<string,unknown>={}
+ // An unchanged, uniquely matched legacy account still needs its stable Orbit binding.
+ if(!user.orbitUserId&&entity.id)patch.id=entity.id
  for(const field of ['firstName','middleName','lastName','phone'] as const)if(Object.prototype.hasOwnProperty.call(entity,field)&&clean(entity[field])!==clean(user[field]))patch[field]=entity[field]
  if(entity.email&&entity.email.trim().toLowerCase()!==String(user.email).toLowerCase())patch.email=entity.email
  if(type==='student'&&user.studentProfile&&!user.studentProfile.archive){
