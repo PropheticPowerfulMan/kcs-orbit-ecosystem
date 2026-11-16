@@ -37,6 +37,10 @@ export type OrbitRegistryEntitySnapshot = {
   externalIds?: Array<{ appSlug: string; externalId: string }>
 }
 
+export function shouldSynchronizeAccessCode(currentCode: string | null | undefined, patch?: OrbitRegistryEntitySnapshot | null) {
+  return !currentCode || Boolean(patch && Object.prototype.hasOwnProperty.call(patch, 'accessCode'))
+}
+
 type SynchronizationInput = {
   preserveAdditionalParentLinks?:boolean
   expectedUpdatedAt?:Date
@@ -454,7 +458,7 @@ export async function synchronizeOrbitEntityToNexus(input: SynchronizationInput)
     ...(owns(input.entity, 'middleName') ? { middleName: clean(input.entity.middleName) } : {}),
     ...(names.lastName ? { lastName: names.lastName } : {}),
     ...(email ? { email } : {}),
-    ...(accessCode ? { accessCode } : {}),
+    ...(accessCode && shouldSynchronizeAccessCode(localUser.accessCode, input.patch) ? { accessCode } : {}),
     ...(owns(input.entity, 'phone') ? { phone: clean(input.entity.phone) } : {}),
     // Official portraits stay in Orbit. User.avatar is personal to Nexus for every role.
     ...(nextRole !== localUser.role ? { role: nextRole } : {}),
