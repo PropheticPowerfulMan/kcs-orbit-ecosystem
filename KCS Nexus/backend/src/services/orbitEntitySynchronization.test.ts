@@ -54,3 +54,10 @@ test('reconciles official parent links only when parentId is explicitly edited',
   assert.equal(shouldReconcileStudentParentLinks({ parentId: 'orbit-parent-2' }), true)
   assert.equal(shouldReconcileStudentParentLinks({ parentId: null }), true)
 })
+test('an unrelated registry edit preserves an existing legacy login code', async () => {
+ const {shouldSynchronizeAccessCode}=await synchronizationModule
+ assert.equal(shouldSynchronizeAccessCode('LEGACY-CODE',{firstName:'Corrected',className:'Grade 11'}),false)
+ assert.equal(shouldSynchronizeAccessCode('LEGACY-CODE',{}),false)
+ assert.equal(shouldSynchronizeAccessCode('LEGACY-CODE',{accessCode:'EXPLICIT-NEW-CODE'}),true)
+ assert.equal(shouldSynchronizeAccessCode(null,{className:'Grade 11'}),true)
+})

@@ -299,10 +299,10 @@ messagesRouter.post('/broadcast', attachmentUpload.single('attachment'), asyncHa
   })
   if (!users.length) return success(res, { recipients: 0, audience: data.audience, emailQueued: 0, emailMissing: 0 }, 'No matching recipients')
   const recipients = users.map((user) => ({ id: user.id, role: user.role, name: [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ') }))
-  const families=await familyEmailRecipients(users.filter(user=>user.role==='PARENT'))
+  const families=await familyEmailRecipients(users.filter(user=>user.role==='PARENT'),undefined,true)
   const emailTargets=users.flatMap((user,index)=>user.role==='PARENT'?(families.get(user.id)??[]).map(target=>({userId:user.id,name:target.name,email:target.email,phone:target.phone})): [{userId:user.id,name:recipients[index].name,email:user.email,phone:user.phone}])
   const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients, targets:emailTargets, channels: ['email'], attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: true, intent: { audience: data.audience } })
-  return success(res, { ...result, recipients: users.length, audience: data.audience, emailMissing: Math.max(0, users.length - result.emailQueued), estimatedMinutes: Math.ceil(result.emailQueued / 60) }, 'Communication recorded for every recipient and email delivery safely queued', 201)
+  return success(res, { ...result, recipients: users.length, audience: data.audience, emailMissing: users.filter(user=>user.role==='PARENT'?!(families.get(user.id)?.length):!user.email).length, estimatedMinutes: Math.ceil(result.emailQueued / 60) }, 'Communication recorded for every recipient and email delivery safely queued', 201)
 }))
 
 messagesRouter.post('/bulk-delete', asyncHandler(async (req: AuthenticatedRequest, res) => {
