@@ -1,3 +1,4 @@
+import {revokeDeletedRegistryAccess,type DeletedRegistryIdentity} from '../services/registry-deletion';
 import { AppSlug, Prisma } from "@prisma/client";
 import { buildCanonicalExternalId, RegistryEntityTypeSchema } from "@ecosystem/shared-contracts";
 import { Request, Response } from "express";
@@ -277,7 +278,7 @@ async function createAuditLog(db: Prisma.TransactionClient, params: {
   entityId: string;
   metadata?: Record<string, unknown>;
 }) {
-  return db.auditLog.create({
+  const record = await db.auditLog.create({
     data: {
       organizationId: params.organizationId,
       action: params.action,
@@ -286,6 +287,8 @@ async function createAuditLog(db: Prisma.TransactionClient, params: {
       ...(params.metadata !== undefined ? { metadata: params.metadata as never } : {}),
     },
   });
+  if(params.action.endsWith('.updated'))await db.auditLog.create({data:{organizationId:params.organizationId,action:'REGISTRY_DIRECT_EDIT',entityType:params.entityType,entityId:params.entityId,metadata:{sourceAction:params.action}}});
+  return record;
 }
 
 async function createSyncEvent(db: Prisma.TransactionClient, params: {
@@ -419,31 +422,29 @@ async function findEntityByOrbitId(organizationId: string, entityType: z.infer<t
   }
 }
 
-async function deleteEntity(db: Prisma.TransactionClient, entityType: z.infer<typeof entityTypeSchema>, orbitId: string) {
-  switch (entityType) {
-    case "family":
-    case "parent": {
-      const children = await db.student.findMany({ where: { parentId: orbitId }, select: { id: true } });
-      const childIds = children.map((student) => student.id);
-      if (childIds.length > 0) {
-        await db.payment.deleteMany({ where: { studentId: { in: childIds } } });
-        await db.grade.deleteMany({ where: { studentId: { in: childIds } } });
-        await db.attendance.deleteMany({ where: { studentId: { in: childIds } } });
-        await db.externalLink.deleteMany({ where: { entityType: "student", nexusEntityId: { in: childIds } } });
-        await db.student.deleteMany({ where: { id: { in: childIds } } });
-      }
-      await db.externalLink.deleteMany({ where: { entityType: "parent", nexusEntityId: orbitId } });
-      return db.parent.delete({ where: { id: orbitId } });
-    }
-    case "student":
-      await db.payment.deleteMany({ where: { studentId: orbitId } });
-      await db.grade.deleteMany({ where: { studentId: orbitId } });
-      await db.attendance.deleteMany({ where: { studentId: orbitId } });
-      return db.student.delete({ where: { id: orbitId } });
-    case "teacher":
-      await db.class.updateMany({ where: { teacherId: orbitId }, data: { teacherId: null } });
-      return db.teacher.delete({ where: { id: orbitId } });
-  }
+async function deleteEntity(db:Prisma.TransactionClient,entityType:z.infer<typeof entityTypeSchema>,orbitId:string,organizationId:string,actor:string){
+ const removed:DeletedRegistryIdentity[]=[];
+ if(entityType==='family'){
+  const children=await db.student.findMany({where:{parentId:orbitId},select:{id:true}});
+  for(const child of children)removed.push(await revokeDeletedRegistryAccess(db,organizationId,'student',child.id,actor));
+  // Academic and financial records remain attached to an archived identity.
+  if(children.length)await db.student.updateMany({where:{id:{in:children.map(child=>child.id)}},data:{status:'ARCHIVED',parentId:null}});
+ }
+ if(entityType==='parent'||entityType==='family'){
+  removed.push(await revokeDeletedRegistryAccess(db,organizationId,'parent',orbitId,actor));
+  await db.student.updateMany({where:{parentId:orbitId},data:{parentId:null}});
+  await db.externalLink.deleteMany({where:{organizationId,nexusEntityId:orbitId,entityType:{in:['parent','family']}}});
+  await db.parent.delete({where:{id:orbitId}});
+ }else if(entityType==='student'){
+  removed.push(await revokeDeletedRegistryAccess(db,organizationId,'student',orbitId,actor));
+  await db.student.update({where:{id:orbitId},data:{status:'ARCHIVED'}});
+ }else{
+  removed.push(await revokeDeletedRegistryAccess(db,organizationId,'teacher',orbitId,actor));
+  await db.class.updateMany({where:{teacherId:orbitId},data:{teacherId:null}});
+  await db.externalLink.deleteMany({where:{organizationId,nexusEntityId:orbitId,entityType:'teacher'}});
+  await db.teacher.delete({where:{id:orbitId}});
+ }
+ return removed;
 }
 
 export async function updateRegistryEntity(req: Request, res: Response) {
@@ -1008,10 +1009,10 @@ export async function deleteRegistryEntity(req: Request, res: Response) {
     select: { id: true, appSlug: true, externalId: true },
   });
 
+  let removed:DeletedRegistryIdentity[]=[];
   try {
-    await prisma.$transaction(async (tx) => {
-      await tx.externalLink.deleteMany({ where: { organizationId: query.organizationId, entityType, nexusEntityId: target.orbitId } });
-      await deleteEntity(tx, entityType, target.orbitId);
+    removed = await prisma.$transaction(async (tx) => {
+      const identities = await deleteEntity(tx, entityType, target.orbitId, query.organizationId, appSlug);
       await tx.syncEvent.create({
         data: {
           organizationId: query.organizationId,
@@ -1038,6 +1039,7 @@ export async function deleteRegistryEntity(req: Request, res: Response) {
           } as never,
         },
       });
+      return identities;
     });
   } catch (error) {
     return res.status(409).json({
@@ -1046,5 +1048,5 @@ export async function deleteRegistryEntity(req: Request, res: Response) {
     });
   }
 
-  return res.json({ entityType, orbitId: target.orbitId, deleted: true });
+  return res.json({ entityType, orbitId: target.orbitId, deleted: true, archived: entityType==='student'||entityType==='family', removed });
 }

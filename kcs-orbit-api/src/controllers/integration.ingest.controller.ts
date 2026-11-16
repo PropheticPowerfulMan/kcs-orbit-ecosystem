@@ -1,3 +1,4 @@
+import {deletedRegistryIdentifiers,staleSourceRegistryReplay} from '../services/registry-deletion';
 import { AppSlug, Prisma, SyncDirection, SyncStatus } from "@prisma/client";
 import {
   AnnouncementPublishedSchema,
@@ -612,6 +613,8 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
     return res.status(404).json({ message: "Organization not found" });
   }
 
+  if(await deletedRegistryIdentifiers(prisma,organizationId,[externalId,payload.email,payload.accessCode]))return res.status(200).json({ignored:true,reason:'REGISTRY_IDENTITY_REMOVED'});
+  if(await staleSourceRegistryReplay(prisma,organizationId,'student',externalId,occurredAt,savanexAppSlug))return res.status(200).json({ignored:true,reason:'NEWER_OFFICIAL_REGISTRY_EDIT'});
   const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
   if (replayedSync) {
     const student = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
@@ -871,6 +874,8 @@ export async function ingestSavanexParent(req: Request, res: Response) {
     return res.status(404).json({ message: "Organization not found" });
   }
 
+  if(await deletedRegistryIdentifiers(prisma,organizationId,[externalId,payload.email,payload.accessCode]))return res.status(200).json({ignored:true,reason:'REGISTRY_IDENTITY_REMOVED'});
+  if(await staleSourceRegistryReplay(prisma,organizationId,'parent',externalId,occurredAt,savanexAppSlug))return res.status(200).json({ignored:true,reason:'NEWER_OFFICIAL_REGISTRY_EDIT'});
   const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
   if (replayedSync) {
     const parent = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
@@ -968,6 +973,8 @@ export async function ingestSavanexTeacher(req: Request, res: Response) {
     return res.status(404).json({ message: "Organization not found" });
   }
 
+  if(await deletedRegistryIdentifiers(prisma,organizationId,[externalId,payload.email,payload.accessCode]))return res.status(200).json({ignored:true,reason:'REGISTRY_IDENTITY_REMOVED'});
+  if(await staleSourceRegistryReplay(prisma,organizationId,'teacher',externalId,occurredAt,savanexAppSlug))return res.status(200).json({ignored:true,reason:'NEWER_OFFICIAL_REGISTRY_EDIT'});
   const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
   if (replayedSync) {
     const teacher = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);

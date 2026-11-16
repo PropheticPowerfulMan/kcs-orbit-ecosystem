@@ -106,3 +106,16 @@ test('confirmed future-quarter task creation is still rejected until explicit ad
  assert.equal(futureGradebookChanged({},next,open),true)
  assert.equal(futureGradebookChanged({},next,closed),false)
 })
+
+test('annual summary protection preserves quarter entry and existing annual records', () => {
+ const before: any = state();
+ before.advancedGradebookByCycle['course::'+year].assignments.push({id:'legacy-annual',term:'Annual final',maxPoints:100});
+ before.advancedGradebookByCycle['course::'+year].scores['legacy-annual:learner']='85';
+ assert.equal(futureGradebookChanged(before,structuredClone(before),open),false);
+ const quarter=structuredClone(before);quarter.advancedGradebookByCycle['course::'+year].scores['task:old:learner']='92';
+ assert.equal(futureGradebookChanged(before,quarter,open),false);
+ const annual=structuredClone(before);annual.advancedGradebookByCycle['course::'+year].scores['legacy-annual:learner']='92';
+ assert.equal(futureGradebookChanged(before,annual,open),true);
+ const removed=structuredClone(before);removed.advancedGradebookByCycle['course::'+year].assignments.pop();
+ assert.equal(futureGradebookChanged(before,removed,open),true);
+});

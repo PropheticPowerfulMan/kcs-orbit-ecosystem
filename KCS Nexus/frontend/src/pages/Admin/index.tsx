@@ -1662,6 +1662,13 @@ const AdminSectionView = ({
     }
   }, [editingParent, editingStudent, selectedParent, viewingStudent, showCreateStudent, savingParentEdit, savingStudentEdit])
 
+  useEffect(()=>{
+    if(!editingParent&&!editingStudent)return
+    const update=()=>{const viewport=window.visualViewport;const height=Math.max(180,Math.round(viewport?.height??window.innerHeight));for(const node of document.querySelectorAll<HTMLElement>('[data-entity-dialog="parent-edit"],[data-entity-dialog="student-edit"]')){node.style.setProperty('--registry-edit-height',height+'px');node.style.setProperty('--registry-edit-top',Math.max(0,Math.round(viewport?.offsetTop??0))+'px')}}
+    update();window.addEventListener('resize',update);window.visualViewport?.addEventListener('resize',update);window.visualViewport?.addEventListener('scroll',update)
+    return()=>{window.removeEventListener('resize',update);window.visualViewport?.removeEventListener('resize',update);window.visualViewport?.removeEventListener('scroll',update)}
+  },[Boolean(editingParent),Boolean(editingStudent)])
+
   const shouldLoadRoster = adminRosterSegments.has(segment)
 
   const refreshEduPayFinance = async () => {

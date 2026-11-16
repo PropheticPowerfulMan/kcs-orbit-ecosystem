@@ -81,7 +81,9 @@ export type OrbitDirectoryTeacher = {
   externalIds: OrbitExternalId[]
 }
 
+export type OrbitDeletedIdentity={id:string;entityType:'student'|'parent'|'teacher';externalIds?:Array<{appSlug:string;externalId:string}>}
 export type OrbitSharedDirectory = {
+  deletedEntities?:OrbitDeletedIdentity[]
   source: 'orbit'
   visibility: 'shared-directory'
   counts: {
@@ -200,6 +202,18 @@ function protectDirectoryCollection<T>(
   return { value: previous, protected: true }
 }
 
+function withoutDeleted(previous:OrbitSharedDirectory|null,deleted:OrbitDeletedIdentity[]=[]){
+ if(!previous||!deleted.length)return previous;
+ const removed=(type:string,id:string)=>deleted.some(row=>row.entityType===type&&row.id===id);
+ const parents=previous.parents.filter(row=>!removed('parent',row.id)),students=previous.students.filter(row=>!removed('student',row.id)),teachers=previous.teachers.filter(row=>!removed('teacher',row.id));
+ return {...previous,parents,students,teachers,deletedEntities:deleted};
+}
+export function confirmOrbitRegistryDeletion(deleted:OrbitDeletedIdentity[]){
+ lastCoherentDirectory=withoutDeleted(lastCoherentDirectory,deleted);
+ if(directoryCache)directoryCache={...directoryCache,value:withoutDeleted(directoryCache.value,deleted)!};
+ invalidateOrbitSharedDirectory();
+}
+
 function strictCollectionCollapse(
   collection: DirectoryCollectionName,
   nextLength: number,
@@ -223,6 +237,7 @@ export function validateStrictFreshOrbitSharedDirectory(
   next: OrbitSharedDirectory,
   previous: OrbitSharedDirectory | null,
 ) {
+  previous=withoutDeleted(previous,next.deletedEntities)
   strictCollectionCollapse('parents', next.parents.length, previous?.parents.length)
   strictCollectionCollapse('students', next.students.length, previous?.students.length)
   strictCollectionCollapse('teachers', next.teachers.length, previous?.teachers.length)
@@ -240,6 +255,7 @@ export function reconcileOrbitSharedDirectory(
   next: OrbitSharedDirectory,
   previous: OrbitSharedDirectory | null,
 ): OrbitSharedDirectory {
+  previous=withoutDeleted(previous,next.deletedEntities)
   const parents = protectDirectoryCollection('parents', next.parents, previous?.parents)
   const students = protectDirectoryCollection('students', next.students, previous?.students)
   const teachers = protectDirectoryCollection('teachers', next.teachers, previous?.teachers)

@@ -102,6 +102,7 @@ export type SharedDirectoryFamily = {
 };
 
 export type SharedDirectoryPayload = {
+  deletedEntities?: Array<{id:string;entityType:string;externalIds:Array<{appSlug:string;externalId:string}>}>;
   source: "orbit";
   visibility: "shared-directory";
   counts: {
@@ -273,6 +274,8 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
     }),
   ]);
 
+  const deletionPolicies=await prisma.auditLog.findMany({where:{...where,action:'ECOSYSTEM_ACCOUNT_ACCESS_POLICY'},select:{metadata:true}});
+  const deletedEntities=deletionPolicies.flatMap(row=>{const m=row.metadata as Record<string,unknown>|null;return m?.registryDeletion===true&&m.blocked===true&&typeof m.entityId==='string'&&['student','parent','teacher'].includes(String(m.entityType))?[{id:m.entityId,entityType:String(m.entityType),externalIds:Array.isArray(m.externalIds)?m.externalIds as Array<{appSlug:string;externalId:string}>:[]}]:[]});
   const typedLinks = externalLinks as Array<{ nexusEntityId: string; entityType: string; appSlug: string; externalId: string }>;
   const studentExternalIds = mapExternalIds(students.map((student) => student.id), typedLinks.filter((link) => link.entityType === "student"));
   const parentExternalIds = mapExternalIds(parents.map((parent) => parent.id), typedLinks.filter((link) => link.entityType === "parent"));
@@ -295,6 +298,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
   });
 
   return {
+    deletedEntities,
     source: "orbit",
     visibility: "shared-directory",
     counts: {

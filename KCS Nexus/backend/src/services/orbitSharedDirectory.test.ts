@@ -109,3 +109,5 @@ test('strict refresh rejects a network failure while ordinary forced refresh kee
     invalidateOrbitSharedDirectory()
   }
 })
+
+test('confirmed bulk deletions cannot be resurrected by the partial-directory guard',async()=>{const{reconcileOrbitSharedDirectory,validateStrictFreshOrbitSharedDirectory}=await directoryModule;const previous=directory(12,20,4);const next={...directory(1,20,4),deletedEntities:Array.from({length:11},(_,i)=>({id:'parent-'+(i+1),entityType:'parent' as const}))};assert.equal(reconcileOrbitSharedDirectory(next,previous).parents.length,1);assert.equal(validateStrictFreshOrbitSharedDirectory(next,previous),next)});

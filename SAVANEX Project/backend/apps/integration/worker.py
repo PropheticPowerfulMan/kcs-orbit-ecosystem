@@ -45,6 +45,8 @@ def _retry_interval_seconds() -> int:
 
 def _flush_once() -> None:
     flushed = flush_outbox()
+    from apps.integration.registry_mirror import reconcile_registry_mirrors
+    reconcile_registry_mirrors()
     if flushed:
         logger.info("Orbit outbox worker flushed %s pending event(s)", flushed)
 

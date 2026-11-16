@@ -1,3 +1,4 @@
+import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
 import {loadOfficialTranscript, transcriptSource} from '../services/officialTranscript.service.js'
 import {officialTranscriptPdf} from '../utils/officialTranscriptPdf.js'
 import { personalizeParentCorrespondence } from "../utils/parentCorrespondence.js";
@@ -384,6 +385,7 @@ export const deliverOfficialDocuments = asyncHandler(async (req: AuthenticatedRe
           "A selected learner is unavailable. Refresh the registry.",
         ),
       );
+    const familyEmails=await familyEmailRecipients(students.flatMap(student=>student.parentLinks.map(link=>link.parent)))
     for (const student of students) {
       if (
         payload.documentType === "completion" &&
@@ -402,7 +404,7 @@ export const deliverOfficialDocuments = asyncHandler(async (req: AuthenticatedRe
         const parent = student.parentLinks.find(
           (link) => link.parent.id === id,
         )?.parent;
-        if (!parent?.email?.trim())
+        if (!parent||(familyEmails.get(parent.id)?.length??0)===0)
           throw new ApiError(
             409,
             tr(
@@ -414,7 +416,7 @@ export const deliverOfficialDocuments = asyncHandler(async (req: AuthenticatedRe
     }
     // Delivery language controls the email only. The attached official PDF is always English.
     const documents = await buildDocuments(students, { ...payload, language: "en" }, actorId);
-    const recipients = normalized.reduce((sum, [, ids]) => sum + ids.length, 0);
+    const recipients=students.reduce((sum,student)=>sum+new Set(student.parentLinks.filter(link=>deliveries.get(student.id)!.includes(link.parent.id)).flatMap(link=>(familyEmails.get(link.parent.id)??[]).map(target=>target.email))).size,0);
     try {
       await prisma.$transaction(
         async (tx) => {
@@ -513,30 +515,8 @@ export const deliverOfficialDocuments = asyncHandler(async (req: AuthenticatedRe
                 link: "/portal/parent/messages",
               })),
             });
-            await tx.correspondenceLog.createMany({
-              data: parents.map((parent) => ({
-                channel: "EMAIL",
-                status: "QUEUED",
-                subject,
-                body: parentBody(parent),
-                senderId: actorId,
-                recipientName: fullName(parent),
-                recipientEmail: parent.email,
-                recipientPhone: parent.phone,
-                studentId: student.id,
-                metadata: {
-                  mailQueueVersion: 1,
-                  internalMessageId: ids.get(parent.id)!,
-                  recipientId: parent.id,
-                  attempts: 0,
-                  nextAttemptAt: new Date().toISOString(),
-                  priority: "HIGH",
-                  language: payload.language,
-                  documentId: pdf.documentId,
-                  documentLanguage: "en",
-                },
-              })),
-            });
+            const emailTargets=[...new Map(parents.flatMap(parent=>(familyEmails.get(parent.id)??[]).map(target=>[target.email,target] as const))).values()];
+            await tx.correspondenceLog.createMany({data:emailTargets.map(target=>({channel:'EMAIL',status:'QUEUED',subject,body:personalizeParentCorrespondence(body,target.name,payload.language,batchId+':'+student.id+':'+target.email),senderId:actorId,recipientName:target.name,recipientEmail:target.email,recipientPhone:target.phone,studentId:student.id,metadata:{mailQueueVersion:1,internalMessageId:ids.get(target.parentId)!,recipientId:target.parentId,relationship:target.relationship,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH',language:payload.language,documentId:pdf.documentId,documentLanguage:'en'}}))});
             await tx.auditLog.create({
               data: {
                 actorId,

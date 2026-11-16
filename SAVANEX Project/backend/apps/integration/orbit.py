@@ -248,6 +248,9 @@ def sync_student(student) -> None:
     if student.parent_id:
         sync_parent(student.parent)
 
+    from django.core.cache import cache
+    placement=cache.get('savanex:official-placement:'+str(student.pk))
+    canonical_class=placement.get('className') if placement and placement.get('sourceClassId')==student.current_class_id else None
     parent_external_id = _parent_external_id(student.parent) if student.parent_id else None
     metadata = {
         "parentExternalId": parent_external_id,
@@ -258,7 +261,7 @@ def sync_student(student) -> None:
         "organizationId": KCS_ORBIT_ORGANIZATION_ID,
         "externalId": student.student_id,
         "sourceApp": "SAVANEX",
-        "occurredAt": _contract_datetime(getattr(student, "updated_at", None)),
+        "occurredAt": _contract_datetime(max(student.updated_at, student.user.updated_at)),
         "version": "1.0.0",
         "metadata": metadata,
         "payload": _compact({
@@ -269,7 +272,7 @@ def sync_student(student) -> None:
             "gender": student.gender,
             "studentNumber": student.student_id,
             "classExternalId": str(student.current_class_id) if student.current_class_id else None,
-            "className": student.current_class.name if student.current_class_id else None,
+            "className": canonical_class or (student.current_class.name if student.current_class_id else None),
             "parentExternalId": parent_external_id,
             "email": student.user.email or None,
             "phone": student.user.phone or None,
@@ -319,7 +322,7 @@ def sync_teacher(teacher) -> None:
         "organizationId": KCS_ORBIT_ORGANIZATION_ID,
         "externalId": teacher.teacher_id,
         "sourceApp": "SAVANEX",
-        "occurredAt": _contract_datetime(getattr(teacher, "updated_at", None)),
+        "occurredAt": _contract_datetime(max(teacher.updated_at, teacher.user.updated_at)),
         "version": "1.0.0",
         "payload": _compact({
             "fullName": teacher.user.get_full_name(),

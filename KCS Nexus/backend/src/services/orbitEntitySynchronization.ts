@@ -38,6 +38,9 @@ export type OrbitRegistryEntitySnapshot = {
 }
 
 type SynchronizationInput = {
+  preserveAdditionalParentLinks?:boolean
+  expectedUpdatedAt?:Date
+  expectedStudentClass?:{grade:string;section:string}
   entityType: OrbitRegistryEntityType
   entity: OrbitRegistryEntitySnapshot
   previous?: OrbitRegistryEntitySnapshot | null
@@ -461,7 +464,7 @@ export async function synchronizeOrbitEntityToNexus(input: SynchronizationInput)
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: localUser.id }, data: userData })
+    if(input.expectedUpdatedAt){const saved=await tx.user.updateMany({where:{id:localUser.id,updatedAt:input.expectedUpdatedAt},data:userData as Prisma.UserUpdateManyMutationInput});if(saved.count!==1)throw new ApiError(409,'Identity changed during synchronization; reload the live registry.')}else await tx.user.update({ where: { id: localUser.id }, data: userData })
 
     if (input.entityType === 'student') {
       const existing = localUser.studentProfile
@@ -478,9 +481,10 @@ export async function synchronizeOrbitEntityToNexus(input: SynchronizationInput)
         ...(clean(input.entity.studentNumber) ? { studentNumber: clean(input.entity.studentNumber)! } : {}),
         ...(classParts ? { grade: classParts.grade, section: classParts.section } : {}),
         ...(owns(input.entity, 'status') && clean(input.entity.status) ? { status: clean(input.entity.status)!.toLowerCase() } : {}),
-        ...(owns(input.entity, 'dateOfBirth') && birthDate !== undefined ? { dateOfBirth: birthDate } : {}),
+        ...(owns(input.entity, 'dateOfBirth') && birthDate !== undefined && (birthDate !== null || owns(input.patch ?? {}, 'dateOfBirth')) ? { dateOfBirth: birthDate } : {}),
         ...(owns(input.entity, 'photoData') ? { officialAvatar: clean(input.entity.photoData) } : {}),
       }
+      if(existing&&input.expectedStudentClass){const current=await tx.$queryRaw<Array<{grade:string;section:string}>>`SELECT grade,section FROM "StudentProfile" WHERE id=${existing.id} FOR UPDATE`;if(!current[0]||current[0].grade!==input.expectedStudentClass.grade||current[0].section!==input.expectedStudentClass.section)throw new ApiError(409,'Student placement changed during synchronization; reload the live registry.')}
       const profile = existing
         ? await tx.studentProfile.update({ where: { id: existing.id }, data: profileData })
         : await tx.studentProfile.create({ data: {
@@ -508,7 +512,8 @@ export async function synchronizeOrbitEntityToNexus(input: SynchronizationInput)
       if (shouldReconcileStudentParentLinks(input.patch)) {
         const parentOrbitId = clean(input.entity.parentId)
         const parent = parentOrbitId ? await tx.user.findFirst({ where: { role: 'PARENT', orbitUserId: parentOrbitId }, select: { id: true } }) : null
-        await tx.parentStudentLink.deleteMany({ where: { studentId: profile.id, ...(parent ? { parentId: { not: parent.id } } : {}) } })
+        if(parentOrbitId&&!parent)throw new ApiError(409,'The official parent account must be synchronized before changing this family link. Existing links were preserved.')
+        await tx.parentStudentLink.deleteMany({ where: { studentId: profile.id, ...(input.preserveAdditionalParentLinks?{relation:'Official parent'}:{}), ...(parent ? { parentId: { not: parent.id } } : {}) } })
         if (parent) await tx.parentStudentLink.upsert({
           where: { parentId_studentId: { parentId: parent.id, studentId: profile.id } },
           update: { relation: 'Official parent' },
