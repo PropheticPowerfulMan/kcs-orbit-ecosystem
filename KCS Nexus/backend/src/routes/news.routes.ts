@@ -3,7 +3,7 @@ import { databaseActorId } from '../utils/databaseActor.js'
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
+import { authenticate, requireWebsiteEditor, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 
@@ -44,7 +44,7 @@ newsRouter.get('/:id', asyncHandler(async (req, res) => {
   return success(res, { ...post, coverImage: post.coverImage ? publicMediaUrl(post.coverImage) : post.coverImage })
 }))
 
-newsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+newsRouter.post('/', authenticate, requireWebsiteEditor(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = newsSchema.parse(req.body)
   const conflict = await prisma.newsPost.findUnique({ where: { slug: payload.slug }, select: { id: true } })
   if (conflict) throw new ApiError(409, 'An article already uses this title. Choose a distinct title.')
@@ -57,7 +57,7 @@ newsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async (re
   return success(res, post, 'Post created', 201)
 }))
 
-newsRouter.put('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+newsRouter.put('/:id', authenticate, requireWebsiteEditor(), asyncHandler(async (req, res) => {
   const postId = getRouteParam(req.params.id)
   const payload = newsSchema.partial().parse(req.body)
   const current = await prisma.newsPost.findUnique({ where: { id: postId }, select: { id: true } })
@@ -66,7 +66,7 @@ newsRouter.put('/:id', authenticate, requireRoles('admin'), asyncHandler(async (
   return success(res, post, 'Post updated')
 }))
 
-newsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+newsRouter.delete('/:id', authenticate, requireWebsiteEditor(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const postId = getRouteParam(req.params.id)
   const post = await prisma.newsPost.findUnique({ where: { id: postId }, select: { title: true, slug: true } })
   if (post) await prisma.newsPost.deleteMany({ where: { id: postId } })

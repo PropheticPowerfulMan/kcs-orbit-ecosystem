@@ -234,7 +234,7 @@ export const authAPI = {
   me: () =>
     api.get('/auth/me'),
   avatar: (id: string) =>
-    api.get('/auth/avatar/' + encodeURIComponent(id), { responseType: 'blob' }),
+    api.get('/auth/avatar/' + encodeURIComponent(id)+'?scope=nexus-personal-v2', { responseType: 'blob' }),
   updateProfile: (data: { firstName?: string; middleName?: string | null; lastName?: string; phone?: string; avatar?: string; bio?: string }) =>
     api.put('/auth/profile', data),
   signature: () => api.get('/auth/signature'),
@@ -560,10 +560,10 @@ export const electivesAPI = {
 
 export const mainTeacherAPI = {
   list: () => api.get('/school-management/teachers/main-assignments'),
-  assign: (teacherId: string, data: { status: 'HOMEROOM_TEACHER' | 'ASSISTANT_TEACHER' | 'TEACHER'; homeroomGrade?: string; homeroomSection?: string }) => api.patch('/school-management/teachers/' + teacherId + '/status', data),
+  assign: (teacherId: string, data: { status: 'HOMEROOM_TEACHER' | 'ASSISTANT_TEACHER' | 'TEACHER'; homeroomGrade?: string; homeroomSection?: string }, silent=false) => api.patch('/school-management/teachers/' + teacherId + '/status', data, silent?{headers:{'x-silent-feedback':'true'}}:{}),
   roster: () => api.get('/school-management/teachers/class-rosters'),
-  assignStudentSections: (studentIds: string[], section: string) => api.patch('/school-management/teachers/class-rosters', { studentIds, section }),
-  assignStudentSection: (studentId: string, section: string) => api.patch('/school-management/teachers/class-rosters/' + studentId, { section }),
+  assignStudentSections: (studentIds: string[], section: string, silent=false) => api.patch('/school-management/teachers/class-rosters', { studentIds, section },silent?{headers:{'x-silent-feedback':'true'}}:{}),
+  assignStudentSection: (studentId: string, section: string, silent=false) => api.patch('/school-management/teachers/class-rosters/' + studentId, { section },silent?{headers:{'x-silent-feedback':'true'}}:{}),
 }
 
 export const disciplineAPI = {

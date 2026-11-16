@@ -1,0 +1,7 @@
+[data-media-workspace]{--nw-paper:#eef6fc;--nw-card:#fbfdff;--nw-line:#bfd8e8;--nw-ink:#143d58;--nw-muted:#4c6b83;color:var(--nw-ink)}
+.dark [data-media-workspace]{--nw-paper:#0c2b43;--nw-card:#10344d;--nw-line:#2d566e;--nw-ink:#e6f5ff;--nw-muted:#b0cddd}
+[data-media-workspace] [hidden]{display:none!important}
+.media-studio-tabs{display:flex;flex-wrap:wrap;gap:7px;border:1px solid var(--nw-line);border-radius:16px;background:var(--nw-paper);padding:7px}
+.media-studio-tabs button{display:flex;align-items:center;justify-content:center;gap:9px;border-radius:11px;padding:12px 18px;font-size:12px;font-weight:800;color:var(--nw-ink);background:transparent}
+.media-studio-tabs button[aria-pressed=true]{background:#12658a;color:#fff;box-shadow:0 3px 12px #0b496c20}
+[data-media-workspace] .nexus-workspace-heading+.nexus-workspace-heading{display:none}

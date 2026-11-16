@@ -1,3 +1,4 @@
+import {portalHome} from '@/utils/accountScope'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -58,7 +59,7 @@ const LoginPage = () => {
       const data = response.data?.data
       if (!data?.user || !data?.token || !data?.refreshToken) throw new Error('Réponse d’authentification invalide.')
       login(data.user, data.token, data.refreshToken)
-      navigate(resolveDestination(data.user.role.toLowerCase() as UserRole), { replace: true })
+      navigate(portalHome({...data.user,role:data.user.role.toLowerCase() as UserRole}), { replace: true })
     } catch (error: any) {
       if (error?.response?.status === 428) {
         setRequiresTwoFactor(true)

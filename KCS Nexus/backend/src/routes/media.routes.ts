@@ -8,7 +8,7 @@ import multer from 'multer'
 import path from 'node:path'
 import { mkdir, unlink, writeFile } from 'node:fs/promises'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
+import { authenticate, requireWebsiteEditor, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { MAX_MEDIA_UPLOAD_BYTES, safeMediaFilename, validateMediaUpload, publicMediaUrl } from '../utils/mediaUpload.js'
@@ -37,7 +37,7 @@ mediaRouter.get('/categories', asyncHandler(async (_req, res) => {
   return success(res, categories)
 }))
 
-mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('file'), asyncHandler(async (req, res) => {
+mediaRouter.post('/upload', authenticate, requireWebsiteEditor(), upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'No file uploaded')
   if (!validateMediaUpload(req.file)) throw new ApiError(415, 'Unsupported or invalid media file')
 
@@ -63,7 +63,7 @@ mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('
 }))
 
 // Links are stored as public viewing URLs; the API never fetches external video content.
-mediaRouter.post('/video-link',authenticate,requireRoles('admin'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+mediaRouter.post('/video-link',authenticate,requireWebsiteEditor(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const https=z.string().trim().url().max(2000).refine(value=>{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password},'Use a public HTTPS viewing URL');
  const input=z.object({id:z.string().optional(),version:z.string().regex(/^[a-f0-9]{64}$/).optional(),title:z.string().trim().min(2).max(200),description:z.string().trim().max(5000).default(''),url:https,thumbnailUrl:https.nullable().optional()}).strict().parse(req.body);
  const actorId=await databaseActorId(req.user!.sub);
@@ -82,7 +82,7 @@ mediaRouter.post('/video-link',authenticate,requireRoles('admin'),asyncHandler(a
  });return success(res,{...item,version:mediaVersion(item)},'Video published',input.id?200:201);
 }));
 
-mediaRouter.put('/:id',authenticate,requireRoles('admin'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+mediaRouter.put('/:id',authenticate,requireWebsiteEditor(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const id=getRouteParam(req.params.id),input=z.object({title:z.string().trim().min(2).max(200),description:z.string().trim().max(5000).nullable(),category:z.string().trim().min(1).max(120),tags:z.array(z.string().trim().min(1).max(80)).max(30),version:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(req.body);
  const actorId=await databaseActorId(req.user!.sub);
  const item=await prisma.$transaction(async tx=>{
@@ -97,7 +97,7 @@ mediaRouter.put('/:id',authenticate,requireRoles('admin'),asyncHandler(async(req
 
 
 // A replacement keeps the media identity and references; a fresh URL prevents stale image caches.
-mediaRouter.post('/:id/file',authenticate,requireRoles('admin'),upload.single('file'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+mediaRouter.post('/:id/file',authenticate,requireWebsiteEditor(),upload.single('file'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const id=getRouteParam(req.params.id);if(!req.file)throw new ApiError(400,'Choose a replacement file.');if(!validateMediaUpload(req.file))throw new ApiError(415,'Unsupported or invalid media file');
  let details:unknown;try{details=JSON.parse(String(req.body.details||'{}'))}catch{throw new ApiError(400,'Invalid media details')}
  const input=z.object({title:z.string().trim().min(2).max(200),description:z.string().trim().max(5000).nullable(),category:z.string().trim().min(1).max(120),tags:z.array(z.string().trim().min(1).max(80)).max(30),version:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse({...details as object,version:req.body.version});
@@ -116,7 +116,7 @@ mediaRouter.post('/:id/file',authenticate,requireRoles('admin'),upload.single('f
  }catch(error){await unlink(filePath).catch(()=>undefined);throw error}
 }));
 
-mediaRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+mediaRouter.delete('/:id', authenticate, requireWebsiteEditor(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const mediaItemId = getRouteParam(req.params.id)
   const actorId = await databaseActorId(req.user!.sub)
   const item = await prisma.$transaction(async tx => {

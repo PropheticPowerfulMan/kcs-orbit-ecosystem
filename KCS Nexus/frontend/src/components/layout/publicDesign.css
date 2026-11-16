@@ -66,7 +66,7 @@
 .kcs-public-redesign .public-site-main [data-public-hero] .badge-gold{color:#f1d59e}
 .kcs-public-redesign .public-site-main [data-public-news-article]{background:var(--site-card);border:1px solid var(--site-line);border-radius:28px;box-shadow:0 18px 48px #082e4710}
 .kcs-public-redesign .public-site-main [data-public-news-article] h1{font-size:clamp(30px,4vw,52px);line-height:1.13}
-.kcs-public-redesign .handbook-hero{margin-top:110px;padding:40px!important;box-shadow:0 16px 35px #082e4712}
+.kcs-public-redesign .handbook-hero{margin-top:0;padding:40px!important;box-shadow:0 16px 35px #082e4712}
 .kcs-public-redesign .handbook-hero :is(h1,h2){color:#f2faff!important}.kcs-public-redesign .handbook-hero .handbook-eyebrow{color:#f0cc8e}.kcs-public-redesign .handbook-edition-card{border-radius:25px;background:var(--site-card);box-shadow:0 10px 30px #082e470a}.kcs-public-redesign .handbook-hero-meta span{background:#ffffff0b;border-color:#ffffff2b;color:#dceef7}
 /* Footer and controls retain every official link and contact detail. */
 .kcs-public-redesign>[data-public-footer]{background:linear-gradient(130deg,#06253c,#0b3a52);border-top:3px solid #ccaa68;color:#e2eef5}
@@ -83,7 +83,7 @@
 .kcs-public-redesign[data-public-page=home] [data-public-hero]{margin-top:88px;min-height:0}.kcs-public-redesign[data-public-page=home] [data-public-hero]>.container-custom{padding-block:38px 48px}.kcs-public-redesign[data-public-page=home] [data-public-hero] h1{font-size:38px}.kcs-public-redesign[data-public-page=home] [data-public-hero] .mt-16{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:26px;padding-top:22px}.kcs-public-redesign[data-public-page=home] [data-public-hero] .text-2xl{font-size:20px}.kcs-public-redesign[data-public-page=home] [data-public-hero] .hero-overlay{background:linear-gradient(90deg,#06273ff0,#082d45b3)}
 .kcs-public-redesign[data-public-page=gallery] [data-public-hero]{padding-top:72px;min-height:480px}.kcs-public-redesign[data-public-page=about] [data-public-hero]{padding-block:44px}.kcs-public-redesign[data-public-page=about] [data-public-hero] img{height:245px}
 .kcs-public-redesign .public-site-main .section-padding{padding-block:42px}.kcs-public-redesign .public-site-main{font-size:14px}.kcs-public-redesign .public-site-main :is(.btn-gold,.btn-primary,.btn-outline){min-height:45px;font-size:12px;padding:11px 17px}.kcs-public-redesign .public-site-main :is(input,textarea,select):not([type=radio]):not([type=checkbox]){font-size:16px}
-.kcs-public-redesign .public-site-main :is(article,form,.github-glass){border-radius:20px}.kcs-public-redesign .handbook-hero{margin-top:94px;padding:25px!important}.kcs-public-redesign .handbook-hero h1{font-size:32px}
+.kcs-public-redesign .public-site-main :is(article,form,.github-glass){border-radius:20px}.kcs-public-redesign .handbook-hero{margin-top:0;padding:25px!important}.kcs-public-redesign .handbook-hero h1{font-size:32px}
 .kcs-public-redesign>[data-public-footer] .py-16{padding-block:40px}.kcs-public-redesign>[data-public-footer] .gap-10{gap:25px}
 }
 @media(prefers-reduced-motion:reduce){.kcs-public-redesign *, .kcs-public-redesign *::before{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
@@ -104,3 +104,5 @@
 .kcs-public-redesign .public-program-icon{display:grid;place-items:center;width:64px;height:64px;border-radius:19px;border:1px solid #74acbe66;background:linear-gradient(140deg,#e4f4f8,#cde6ef);color:#125373;box-shadow:inset 0 1px #ffffffb0,0 7px 18px #124b6712}
 .dark .kcs-public-redesign .public-program-icon{background:linear-gradient(140deg,#16475e,#0b2e44);border-color:#38768e;color:#9ae7ee;box-shadow:inset 0 1px #60c5d526,0 7px 18px #00000020}
 }
+
+@media screen{.kcs-public-redesign[data-public-page=school-handbook] .school-handbook--public>.handbook-hero{margin-top:0!important}}

@@ -1,0 +1,7 @@
+import {useEffect,useRef,type ReactNode} from 'react'
+import {createPortal} from 'react-dom'
+export default function PrincipalRecordDialog({children,label,onClose}:{children:ReactNode;label:string;onClose:()=>void}){
+ const ref=useRef<HTMLDivElement>(null),close=useRef(onClose);close.current=onClose
+ useEffect(()=>{const previous=document.activeElement as HTMLElement|null,overflow=document.body.style.overflow;document.body.style.overflow='hidden';ref.current?.querySelector<HTMLElement>('button')?.focus();const keyboard=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();close.current();return}if(event.key!=='Tab')return;const nodes=Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')||[]).filter(node=>node.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}};document.addEventListener('keydown',keyboard);return()=>{document.body.style.overflow=overflow;document.removeEventListener('keydown',keyboard);previous?.focus()}},[])
+ return createPortal(<div ref={ref} className="principal-record-overlay" role="dialog" aria-modal="true" aria-label={label} onClick={()=>onClose()}>{children}</div>,document.body)
+}
