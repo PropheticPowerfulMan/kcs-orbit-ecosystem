@@ -1,3 +1,4 @@
+import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
 import { personalizeParentCorrespondence } from '../utils/parentCorrespondence.js'
 import { queueMessageBatch } from '../services/messageBatch.js'
 import { Router } from 'express'
@@ -249,9 +250,9 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
   const allTargets: Array<typeof targets[number] & { relationship?: string }> = [...targets]
   for (const parent of deliveryParents.filter((person) => person.role === 'PARENT')) {
     const official = findOfficialContact(directory, parent)
-    for (const mother of (official?.familyContacts ?? []).filter((contact) => contact.kind === 'MOTHER' && (contact.email || contact.phone))) {
+    for (const mother of (official?.familyContacts ?? []).filter((contact) => (contact.email || contact.phone))) {
       if (mother.email?.trim().toLowerCase() === parent.email?.trim().toLowerCase() && mother.phone?.trim() === parent.phone?.trim()) continue
-      allTargets.push({ userId: parent.id, name: [mother.lastName, mother.middleName, mother.firstName].filter(Boolean).join(' ') || 'Mother / Mère', email: mother.email || null, phone: mother.phone || null, relationship: 'MOTHER' })
+      allTargets.push({ userId: parent.id, name: [mother.lastName, mother.middleName, mother.firstName].filter(Boolean).join(' ') || 'Family contact / Contact familial', email: mother.email || null, phone: mother.phone || null, relationship: mother.kind||'FAMILY_CONTACT' })
     }
   }
   const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients: deliveryParents.map((parent) => ({ id: parent.id, role: parent.role, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') })), targets: allTargets, channels: data.channels, attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: req.user!.sub === 'configured-superadmin', intent: { recipientIds: [...recipientIds].sort() } })
@@ -298,8 +299,10 @@ messagesRouter.post('/broadcast', attachmentUpload.single('attachment'), asyncHa
   })
   if (!users.length) return success(res, { recipients: 0, audience: data.audience, emailQueued: 0, emailMissing: 0 }, 'No matching recipients')
   const recipients = users.map((user) => ({ id: user.id, role: user.role, name: [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ') }))
-  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients, targets: users.map((user, index) => ({ userId: user.id, name: recipients[index].name, email: user.email, phone: user.phone })), channels: ['email'], attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: true, intent: { audience: data.audience } })
-  return success(res, { ...result, recipients: users.length, audience: data.audience, emailMissing: users.length - result.emailQueued, estimatedMinutes: Math.ceil(result.emailQueued / 60) }, 'Communication recorded for every recipient and email delivery safely queued', 201)
+  const families=await familyEmailRecipients(users.filter(user=>user.role==='PARENT'))
+  const emailTargets=users.flatMap((user,index)=>user.role==='PARENT'?(families.get(user.id)??[]).map(target=>({userId:user.id,name:target.name,email:target.email,phone:target.phone})): [{userId:user.id,name:recipients[index].name,email:user.email,phone:user.phone}])
+  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients, targets:emailTargets, channels: ['email'], attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: true, intent: { audience: data.audience } })
+  return success(res, { ...result, recipients: users.length, audience: data.audience, emailMissing: Math.max(0, users.length - result.emailQueued), estimatedMinutes: Math.ceil(result.emailQueued / 60) }, 'Communication recorded for every recipient and email delivery safely queued', 201)
 }))
 
 messagesRouter.post('/bulk-delete', asyncHandler(async (req: AuthenticatedRequest, res) => {

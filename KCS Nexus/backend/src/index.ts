@@ -1,3 +1,4 @@
+import {startRegistryMirrorReconciliation} from './services/registryMirror.service.js'
 import {ensureUploadStorage} from './utils/uploadStorage.js'
 import {startSentinelStaffAttendanceSync} from './services/sentinelStaffAttendance.service.js'
 import { startOutboundSmsQueue } from './services/outboundSmsQueue.js'
@@ -19,6 +20,7 @@ const start = async () => {
     startOutboundSmsQueue()
     startEventReminderWorker()
     startSentinelStaffAttendanceSync()
+    startRegistryMirrorReconciliation()
   } catch (error) {
     setDatabaseReady(false)
     console.error('KCS Nexus database unavailable; starting API in degraded mode.', error)

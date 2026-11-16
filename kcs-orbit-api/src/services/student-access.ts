@@ -12,10 +12,10 @@ export async function studentUserAccess(userId: string, organizationId?: string 
   const user = await prisma.user.findUnique({where:{id:userId},select:{role:true,email:true,organizationId:true}});
   if (!user || user.organizationId !== organizationId) return false;
   if (!organizationId || !await identifiersAreAllowed([userId,user.email],organizationId)) return false;
-  if (user.role !== 'STUDENT') return true;
-  if (!organizationId) return false;
   const audit = await prisma.auditLog.findFirst({where:{userId,organizationId,action:'ACADEMY_SERVICE_TICKET_CREATED'},select:{metadata:true},orderBy:[{createdAt:'asc'},{id:'asc'}]});
   const sourceId = (audit?.metadata as Record<string,unknown> | null)?.sourceIdentityId;
+  if(typeof sourceId==='string'&&!await identifiersAreAllowed([sourceId],organizationId))return false;
+  if(user.role!=='STUDENT')return typeof sourceId==='string'&&sourceId!==userId?(await identityAccess(sourceId,organizationId)).allowed:true;
   const candidates = typeof sourceId === 'string'
     ? await prisma.student.findMany({where:{id:sourceId,organizationId},select:{status:true},take:2})
     : await prisma.student.findMany({where:{email:{equals:user.email,mode:'insensitive'},organizationId},select:{status:true},take:2});

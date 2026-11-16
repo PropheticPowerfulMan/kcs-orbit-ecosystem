@@ -11,6 +11,8 @@ import { sendSchoolSms } from '../utils/sms.js'
 import {
   getOrbitSharedDirectory as getSharedDirectoryFromOrbit,
   invalidateOrbitSharedDirectory,
+  confirmOrbitRegistryDeletion,
+  type OrbitDeletedIdentity,
   type OrbitSharedDirectory,
 } from '../services/orbitSharedDirectory.js'
 import { assertOrbitEntityUpdateCanSynchronize, buildOrbitRollbackPatch, synchronizeOrbitEntityToNexus, type OrbitRegistryEntitySnapshot } from '../services/orbitEntitySynchronization.js'
@@ -129,7 +131,7 @@ async function createRegistryEntityInOrbit(entityType: RegistryEntityType, paylo
 }
 
 async function deleteRegistryEntityInOrbit(entityType: RegistryEntityType, identifier: string, organizationId: string, identifierType: 'orbitId' | 'externalId' = 'orbitId') {
-  const registryEntityType = entityType === 'parent' ? 'family' : entityType
+  const registryEntityType = entityType
   const response = await fetch(
     `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/${registryEntityType}/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(organizationId)}&identifierType=${encodeURIComponent(identifierType)}`,
     {
@@ -820,7 +822,7 @@ registryRouter.delete('/entities/:entityType/:identifier', authenticate, require
   }
 
   const deleted = await deleteRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, identifierType)
-  invalidateOrbitSharedDirectory()
+  confirmOrbitRegistryDeletion((deleted as {removed?:OrbitDeletedIdentity[]}).removed??[{id:String(req.params.identifier),entityType}])
   const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, before, 'deleted').catch((error) => {
     const reason = error instanceof Error ? error.message : 'Unknown notification delivery failure'
     console.error('[registry-delete] Entity deleted, but secondary delivery is degraded', { entityType, identifier: req.params.identifier, reason })

@@ -54,19 +54,20 @@ router.post("/service-tickets", async (req, res, next) => {
       const aliasEmail = `academy-${createHmac("sha256", process.env.ACADEMY_INTEGRATION_KEY!).update(String(source.organizationId)+"\0"+sourceId).digest("hex")}@sso.invalid`;
       let email = source.email || aliasEmail;
       let existing = await prisma.user.findUnique({where:{email}});
-      if (student) {
+      if (source) {
         const linkedAudit = await prisma.auditLog.findFirst({where:{organizationId:source.organizationId ?? undefined,action:'ACADEMY_SERVICE_TICKET_CREATED',metadata:{path:['sourceIdentityId'],equals:sourceId}},orderBy:[{createdAt:'asc'},{id:'asc'}],select:{userId:true}});
         const linkedUser = linkedAudit?.userId ? await prisma.user.findUnique({where:{id:linkedAudit.userId}}) : null;
-        if (linkedUser?.role === 'STUDENT' && linkedUser.organizationId === source.organizationId) existing = linkedUser;
+        if (linkedUser?.role === source.role && linkedUser.organizationId === source.organizationId) existing = linkedUser;
         const first = existing ? await prisma.auditLog.findFirst({where:{userId:existing.id,action:'ACADEMY_SERVICE_TICKET_CREATED'},orderBy:[{createdAt:'asc'},{id:'asc'}],select:{metadata:true}}) : null;
         const boundId = (first?.metadata as Record<string,unknown> | null)?.sourceIdentityId;
-        const ambiguousEmail = !boundId && source.email ? await prisma.student.count({where:{organizationId:source.organizationId,email:{equals:source.email,mode:'insensitive'}}}) > 1 : false;
-        if ((boundId && boundId !== sourceId) || ambiguousEmail || (existing && (existing.role !== 'STUDENT' || existing.organizationId !== source.organizationId))) {
+        const ambiguousEmail = !boundId && source.email&&student ? await prisma.student.count({where:{organizationId:source.organizationId,email:{equals:source.email,mode:'insensitive'}}}) > 1 : false;
+        if ((boundId && boundId !== sourceId) || ambiguousEmail || (existing && (existing.role !== source.role || existing.organizationId !== source.organizationId))) {
           email = aliasEmail;
           existing = await prisma.user.findUnique({where:{email}});
         }
       }
       if (existing && (existing.organizationId !== source.organizationId || existing.role !== source.role)) return res.status(409).json({message:'Orbit identity conflicts with an existing Academy account'});
+      if(existing){const emailOwner=source.email?await prisma.user.findUnique({where:{email:source.email},select:{id:true}}):null;existing=await prisma.user.update({where:{id:existing.id},data:{fullName:source.fullName,...(source.email&&(!emailOwner||emailOwner.id===existing.id)?{email:source.email}:{})}})}
       user = existing || await prisma.user.create({data:{fullName:source.fullName,email,passwordHash:'!academy-sso-only!',role:source.role,organizationId:source.organizationId}});
 
     }

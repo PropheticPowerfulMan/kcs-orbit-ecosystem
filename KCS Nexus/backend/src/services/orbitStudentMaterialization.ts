@@ -131,7 +131,7 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
         middleName: name.middleName,
         lastName: name.lastName,
         phone: student.phone?.trim() || null,
-        avatar: student.photoData || null,
+        avatar: null,
         role: 'STUDENT',
         orbitUserId: student.id,
         orbitOrganizationId: env.KCS_ORBIT_ORGANIZATION_ID || null,
@@ -140,9 +140,11 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
       select: { id: true, email: true, accessCode: true, role: true },
     })
   } else {
+    const emailOwner = normalizedEmail ? await prisma.user.findUnique({where:{email:normalizedEmail},select:{id:true}}) : null
     await prisma.user.update({
       where: { id: user.id },
       data: {
+        ...(normalizedEmail&&(!emailOwner||emailOwner.id===user.id)?{email:normalizedEmail}:{}),
         role: 'STUDENT',
         orbitUserId: student.id,
         orbitOrganizationId: env.KCS_ORBIT_ORGANIZATION_ID || null,

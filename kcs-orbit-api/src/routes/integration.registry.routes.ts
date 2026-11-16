@@ -16,6 +16,9 @@ function restrictRegistryEntityScope(req: Request, res: Response, next: NextFunc
   const entityType = String(req.params.entityType || '').toLowerCase();
   const appSlug = req.integration?.appSlug;
   const baseAllowedTypes = appSlug ? registryMutationScopes[appSlug] : undefined;
+  // An old Nexus parent dialog incorrectly requested deletion of the whole family.
+  // Refuse that obsolete route while newer clients delete the selected parent.
+  if(appSlug===AppSlug.KCS_NEXUS&&req.method==='DELETE'&&entityType==='family')return res.status(409).json({message:'Refresh Nexus before deleting this parent. Whole-family deletion is not supported by this dialog.'});
   const allowedTypes = appSlug === AppSlug.KCS_NEXUS && req.method === 'PUT'
     ? ['family', 'parent', 'student', 'teacher']
     : baseAllowedTypes;

@@ -1,3 +1,4 @@
+import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
 import {coursePeriodStates} from '../services/courseTeachingPeriods.service.js'
 import {courseMatchesPeriod} from '../utils/courseTeachingPeriods.js'
 import {reportCardSubmissionHistories,emptyReportCardSubmissionHistory} from '../services/reportCardSubmissionHistory.js'
@@ -925,6 +926,7 @@ academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHand
   const linked=new Set(card.student.parentLinks.map(link=>link.parentId))
   if(request.parentIds.some(id=>!linked.has(id)))throw new ApiError(409,'Every selected recipient must be a linked parent of the selected learner')
  }
+ const familyEmails=await familyEmailRecipients(cards.flatMap(card=>card.student.parentLinks.map(link=>link.parent)))
  const pdfByCard=await prepareReportCardPdfs(cards,'en')
  let recipients=0
  try{await prisma.$transaction(async tx=>{
@@ -944,12 +946,15 @@ academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHand
    const parentBody=(parent:typeof linked[number]['parent'])=>personalizeParentCorrespondence(body,[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '),payload.language,batchId+':'+card.id+':'+parent.id)
    await tx.internalMessage.createMany({data:linked.map(({parent})=>({id:ids.get(parent.id)!,senderId:actorId,recipientId:parent.id,subject,body:parentBody(parent),priority:'high',attachmentName:pdf.documentId+'.pdf',attachmentMime:'application/pdf',attachmentSize:pdf.buffer.length,sharedAttachmentId:attachment.id}))})
    await tx.notification.createMany({data:linked.map(({parent})=>({userId:parent.id,title:subject,message:parentBody(parent),type:'MESSAGE',link:'/portal/parent/grades'}))})
-   await tx.correspondenceLog.createMany({data:linked.map(({parent})=>({channel:'EMAIL',status:parent.email?'QUEUED':'FAILED',subject,body:parentBody(parent),senderId:actorId,recipientName:[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '),recipientEmail:parent.email,recipientPhone:parent.phone,studentId:card.studentId,reportCardId:card.id,failureReason:parent.email?null:'RECIPIENT_EMAIL_MISSING',metadata:{mailQueueVersion:1,internalMessageId:ids.get(parent.id)!,recipientId:parent.id,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH',language:payload.language}}))})
-   recipients+=linked.length
+   const emailTargets=[...new Map(linked.flatMap(({parent})=>(familyEmails.get(parent.id)??[]).map(target=>[target.email,target] as const))).values()]
+   await tx.correspondenceLog.createMany({data:emailTargets.map(target=>({channel:'EMAIL',status:'QUEUED',subject,body:personalizeParentCorrespondence(body,target.name,payload.language,batchId+':'+card.id+':'+target.email),senderId:actorId,recipientName:target.name,recipientEmail:target.email,recipientPhone:target.phone,studentId:card.studentId,reportCardId:card.id,metadata:{mailQueueVersion:1,internalMessageId:ids.get(target.parentId)!,recipientId:target.parentId,relationship:target.relationship,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH',language:payload.language}}))})
+
+   recipients+=emailTargets.length
    await tx.reportCard.update({where:{id:card.id},data:{publicationStatus:'EMAILED',emailedAt:new Date(),portalPostedAt:card.portalPostedAt??new Date()}})
    await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:pdf.documentId,metadata:{fingerprint:pdf.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:'EMAILED',approvedAt:card.approvedAt?.toISOString()??null}}})
    await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_DELIVERY_QUEUED',targetType:'ReportCard',targetId:card.id,metadata:{studentId:card.studentId,parentIds:linked.map(item=>item.parentId),term:card.term,documentId:pdf.documentId,language:payload.language}}})
   }
+  await tx.auditLog.update({where:{id:batchId},data:{metadata:{requestHash,reportCards:cards.length,recipients}}})
  },{maxWait:10000,timeout:60000})}catch(error){
   if(error instanceof Prisma.PrismaClientKnownRequestError&&error.code==='P2002'){
    const replay=await prisma.auditLog.findUnique({where:{id:batchId},select:{metadata:true}})

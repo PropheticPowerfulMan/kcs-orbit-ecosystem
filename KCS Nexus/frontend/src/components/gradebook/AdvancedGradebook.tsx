@@ -49,7 +49,7 @@ import { academicCalendarAPI, academicRecordsAPI, teacherWorkspaceAPI } from '@/
 import { canonicalClassLabel } from '@/utils/classLabels'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
-import { canonicalGradebookTerm, openingGradebookTerm } from '@/utils/gradebookPeriods'
+import { canonicalGradebookTerm, openingGradebookTerm, annualGradebookSummaryReady } from '@/utils/gradebookPeriods'
 import { recoverGradebook, stableGradebookValue, defaultGradebookCategories, type AssignmentType, type GradebookColumn, type Category, type GradebookSnapshot, type ArchivedAssignment } from '@/utils/gradebookRecovery'
 
 type Course = {
@@ -386,10 +386,14 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [academicYear, setAcademicYear] = useState('2026-2027')
   const { readOnly: periodClosed, access: periodAccess } = useAcademicPeriodAccess(academicYear, term)
   const futurePeriod = isFutureGradebookPeriod(periodAccess, academicYear, term)
-  const periodReadOnly = periodClosed || futurePeriod
+  const annualSummary = term === 'Annual final'
+  const annualSummaryReady = annualGradebookSummaryReady(periodAccess, academicYear)
+  const periodReadOnly = periodClosed || futurePeriod || annualSummary
   useEffect(() => { setConfirmedPeriod(false) }, [selectedCourseId, academicYear, term, periodAccess?.activeAcademicYear, periodAccess?.activeEntryTerm])
-  const assignmentReadOnly = (assignment?: GradebookColumn) => Boolean(assignment && (isAcademicPeriodReadOnly(periodAccess, academicYear, assignment.term) || isFutureGradebookPeriod(periodAccess, academicYear, assignment.term)))
-  const periodNotice = futurePeriod
+  const assignmentReadOnly = (assignment?: GradebookColumn) => Boolean(annualSummary || assignment && (isAcademicPeriodReadOnly(periodAccess, academicYear, assignment.term) || isFutureGradebookPeriod(periodAccess, academicYear, assignment.term)))
+  const periodNotice = annualSummary
+    ? tr('Bilan annuel en lecture seule, calculé à partir des quarters. Les notes se saisissent et se soumettent dans chaque quarter.', 'Read-only annual summary, derived from the quarters. Enter and submit grades within each quarter.')
+    : futurePeriod
     ? tr('Ce quarter n’est pas encore ouvert. Saisissez les notes dans ', 'This quarter is not open yet. Enter grades in ') + (periodAccess?.activeEntryTerm || '') + tr(' jusqu’au passage confirmé par le SuperAdmin.', ' until the SuperAdmin confirms advancement.')
     : tr('Cette période est clôturée. Les notes sont en lecture seule.', 'This academic period is closed. Grades are read-only.')
   const closedNotice = () => onAction(periodNotice, true)
@@ -406,6 +410,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const autosavePreferenceKey = `kcs:nexus:gradebook:autosave:${userId}:${cycleKey}`
   activeScope.current = cycleKey
   const chooseTerm = (nextTerm: string) => {
+    if (nextTerm === 'Annual final' && !annualSummaryReady) return
     const pending = pendingAutosave.current
     pendingAutosave.current = null
     if (pending) void pending()
@@ -512,7 +517,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setComments(saved.comments ?? {})
       setScores(buildMissingScoreCells(savedAssignments, students, saved.scores ?? {}))
       setSelectedAssignmentId(savedAssignments[0]?.id ?? '')
-      setTerm(openingGradebookTerm(savedAssignments, localStorage.getItem(periodPreferenceKey), officialTerm, terms))
+      setTerm(openingGradebookTerm(savedAssignments, localStorage.getItem(periodPreferenceKey), officialTerm, terms, annualGradebookSummaryReady(periodAccess, academicYear)))
       // The expected server version is kept separately from recovered browser data.
       setLoadedScope(cycleKey)
     }
@@ -1027,10 +1032,11 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       <section hidden={spreadsheetOpen&&!focusPeriodsOpen} className="shrink-0 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
         <p className="text-sm font-bold text-kcs-blue-950 dark:text-sky-100">{academicYear} · {tr('Période affichée', 'Displayed period')} {term}</p>
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{loadedScope !== cycleKey ? tr('Chargement sécurisé des notes enregistrées…', 'Loading saved gradebook securely…') : tr('Vos notes restent conservées dans leur période. Choisissez une période ci-dessous pour les retrouver.', 'Your grades remain saved in their original period. Choose a period below to view them.')} {officialTerm !== term && <strong>{tr('Période de saisie ouverte', 'Open grade-entry period')} {officialTerm}.</strong>}</p>
+        {!annualSummaryReady && <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{tr('Le bilan annuel sera disponible en lecture seule après la clôture des quatre quarters par le SuperAdmin. Les dates seules ne l’activent pas.', 'The read-only annual summary becomes available after the SuperAdmin closes all four quarters. Calendar dates alone do not activate it.')}</p>}
         {recoveredCells > 0 && <p className="mt-2 text-xs font-bold text-amber-800 dark:text-amber-200">{tr('Notes retrouvées dans les anciens formats', 'Grades recovered from older formats')} · {recoveredCells}. {tr('Enregistrez pour confirmer leur synchronisation.', 'Save to confirm synchronization.')}</p>}
         <div className="mt-2 flex flex-wrap gap-2">{terms.map((period) => {
           const count = assignments.filter((assignment) => period === 'Annual final' || assignment.term === period).length
-          return <button key={period} type="button" disabled={loadedScope !== cycleKey} aria-pressed={term === period} onClick={() => chooseTerm(period)} className={`rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${term === period ? 'border-kcs-blue-700 bg-kcs-blue-700 text-white' : 'border-sky-200 bg-white text-kcs-blue-900 dark:border-sky-800 dark:bg-kcs-blue-900 dark:text-sky-100'}`}>{period} · {count} {tr('travaux', 'tasks')}</button>
+          return <button key={period} type="button" disabled={loadedScope !== cycleKey || (period === 'Annual final' && !annualSummaryReady)} title={period === 'Annual final' && !annualSummaryReady ? tr('Disponible après la clôture explicite des quatre quarters par le SuperAdmin.', 'Available after the SuperAdmin explicitly closes all four quarters.') : undefined} aria-pressed={term === period} onClick={() => chooseTerm(period)} className={`rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${term === period ? 'border-kcs-blue-700 bg-kcs-blue-700 text-white' : 'border-sky-200 bg-white text-kcs-blue-900 dark:border-sky-800 dark:bg-kcs-blue-900 dark:text-sky-100'}`}>{period === 'Annual final' ? tr('Bilan annuel', 'Annual summary') : period} · {period === 'Annual final' && !annualSummaryReady ? tr('Non disponible', 'Not available yet') : <>{count} {tr('travaux', 'tasks')}</>}</button>
         })}</div>
       </section>
       <div className={`grid gap-4 ${commandCenterOpen ? 'xl:grid-cols-[1fr_0.9fr]' : ''}`}>
@@ -1211,10 +1217,11 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       <section hidden={spreadsheetOpen&&!focusPeriodsOpen} className="shrink-0 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
         <p className="text-sm font-bold text-kcs-blue-950 dark:text-sky-100">{academicYear} · {tr('Période affichée', 'Displayed period')} {term}</p>
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{loadedScope !== cycleKey ? tr('Chargement sécurisé des notes enregistrées…', 'Loading saved gradebook securely…') : tr('Vos notes restent conservées dans leur période. Choisissez une période ci-dessous pour les retrouver.', 'Your grades remain saved in their original period. Choose a period below to view them.')} {officialTerm !== term && <strong>{tr('Période actuelle du calendrier', 'Current calendar period')} {officialTerm}.</strong>}</p>
+        {!annualSummaryReady && <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{tr('Le bilan annuel sera disponible en lecture seule après la clôture des quatre quarters par le SuperAdmin. Les dates seules ne l’activent pas.', 'The read-only annual summary becomes available after the SuperAdmin closes all four quarters. Calendar dates alone do not activate it.')}</p>}
         {recoveredCells > 0 && <p className="mt-2 text-xs font-bold text-amber-800 dark:text-amber-200">{tr('Notes retrouvées dans les anciens formats', 'Grades recovered from older formats')} · {recoveredCells}. {tr('Enregistrez pour confirmer leur synchronisation.', 'Save to confirm synchronization.')}</p>}
         <div className="mt-2 flex flex-wrap gap-2">{terms.map((period) => {
           const count = assignments.filter((assignment) => period === 'Annual final' || assignment.term === period).length
-          return <button key={period} type="button" disabled={loadedScope !== cycleKey} aria-pressed={term === period} onClick={() => chooseTerm(period)} className={`rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${term === period ? 'border-kcs-blue-700 bg-kcs-blue-700 text-white' : 'border-sky-200 bg-white text-kcs-blue-900 dark:border-sky-800 dark:bg-kcs-blue-900 dark:text-sky-100'}`}>{period} · {count} {tr('travaux', 'tasks')}</button>
+          return <button key={period} type="button" disabled={loadedScope !== cycleKey || (period === 'Annual final' && !annualSummaryReady)} title={period === 'Annual final' && !annualSummaryReady ? tr('Disponible après la clôture explicite des quatre quarters par le SuperAdmin.', 'Available after the SuperAdmin explicitly closes all four quarters.') : undefined} aria-pressed={term === period} onClick={() => chooseTerm(period)} className={`rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${term === period ? 'border-kcs-blue-700 bg-kcs-blue-700 text-white' : 'border-sky-200 bg-white text-kcs-blue-900 dark:border-sky-800 dark:bg-kcs-blue-900 dark:text-sky-100'}`}>{period === 'Annual final' ? tr('Bilan annuel', 'Annual summary') : period} · {period === 'Annual final' && !annualSummaryReady ? tr('Non disponible', 'Not available yet') : <>{count} {tr('travaux', 'tasks')}</>}</button>
         })}</div>
       </section>
         <div className={`flex flex-col gap-2 border-b p-3 dark:border-kcs-blue-800 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between ${spreadsheetOpen ? 'border-kcs-blue-200 bg-[#dceaf9] dark:border-kcs-blue-700 dark:bg-kcs-blue-950' : 'border-gray-100'}`}>

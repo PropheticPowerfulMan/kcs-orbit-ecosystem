@@ -43,6 +43,20 @@ const originalExternalLinkCreate = prisma.externalLink.create.bind(prisma.extern
 const originalSyncEventCreate = prisma.syncEvent.create.bind(prisma.syncEvent);
 const originalAuditLogCreate = prisma.auditLog.create.bind(prisma.auditLog);
 const originalTransaction = prisma.$transaction.bind(prisma);
+const originalUserFindUnique = prisma.user.findUnique.bind(prisma.user);
+const originalAuditFindMany = prisma.auditLog.findMany.bind(prisma.auditLog);
+const originalAuditFindFirst = prisma.auditLog.findFirst.bind(prisma.auditLog);
+// HTTP authorization fixtures must include the local account and access policy.
+test.beforeEach(() => {
+  prisma.user.findUnique = (async ({where}: any) => ({id:where.id, role:where.id === 'parent-user' ? 'PARENT' : 'TEACHER', email:where.id+'@example.invalid', organizationId:'org-1'})) as any;
+  prisma.auditLog.findMany = (async () => []) as any;
+  prisma.auditLog.findFirst = (async () => null) as any;
+});
+test.afterEach(() => {
+  prisma.user.findUnique = originalUserFindUnique;
+  prisma.auditLog.findMany = originalAuditFindMany;
+  prisma.auditLog.findFirst = originalAuditFindFirst;
+});
 
 async function withServer(run: (baseUrl: string) => Promise<void>) {
   const server = createServer(createApp());
@@ -427,7 +441,7 @@ test("registry route authorizes EduPay family creation before payload validation
   });
 });
 
-test("registry route blocks KCS Nexus from creating school employees", async () => {
+test("registry route authorizes Nexus employee management before organization lookup", async () => {
   process.env.KCS_NEXUS_INTEGRATION_KEY = "test-kcs-key";
 
   await withServer(async (baseUrl) => {
@@ -441,9 +455,8 @@ test("registry route blocks KCS Nexus from creating school employees", async () 
       body: JSON.stringify({ organizationId: "org-1", fullName: "Blocked Employee" }),
     });
 
-    assert.equal(response.status, 403);
-    const data = await response.json() as { allowedEntityTypes: string[] };
-    assert.deepEqual(data.allowedEntityTypes, ["family", "parent", "student"]);
+    assert.equal(response.status, 404);
+    assert.equal((await response.json() as {message:string}).message, "Organization not found");
   });
 });
 

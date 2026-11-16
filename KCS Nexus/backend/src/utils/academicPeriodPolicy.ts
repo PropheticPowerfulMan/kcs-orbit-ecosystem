@@ -221,6 +221,19 @@ export function futureGradebookPeriods(access: AcademicPeriodAccess, year: strin
 export function futureGradebookChanged(previous: unknown, next: unknown, access: AcademicPeriodAccess) {
   const year = access.activeAcademicYear;
   if (!year) return false;
+  // Annual is a derived summary, not a writable assessment period. Do not use
+  // an annual closure here: that would also lock the still-open quarters.
+  const before = record(previous), after = record(next);
+  for (const field of ['advancedGradebookByCycle', 'advancedGradebookByCourse', 'gradebookColumnsByCourse']) {
+    const oldMap = record(before[field]), newMap = record(after[field]);
+    for (const key of new Set([...Object.keys(oldMap), ...Object.keys(newMap)])) {
+      const split = key.lastIndexOf('::');
+      if ((field === 'advancedGradebookByCycle' ? key.slice(split + 2) : '2026-2027') !== year) continue;
+      const course = field === 'advancedGradebookByCycle' ? key.slice(0, split) : key;
+      const baseline = record(before.advancedGradebookByCycle)[course + '::' + year] ?? (year === '2026-2027' ? record(before.advancedGradebookByCourse)[course] : undefined);
+      if (JSON.stringify(closedSlice(oldMap[key] ?? baseline, new Set(['Annual final']), field === 'gradebookColumnsByCourse')) !== JSON.stringify(closedSlice(newMap[key], new Set(['Annual final']), field === 'gradebookColumnsByCourse'))) return true;
+    }
+  }
   return closedGradebookChanged(previous, next, {
     ...access,
     closedPeriods: futureGradebookPeriods(access, year).map(term => ({ academicYear: year, term })),

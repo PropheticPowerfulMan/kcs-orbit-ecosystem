@@ -252,6 +252,7 @@ export const authAPI = {
 
 // --- News API ---
 export const newsAPI = {
+  uploadAttachment:(file:File)=>{const data=new FormData();data.append('file',file);return api.post('/news/attachments',data,{headers:{'Content-Type':'multipart/form-data'}})},
   getAll: (params?: object) => api.get('/news', { params }),
   getById: (id: string) => api.get(`/news/${id}`),
   getBySlug: (slug: string) => api.get(`/news/slug/${slug}`),

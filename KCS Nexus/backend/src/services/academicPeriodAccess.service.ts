@@ -107,6 +107,7 @@ export async function academicCycleForDate(date: Date) {
 }
 
 export async function protectGradebookEntry(db: Prisma.TransactionClient, year: string, term: string) {
+  if (term.trim().toLowerCase() === 'annual final') throw new ApiError(409, 'ANNUAL_SUMMARY_READ_ONLY: Enter and submit assessments in their quarter. The annual result is derived from submitted periods.');
   await lockAcademicYears(db, [year]);
   const access = await academicPeriodAccess(db);
   assertAcademicPeriodOpen(access, year, term);
