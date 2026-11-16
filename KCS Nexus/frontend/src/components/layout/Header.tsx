@@ -1,3 +1,4 @@
+import {portalHome} from '@/utils/accountScope'
 import { useState, useEffect, useRef } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -55,7 +56,7 @@ const Header = () => {
 
   const isHomePage = location.pathname === '/'
   const logoSrc = getAssetUrl('images/kcs.jpg')
-  const dashboardPath = user?.role === 'admin' ? '/admin' : `/portal/${user?.role ?? ''}`
+  const dashboardPath = user?portalHome(user):'/login'
 
   const navItems = [
     { to: '/', label: t('nav.home'), icon: Home },

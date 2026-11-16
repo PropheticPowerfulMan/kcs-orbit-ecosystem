@@ -1,3 +1,4 @@
+import {isMediaAccount} from '@/utils/accountScope'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Camera, CheckCircle2, Eye, EyeOff, Fingerprint, KeyRound, Loader2, Mail, PenTool, Phone, Save, Shield, Trash2, UserCheck, UsersRound } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
@@ -12,6 +13,7 @@ const passwordInputClass = 'min-w-0 flex-1 bg-transparent px-4 py-3 text-sm text
 
 export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanelProps) {
   const { user, updateUser } = useAuthStore()
+  const mediaAccount=isMediaAccount(user)
   const language = useUIStore((state) => state.language)
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -27,14 +29,14 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
   useEffect(() => setProfile({ avatar: user?.avatar ?? '' }), [user?.id, user?.avatar])
   useEffect(() => {
     let active = true
-    if (!user?.id) return
+    if (!user?.id||mediaAccount) return
     authAPI.signature().then(({ data }) => {
       if (!active) return
       const value = data?.data?.signatureImage ?? ''
       setSignature({ saved: value, draft: value, loaded: true })
     }).catch(() => { if (active) setSignature((current) => ({ ...current, loaded: true })) })
     return () => { active = false }
-  }, [user?.id])
+  }, [user?.id,mediaAccount])
 
   const displayName = [user?.lastName, user?.middleName, user?.firstName].filter(Boolean).join(' ') || tr('Utilisateur du portail', 'Portal user')
   const initials = `${user?.firstName?.[0] ?? 'K'}${user?.lastName?.[0] ?? 'C'}`.toUpperCase()
@@ -42,8 +44,8 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
   const passwordDrafted = Boolean(passwords.current || passwords.newPassword || passwords.confirm)
   const photoChanged = profile.avatar !== (user?.avatar ?? '')
   const signatureChanged = signature.loaded && signature.draft !== signature.saved
-  const canUseOfficialSignature = Boolean(user && (user.role === 'teacher' || user.role === 'staff' || user.role === 'admin' || user.accessRoles?.includes('teacher') || user.accessRoles?.includes('staff')))
-  const accessProfiles = (user?.accessRoles?.length ? user.accessRoles : user?.role ? [user.role] : [])
+  const canUseOfficialSignature = !mediaAccount&&Boolean(user && (user.role === 'teacher' || user.role === 'staff' || user.role === 'admin' || user.accessRoles?.includes('teacher') || user.accessRoles?.includes('staff')))
+  const accessProfiles = mediaAccount?tr('Édition média du site','Website media publishing'): (user?.accessRoles?.length ? user.accessRoles : user?.role ? [user.role] : [])
     .map((role) => ({ admin: tr('Superadministration', 'Super Administration'), staff: tr('Administration', 'Administration'), teacher: tr('Enseignant', 'Teacher'), student: tr('Élève', 'Student'), parent: tr('Parent', 'Parent') }[role] ?? role))
     .join(' · ')
 
@@ -91,7 +93,7 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
     setSavingAction('password')
     try {
       await changePassword()
-      setMessage(tr('Mot de passe enregistré et propagé dans les applications autorisées de l’écosystème.', 'Password saved and propagated across authorized ecosystem applications.'))
+      setMessage(mediaAccount?tr('Le mot de passe de votre compte Media Nexus a été enregistré.','Your Media Nexus account password has been saved.'):tr('Mot de passe enregistré et propagé dans les applications autorisées de l’écosystème.', 'Password saved and propagated across authorized ecosystem applications.'))
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || requestError?.response?.data?.detail || requestError?.message || tr('La modification du mot de passe a échoué.', 'The password update failed.'))
     } finally {
@@ -118,7 +120,7 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
         setSignature((current) => ({ ...current, saved: current.draft }))
       }
       if (passwordDrafted) await changePassword()
-      setMessage((photoChanged || signatureChanged) && passwordDrafted
+      setMessage(mediaAccount?tr('Les modifications de votre compte Media Nexus ont été enregistrées.','Your Media Nexus account updates have been saved.'):(photoChanged || signatureChanged) && passwordDrafted
         ? tr('Profil, signature officielle et mot de passe enregistrés avec succès.', 'Profile, official signature and password saved successfully.')
         : signatureChanged
           ? tr('Signature électronique officielle enregistrée et auditée.', 'Official electronic signature saved and audited.')
@@ -153,7 +155,7 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
         <Status icon={<Mail size={18}/>} label={tr('Adresse professionnelle', 'Professional email')} value={user?.email || tr('Non renseignée', 'Not provided')}/>
         <Status icon={<Phone size={18}/>} label={tr('Téléphone', 'Phone')} value={user?.phone || tr('Non renseigné', 'Not provided')}/>
         <Status icon={<UsersRound size={18}/>} label={tr('Profils autorisés', 'Authorized profiles')} value={accessProfiles || user?.role || tr('Compte', 'Account')}/>
-        <Status icon={<UserCheck size={18}/>} label={tr('Identité', 'Identity')} value={tr('Synchronisée avec le registre KCS Orbit', 'Synchronized with the KCS Orbit registry')}/>
+        <Status icon={<UserCheck size={18}/>} label={tr('Identité', 'Identity')} value={mediaAccount?tr('Compte média Nexus créé par la Superadministration','Nexus media account created by Super Administration'):tr('Synchronisée avec le registre KCS Orbit', 'Synchronized with the KCS Orbit registry')}/>
         <Status icon={<Shield size={18}/>} label={tr('Photo personnelle', 'Personal photo')} value={tr('KCS Nexus uniquement · dossier officiel inchangé', 'KCS Nexus only · official record unchanged')}/>
       </div>
       <button type="button" data-teacher-save-primary disabled={Boolean(savingAction)} onClick={() => void saveAllUpdates()} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-kcs-blue-700 to-cyan-600 px-4 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60">{savingAction === 'all' ? <Loader2 size={18} className="animate-spin"/> : <Save size={18}/>} {savingAction === 'all' ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer les modifications', 'Save updates')}</button>
@@ -171,7 +173,7 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
         <button type="button" disabled={Boolean(savingAction)} onClick={() => void savePasswordOnly()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800 disabled:cursor-wait disabled:opacity-60">{savingAction === 'password' ? <Loader2 size={16} className="animate-spin"/> : <KeyRound size={16}/>} {savingAction === 'password' ? tr('Sécurisation…', 'Securing…') : tr('Enregistrer', 'Save')}</button>
       </div>
       <div className="mt-5 grid gap-5">
-        <div className="rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 text-sm text-kcs-blue-800 dark:border-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">{tr('La photo choisie ici personnalise uniquement votre dashboard KCS Nexus. Elle ne remplace jamais la photo officielle conservée par l’administration. Le mot de passe, lui, est propagé par l’autorité d’identité commune.', 'The photo selected here personalizes only your KCS Nexus dashboard. It never replaces the official portrait held by the administration. The password is propagated by the common identity authority.')}</div>
+        <div className="rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 text-sm text-kcs-blue-800 dark:border-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">{mediaAccount?tr('Cette photo et ce mot de passe sont propres à votre compte Media Nexus. Les dossiers officiels et les autres comptes restent inchangés.','This photo and password belong to your Media Nexus account. Official records and other accounts remain unchanged.'):tr('La photo choisie ici personnalise uniquement votre dashboard KCS Nexus. Elle ne remplace jamais la photo officielle conservée par l’administration. Le mot de passe, lui, est propagé par l’autorité d’identité commune.', 'The photo selected here personalizes only your KCS Nexus dashboard. It never replaces the official portrait held by the administration. The password is propagated by the common identity authority.')}</div>
         <div className="grid gap-3 sm:grid-cols-3">
           {passwordFields.map(([id, label]) => <label key={id} className="grid gap-1 text-xs font-semibold text-gray-500">{label}<span className="flex items-center overflow-hidden rounded-xl border border-gray-200 pr-2 dark:border-kcs-blue-700"><input className={passwordInputClass} value={passwords[id]} onChange={(event) => setPasswords({ ...passwords, [id]: event.target.value })} type={visiblePasswords[id] ? 'text' : 'password'} autoComplete={id === 'current' ? 'current-password' : 'new-password'} placeholder={id === 'current' ? tr('Mot de passe actuel', 'Current password') : tr('Phrase de passe forte et unique', 'Strong unique passphrase')}/><button type="button" onClick={() => setVisiblePasswords({ ...visiblePasswords, [id]: !visiblePasswords[id] })} className="p-2" aria-label={visiblePasswords[id] ? tr('Masquer', 'Hide') : tr('Afficher', 'Show')}>{visiblePasswords[id] ? <EyeOff size={16}/> : <Eye size={16}/>}</button></span></label>)}
         </div>

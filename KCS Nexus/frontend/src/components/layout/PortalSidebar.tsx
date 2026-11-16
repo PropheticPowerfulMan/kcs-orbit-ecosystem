@@ -1,3 +1,5 @@
+import {isMediaAccount} from '@/utils/accountScope'
+import {loadPersonalAvatar} from '@/utils/personalAvatarCache'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -22,73 +24,6 @@ interface NavItem {
 }
 
 type PortalSidebarProps = { badges?: Record<string, number> }
-
-// Keep one efficient blob URL per authenticated identity for the lifetime of the
-// page. Revoking it when a sidebar instance unmounts makes the same stored URL
-// invalid and causes the profile photo to disappear during portal navigation.
-const sessionAvatarUrls = new Map<string, string>()
-const sessionAvatarRequests = new Map<string, Promise<string | null>>()
-
-const avatarDatabase = () => new Promise<IDBDatabase>((resolve, reject) => {
-  const request = indexedDB.open('kcs-nexus-media-cache', 1)
-  request.onupgradeneeded = () => {
-    if (!request.result.objectStoreNames.contains('avatars')) request.result.createObjectStore('avatars')
-  }
-  request.onsuccess = () => resolve(request.result)
-  request.onerror = () => reject(request.error)
-})
-
-const readPersistentAvatar = async (userId: string) => {
-  try {
-    const database = await avatarDatabase()
-    const blob = await new Promise<Blob | null>((resolve, reject) => {
-      const request = database.transaction('avatars', 'readonly').objectStore('avatars').get(userId)
-      request.onsuccess = () => resolve(request.result instanceof Blob ? request.result : null)
-      request.onerror = () => reject(request.error)
-    })
-    database.close()
-    if (!blob?.size) return null
-    const objectUrl = URL.createObjectURL(blob)
-    sessionAvatarUrls.set(userId, objectUrl)
-    return objectUrl
-  } catch {
-    return null
-  }
-}
-
-const persistAvatar = async (userId: string, blob: Blob) => {
-  try {
-    const database = await avatarDatabase()
-    await new Promise<void>((resolve, reject) => {
-      const request = database.transaction('avatars', 'readwrite').objectStore('avatars').put(blob, userId)
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
-    })
-    database.close()
-  } catch {
-    // Cache availability must never block authenticated navigation.
-  }
-}
-
-const loadSessionAvatar = (userId: string) => {
-  const cached = sessionAvatarUrls.get(userId)
-  if (cached) return Promise.resolve(cached)
-  const pending = sessionAvatarRequests.get(userId)
-  if (pending) return pending
-
-  const request = authAPI.avatar(userId)
-    .then((response) => {
-      if (!(response.data instanceof Blob) || response.data.size === 0) return null
-      const objectUrl = URL.createObjectURL(response.data)
-      sessionAvatarUrls.set(userId, objectUrl)
-      void persistAvatar(userId, response.data)
-      return objectUrl
-    })
-    .catch(() => null)
-    .finally(() => sessionAvatarRequests.delete(userId))
-  sessionAvatarRequests.set(userId, request)
-  return request
-}
 
 const getNavItems = (role: UserRole, t: (key: string) => string, language: string): NavItem[] => {
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
@@ -220,12 +155,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   useEffect(() => {
     if (!user?.id) return
     let active = true
-    void readPersistentAvatar(user.id).then((avatar) => {
-      if (active && avatar) updateUser({ avatar })
-    })
-    void loadSessionAvatar(user.id).then((avatar) => {
-      if (active && avatar) updateUser({ avatar })
-    })
+    const apply=(avatar:string|null)=>{if(active&&avatar&&useAuthStore.getState().user?.id===user.id)updateUser({avatar})}
+    void loadPersonalAvatar(user.id,async()=>{const response=await authAPI.avatar(user.id);return response.data},apply,avatarLoadVersion>0).then(apply)
     return () => { active = false }
   }, [user?.id, avatarLoadVersion, updateUser])
 
@@ -315,7 +246,12 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
       ? 'staff'
       : user.role
 
-  const navItems: NavItem[] = activeRole === 'admin' && user.id !== 'configured-superadmin' ? [
+  const mediaAccount=isMediaAccount(user)
+  const navItems: NavItem[] = mediaAccount?[
+   {to:'/portal/media/news',label:language==='fr'?'Actualités et événements':'News & Events',icon:Megaphone},
+   {to:'/portal/media/gallery',label:language==='fr'?'Galerie et vidéos':'Gallery & Videos',icon:LibraryBig},
+   {to:'/portal/media/settings',label:t('portalNav.settings'),icon:Settings},
+  ]:activeRole === 'admin' && user.id !== 'configured-superadmin' ? [
     { to: '/admin', label: t('portalNav.dashboard'), icon: LayoutDashboard },
     { to: '/admin/handbook', label: language === 'fr' ? 'Manuel de l’école' : 'School Handbook', icon: BookOpen },
     { to: '/shining-students', label: 'Shining Student', icon: GraduationCap },
@@ -348,7 +284,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     parent: 'bg-orange-500',
   }[activeRole]
 
-  const roleName = {
+  const roleName = mediaAccount?'Media':{
     admin: t('roles.admin'),
     staff: t('roles.staff'),
     teacher: t('roles.teacher'),
@@ -398,7 +334,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
         className={isMobile ? 'nexus-mobile-menu-actions' : 'min-h-0 space-y-1 overflow-y-auto border-t border-gray-100 p-3 dark:border-kcs-blue-800'}
         style={!isMobile ? { height: sidebarCollapsed ? 'auto' : desktopActionHeight, flex: sidebarCollapsed ? '0 0 auto' : `0 0 ${desktopActionHeight}px` } : undefined}
       >
-        {(isMobile || !sidebarCollapsed) && (
+        {!mediaAccount && (isMobile || !sidebarCollapsed) && (
           <div
             className={`mb-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-bold leading-4 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/35 dark:text-emerald-200 ${isMobile ? '' : 'touch-none cursor-ns-resize select-none'}`}
             onPointerDown={isMobile ? undefined : beginSidebarResize}

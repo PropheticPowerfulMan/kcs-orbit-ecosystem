@@ -1,3 +1,4 @@
+import {isMediaAccount,portalHome} from '@/utils/accountScope'
 import { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
@@ -40,10 +41,13 @@ const ProtectedRoute = ({ children, allowedRoles, redirectTo = '/login' }: Prote
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
+  if(user&&isMediaAccount(user)&&!/^\/portal\/media(?:\/|$)/.test(location.pathname))return <Navigate to={portalHome(user)} replace/>
+  if(user&&!isMediaAccount(user)&&/^\/portal\/media(?:\/|$)/.test(location.pathname))return <Navigate to={portalHome(user)} replace/>
+
   const accessRoles = user?.accessRoles?.length ? user.accessRoles : (user ? [user.role] : [])
 
   if (allowedRoles && user && !allowedRoles.some((role) => accessRoles.includes(role))) {
-    const fallbackRoute = user.role === 'admin' ? '/admin' : `/portal/${user.role}`
+    const fallbackRoute = portalHome(user)
     return <Navigate to={fallbackRoute} state={{ from: location, unauthorizedRole: user.role }} replace />
   }
 

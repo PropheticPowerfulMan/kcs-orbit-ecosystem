@@ -1,3 +1,5 @@
+import {preserveSessionPortrait} from '@/utils/sessionIdentity'
+import {rememberPersonalAvatar} from '@/utils/personalAvatarCache'
 import { create } from 'zustand'
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware'
 import type { User, UserRole } from '@/types'
@@ -39,7 +41,7 @@ export const useAuthStore = create<AuthState>()(
 
       login: (user, token, refreshToken) => {
         set({
-          user: { ...user, role: user.role.toLowerCase() as UserRole },
+          user: preserveSessionPortrait({ ...user, role: user.role.toLowerCase() as UserRole },get().user),
           token,
           refreshToken,
           isAuthenticated: true,
@@ -55,6 +57,7 @@ export const useAuthStore = create<AuthState>()(
       updateUser: (updates) => {
         const current = get().user
         if (current) {
+          if(typeof updates.avatar==='string')rememberPersonalAvatar(current.id,updates.avatar)
           set({ user: { ...current, ...updates } })
         }
       },

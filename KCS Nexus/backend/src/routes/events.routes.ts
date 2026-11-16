@@ -3,7 +3,7 @@ import { databaseActorId } from '../utils/databaseActor.js'
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
+import { authenticate, requireWebsiteEditor, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { processEventReminders } from '../services/eventReminder.service.js'
@@ -45,14 +45,14 @@ eventsRouter.get('/:id', asyncHandler(async (req, res) => {
   return success(res, { ...event, coverImage: event.coverImage ? publicMediaUrl(event.coverImage) : event.coverImage })
 }))
 
-eventsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+eventsRouter.post('/', authenticate, requireWebsiteEditor(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = eventSchema.parse(req.body)
   if (payload.endDate < payload.startDate) throw new ApiError(400, 'The event end date must follow its start date')
   const event = await prisma.event.create({ data: payload })
   return success(res, event, 'Event created', 201)
 }))
 
-eventsRouter.put('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+eventsRouter.put('/:id', authenticate, requireWebsiteEditor(), asyncHandler(async (req, res) => {
   const payload = eventSchema.partial().parse(req.body)
   const eventId = getRouteParam(req.params.id)
   const current = await prisma.event.findUnique({ where: { id: eventId } })
@@ -62,12 +62,12 @@ eventsRouter.put('/:id', authenticate, requireRoles('admin'), asyncHandler(async
   return success(res, event, 'Event updated')
 }))
 
-eventsRouter.post('/reminders/process', authenticate, requireRoles('admin'), asyncHandler(async (_req, res) => {
+eventsRouter.post('/reminders/process', authenticate, requireWebsiteEditor(), asyncHandler(async (_req, res) => {
   const result = await processEventReminders()
   return success(res, result, 'Calendar reminder processing completed')
 }))
 
-eventsRouter.patch('/:id/live-stream', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+eventsRouter.patch('/:id/live-stream', authenticate, requireWebsiteEditor(), asyncHandler(async (req, res) => {
   const payload = eventSchema.pick({
     liveStreamEnabled: true,
     liveStreamUrl: true,
@@ -81,7 +81,7 @@ eventsRouter.patch('/:id/live-stream', authenticate, requireRoles('admin'), asyn
   return success(res, event, 'Live stream settings updated')
 }))
 
-eventsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+eventsRouter.delete('/:id', authenticate, requireWebsiteEditor(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const eventId = getRouteParam(req.params.id)
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: { title: true, startDate: true } })
   if (event) await prisma.event.deleteMany({ where: { id: eventId } })

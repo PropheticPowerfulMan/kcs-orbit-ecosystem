@@ -1,3 +1,4 @@
+import {portalHome} from '@/utils/accountScope'
 import AdminWorkspaceTheme from '@/components/admin/AdminWorkspaceTheme'
 import PortalDialogTheme from '@/components/shared/PortalDialogTheme'
 import ParentMeetingVerification from '@/components/shared/ParentMeetingVerification'
@@ -44,6 +45,7 @@ const StudentForumPage = lazyWithRecovery(() => import('@/pages/StudentForum'))
 const ParentPortal = lazyWithRecovery(() => import('@/pages/ParentPortal'))
 const ParentForumPage = lazyWithRecovery(() => import('@/pages/ParentForum'))
 const TeacherPortal = lazyWithRecovery(() => import('@/pages/TeacherPortal'))
+const MediaPortal = lazyWithRecovery(() => import('@/pages/MediaPortal'))
 const StaffPortal = lazyWithRecovery(() => import('@/pages/StaffPortal'))
 const IncidentReportsPage = lazyWithRecovery(() => import('@/pages/IncidentReports'))
 const ElectivesPage = lazyWithRecovery(() => import('@/pages/Electives'))
@@ -112,7 +114,7 @@ const PortalRedirect = () => {
     return <Navigate to="/login" replace />
   }
 
-  return <Navigate to={user.role === 'admin' ? '/admin' : `/portal/${user.role}`} replace />
+  return <Navigate to={portalHome(user)} replace />
 }
 
 const TranscriptVerificationPage = () => {
@@ -382,6 +384,7 @@ const App = () => {
               }
             />
 
+            <Route path="/portal/media/*" element={<ProtectedRoute allowedRoles={['staff']}><MediaPortal/></ProtectedRoute>}/>
             <Route
               path="/portal/staff"
               element={

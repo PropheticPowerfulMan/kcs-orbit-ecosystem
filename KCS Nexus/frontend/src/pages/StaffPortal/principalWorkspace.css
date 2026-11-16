@@ -1,5 +1,5 @@
 
-[data-principal-workspace]{--nw-paper:#f0f7fc;--nw-card:#fafdff;--nw-ink:#153c56;--nw-muted:#4c6c83;--nw-line:#c8deeb;container-type:inline-size}
+[data-principal-workspace]{--nw-paper:#f0f7fc;--nw-card:#fafdff;--nw-ink:#153c56;--nw-muted:#4c6c83;--nw-line:#c8deeb}
 .dark [data-principal-workspace]{--nw-paper:#0c2b43;--nw-card:#10344d;--nw-ink:#e5f4ff;--nw-muted:#b1cddd;--nw-line:#2a526c}
 [data-principal-workspace] [hidden]{display:none!important}
 [data-principal-workspace] .principal-card{padding:22px;box-shadow:0 6px 22px #092e4b08}
@@ -29,3 +29,20 @@
 @media(max-width:640px){[data-principal-workspace] .principal-card{padding:16px}[data-principal-workspace] .principal-card tbody td{padding:11px}.principal-tabs button{flex:1;justify-content:center;padding:10px}.principal-refresh{margin-left:0}.principal-message-history{max-height:52dvh}}
 
 [data-principal-workspace] .principal-card :is(.bg-emerald-50,.bg-amber-50){color:#153c56}
+
+[data-principal-workspace] .nexus-workspace-card{border-color:var(--nw-line);background:var(--nw-paper)}
+.principal-directory-tools{display:flex;flex-wrap:wrap;align-items:end;gap:14px;margin:18px 0;padding:14px;border:1px solid var(--nw-line);border-radius:15px;background:var(--nw-card);font-size:12px;color:var(--nw-muted)}
+.principal-directory-tools label{display:grid;gap:6px;min-width:180px;font-weight:750}.principal-directory-tools select{min-width:0;padding:9px 12px;border:1px solid var(--nw-line);border-radius:10px;color:var(--nw-ink);background:var(--nw-paper)}
+.principal-directory-tools>span{padding-bottom:10px}.principal-directory-tools>span b{font-size:19px;color:var(--nw-ink)}.principal-directory-tools>button{margin-left:auto;border:1px solid var(--nw-line);background:var(--nw-paper);border-radius:10px;padding:9px 12px;font-size:11px;font-weight:750;color:var(--nw-ink)}
+.principal-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:16px;font-size:11px;color:var(--nw-muted)}.principal-pagination>div{display:flex;gap:7px}.principal-pagination button{border:1px solid var(--nw-line);border-radius:9px;background:var(--nw-card);color:var(--nw-ink);padding:8px 13px;font-weight:750}.principal-pagination button:disabled{opacity:.4;cursor:not-allowed}
+.principal-history-scroll{max-height:60dvh;overflow-y:auto;padding-right:5px;overscroll-behavior:contain}
+.principal-record-overlay{position:fixed;inset:0;z-index:210;display:flex;align-items:center;justify-content:center;padding:22px;background:#041c35b8;backdrop-filter:blur(9px)}
+.principal-record-dialog{max-width:1100px!important;max-height:calc(100dvh - 44px)!important;border:1px solid #b3d3e6;border-radius:26px!important;background:#edf6fc!important;color:#123b56;box-shadow:0 28px 100px #00182c55;padding:0 24px 24px!important;overscroll-behavior:contain}
+.principal-record-dialog>div:first-child{position:sticky;top:0;z-index:2;gap:15px;margin:0 -24px;padding:23px 24px;border-radius:25px 25px 0 0;background:linear-gradient(120deg,#0a3450,#145b76);color:#f2fbff}
+.principal-record-dialog>div:first-child :is(h3,p){color:#f2fbff!important}.principal-record-dialog>div:first-child button{align-self:start;border:1px solid #93d4e566;background:#357c972b;color:#fff;border-radius:11px}
+.dark .principal-record-dialog{background:#0b2b43!important;color:#e5f3ff;border-color:#2d5872}.principal-record-dialog :is(.text-gray-400,.text-gray-500){color:#4f6e85}.dark .principal-record-dialog :is(.text-gray-400,.text-gray-500){color:#b2ccdd}
+.principal-record-dialog :is(button,a):focus-visible{outline:3px solid #3ba5c7;outline-offset:3px}
+@media(max-width:1023px){[data-principal-main]>.portal-dashboard-topbar{position:static}}
+@media(max-width:640px){.principal-directory-tools{gap:10px}.principal-directory-tools label{width:100%;min-width:0}.principal-directory-tools>button{margin-left:0}.principal-pagination>span{width:100%}.principal-record-overlay{padding:10px}.principal-record-dialog{max-height:calc(100dvh - 20px)!important;padding:0 16px 16px!important;border-radius:20px!important}.principal-record-dialog>div:first-child{margin:0 -16px;padding:18px 16px;border-radius:19px 19px 0 0}}
+
+@media(max-width:1023px){.portal-shell>main[data-principal-main]>.portal-dashboard-topbar{position:static!important}}

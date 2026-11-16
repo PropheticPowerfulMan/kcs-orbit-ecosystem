@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CheckSquare, Layers3, Search, Square, UserCheck, Users } from 'lucide-react'
+import './mainTeacherWorkspace.css'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { CheckSquare, Layers3, Search, Square, UserCheck, Users, LayoutGrid, ArrowRight, ChevronDown, RefreshCw } from 'lucide-react'
 import { mainTeacherAPI } from '@/services/api'
 import { SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { useUIStore } from '@/store/uiStore'
@@ -18,6 +19,10 @@ const actionClass = 'inline-flex min-h-10 items-center justify-center gap-2 roun
 export default function AdministratorMainTeacherWorkspace() {
   const language = useUIStore((state) => state.language)
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
+  const shellRef=useRef<HTMLDivElement>(null)
+  const [panel,setPanel]=useState<'learners'|'leaders'|'overview'>('learners')
+  const [teacherGrade,setTeacherGrade]=useState('ALL')
+  useLayoutEffect(()=>{const main=shellRef.current?.closest('main'),header=main?.querySelector<HTMLElement>(':scope > .portal-dashboard-topbar');if(!header)return;const update=()=>{const sticky=getComputedStyle(header).position==='sticky';shellRef.current?.style.setProperty('--assignment-nav-top',sticky?`${header.offsetHeight+8}px`:'76px')};update();const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(update):null;observer?.observe(header);window.addEventListener('resize',update);return()=>{observer?.disconnect();window.removeEventListener('resize',update)}},[])
   const [teachers, setTeachers] = useState<any[]>([])
   const [teacherDrafts, setTeacherDrafts] = useState<Record<string, TeacherDraft>>({})
   const [students, setStudents] = useState<any[]>([])
@@ -67,9 +72,9 @@ export default function AdministratorMainTeacherWorkspace() {
   useEffect(() => { void load() }, [])
 
   const gradeOptions = useMemo(() =>
-    Array.from(new Set(students.map((student) => String(student.grade || '')).filter(Boolean)))
-      .sort((left, right) => left.localeCompare(right, 'en', { numeric: true })),
-  [students])
+    Array.from(new Set([...SCHOOL_LEVELS,...students.map((student) => String(student.grade || '')),...classes.map((item)=>String(item.grade||''))].filter(Boolean)))
+      .sort((left, right) => {const order=(value:string)=>{const index=(SCHOOL_LEVELS as readonly string[]).indexOf(value);return index<0?1000:index};return order(left)-order(right)||left.localeCompare(right,'en',{numeric:true})}),
+  [students,classes])
 
   const sectionOptions = useMemo(() =>
     Array.from(new Set([
@@ -100,11 +105,12 @@ export default function AdministratorMainTeacherWorkspace() {
     return [...teachers]
       .filter((teacher) => {
         const haystack = [personName(teacher), teacher.user?.email, teacher.homeroomGrade, teacher.homeroomSection].filter(Boolean).join(' ').toLocaleLowerCase()
-        return tokens.every((token) => haystack.includes(token))
+        return (teacherGrade==='ALL'||teacher.homeroomGrade===teacherGrade)&&tokens.every((token) => haystack.includes(token))
       })
       .sort((left, right) => personName(left).localeCompare(personName(right), language === 'fr' ? 'fr' : 'en', { sensitivity: 'base', numeric: true }))
-  }, [language, teacherQuery, teachers])
+  }, [language, teacherQuery, teacherGrade, teachers])
 
+  const classGroups=useMemo(()=>[...new Set([...students.map(student=>`${student.grade}::${student.section||''}`),...classes.filter(item=>item.grade).map(item=>`${item.grade}::${item.section||''}`),...teachers.filter(teacher=>teacher.status!=='TEACHER'&&teacher.homeroomGrade).map(teacher=>`${teacher.homeroomGrade}::${teacher.homeroomSection||''}`)])].sort((a,b)=>{const order=(value:string)=>{const index=(SCHOOL_LEVELS as readonly string[]).indexOf(value);return index<0?1000:index};return order(a.split('::')[0])-order(b.split('::')[0])||a.localeCompare(b,language==='fr'?'fr':'en',{numeric:true})}),[students,classes,teachers,language])
   const selectedSet = useMemo(() => new Set(selectedStudentIds), [selectedStudentIds])
   const allVisibleSelected = visibleStudents.length > 0 && visibleStudents.every((student) => selectedSet.has(student.id))
   const wholeClassCount = gradeStudents.filter((student) => !String(student.section || '').trim()).length
@@ -119,7 +125,7 @@ export default function AdministratorMainTeacherWorkspace() {
     const section = String(sectionDrafts[student.id] ?? '').trim()
     setBusyKey('student:' + student.id)
     try {
-      await mainTeacherAPI.assignStudentSection(student.id, section)
+      await mainTeacherAPI.assignStudentSection(student.id, section,true)
       setResult({
         ok: true,
         message: section
@@ -147,7 +153,7 @@ export default function AdministratorMainTeacherWorkspace() {
     setBusyKey('bulk')
     try {
       const completed = selectedStudentIds.length
-      await mainTeacherAPI.assignStudentSections(selectedStudentIds, section)
+      await mainTeacherAPI.assignStudentSections(selectedStudentIds, section,true)
       setSelectedStudentIds([])
       setBulkSection('')
       setResult({ ok: true, message: tr(`${completed} élève(s) affecté(s) à ${selectedGrade} ${section}.`, `${completed} learner(s) assigned to ${selectedGrade} ${section}.`) })
@@ -172,7 +178,7 @@ export default function AdministratorMainTeacherWorkspace() {
         status: draft.status,
         homeroomGrade: draft.status === 'TEACHER' ? undefined : draft.grade,
         homeroomSection: draft.status === 'TEACHER' ? undefined : draft.section.trim(),
-      })
+      },true)
       setResult({
         ok: true,
         message: draft.status === 'TEACHER'
@@ -190,9 +196,9 @@ export default function AdministratorMainTeacherWorkspace() {
     }
   }
 
-  return <div className="space-y-6">
+  return <div ref={shellRef} data-main-teacher-workspace className="space-y-5">
     {result ? <div className="fixed inset-0 z-[170] flex items-center justify-center bg-kcs-blue-950/75 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-kcs-blue-950">
+      <div className="assignment-result w-full max-w-lg rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-kcs-blue-950">
         <div className={'mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black text-white ' + (result.ok ? 'bg-emerald-600' : 'bg-red-600')}>{result.ok ? '✓' : '!'}</div>
         <h3 className="mt-4 text-xl font-bold text-kcs-blue-950 dark:text-white">{result.ok ? tr('Opération réussie', 'Operation successful') : tr('Opération impossible', 'Operation failed')}</h3>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{result.message}</p>
@@ -200,16 +206,12 @@ export default function AdministratorMainTeacherWorkspace() {
       </div>
     </div> : null}
 
-    <section className="rounded-2xl border border-sky-200 bg-sky-50/80 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
-      <p className="text-xs font-black uppercase tracking-[.18em] text-kcs-gold-600">{tr('Organisation officielle des classes', 'Official class organization')}</p>
-      <h2 className="mt-2 text-2xl font-black text-kcs-blue-950 dark:text-white">{tr('Sections, Main Teachers et Assistants', 'Sections, Main Teachers and Assistants')}</h2>
-      <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-300">{tr('Si une classe est divisée, répartissez les élèves puis affectez les responsables par section. Si elle ne comporte aucune section, laissez les élèves sans sous-classe et choisissez « Classe entière » pour son Main Teacher ou son assistant. Un professeur conserve tous ses autres cours.', 'For a divided class, place learners into sections and assign leaders per section. If the class has no section, leave learners without a subsection and choose “Whole class” for its Main Teacher or assistant. Teachers keep all their other courses.')}</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl bg-white p-4 font-bold text-kcs-blue-900 shadow-sm dark:bg-kcs-blue-950 dark:text-white"><span className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-kcs-blue-700 text-white">1</span>{tr('Répartir les élèves', 'Place learners')}</div>
-        <div className="rounded-xl bg-white p-4 font-bold text-kcs-blue-900 shadow-sm dark:bg-kcs-blue-950 dark:text-white"><span className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-kcs-blue-700 text-white">2</span>{tr('Affecter les responsables', 'Assign class leaders')}</div>
-      </div>
-    </section>
+    <nav className="assignment-tabs" aria-label={tr('Organisation des classes','Class organization')}>
+      {([['learners',Users,tr('Répartir les élèves','Learner sections'),students.length],['leaders',UserCheck,tr('Main Teachers et assistants','Main Teachers & assistants'),teachers.length],['overview',LayoutGrid,tr('Vue des classes','Class overview'),classGroups.length]] as const).map(([key,Icon,label,count])=><button type="button" key={key} aria-pressed={panel===key} onClick={()=>setPanel(key)}><Icon size={18}/><span>{label}</span><b>{count}</b></button>)}
+    </nav>
+    <details className="assignment-guide"><summary>{tr('Comment organiser une classe ou une section ?','How do I organize a class or section?')}<ChevronDown size={16}/></summary><p>{tr('1. Répartissez les élèves dans les sections de leur classe. 2. Affectez un Main Teacher et un assistant à chaque section. Pour une classe non divisée, laissez la section vide. Les cours des enseignants sont conservés. Les onglets gardent vos saisies en cours.','1. Place learners into their class sections. 2. Assign a Main Teacher and an assistant to each section. Leave the section empty for a whole class. Teachers keep their courses. Switching tabs preserves your current entries.')}</p></details>
 
+    <div hidden={panel!=='learners'} data-assignment-panel="learners">
     <section className="rounded-2xl border border-sky-200 bg-white p-4 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 sm:p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
@@ -224,10 +226,10 @@ export default function AdministratorMainTeacherWorkspace() {
       </div>
 
       <div className="mt-5 grid gap-3 lg:grid-cols-[14rem_12rem_1fr]">
-        <select value={selectedGrade} onChange={(event) => { setSelectedGrade(event.target.value); setSectionFilter('ALL'); setSelectedStudentIds([]) }} className={fieldClass}>
+        <select aria-label={tr('Classe des élèves','Learner class')} value={selectedGrade} onChange={(event) => { setSelectedGrade(event.target.value); setSectionFilter('ALL'); setSelectedStudentIds([]) }} className={fieldClass}>
           {gradeOptions.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
         </select>
-        <select value={sectionFilter} onChange={(event) => { setSectionFilter(event.target.value); setSelectedStudentIds([]) }} className={fieldClass}>
+        <select aria-label={tr('Filtrer les sections','Filter sections')} value={sectionFilter} onChange={(event) => { setSectionFilter(event.target.value); setSelectedStudentIds([]) }} className={fieldClass}>
           <option value="ALL">{tr('Toutes les sections', 'All sections')}</option>
           <option value="UNASSIGNED">{tr('Classe entière · sans section', 'Whole class · no section')}</option>
           {sectionOptions.map((section) => <option key={section} value={section}>{selectedGrade} {section}</option>)}
@@ -249,11 +251,11 @@ export default function AdministratorMainTeacherWorkspace() {
 
       <datalist id="official-section-options">{sectionOptions.map((section) => <option key={section} value={section}/>)}</datalist>
 
-      <div className="mt-4 divide-y overflow-hidden rounded-2xl border border-slate-200 dark:divide-kcs-blue-800 dark:border-kcs-blue-800">
+      <div className="assignment-list mt-4 divide-y overflow-hidden rounded-2xl border border-slate-200 dark:divide-kcs-blue-800 dark:border-kcs-blue-800">
         {visibleStudents.map((student) => {
           const selected = selectedSet.has(student.id)
           const unchanged = String(sectionDrafts[student.id] ?? '').trim() === String(student.section ?? '').trim()
-          return <article key={student.id} className={'grid gap-3 p-4 md:grid-cols-[auto_minmax(13rem,1.3fr)_minmax(8rem,.6fr)_minmax(12rem,1fr)_auto] md:items-center ' + (selected ? 'bg-sky-50 dark:bg-kcs-blue-800/40' : 'bg-white dark:bg-kcs-blue-950/30')}>
+          return <article data-assignment-learner key={student.id} className={'grid gap-3 p-4 md:grid-cols-[auto_minmax(13rem,1.3fr)_minmax(8rem,.6fr)_minmax(12rem,1fr)_auto] md:items-center ' + (selected ? 'bg-sky-50 dark:bg-kcs-blue-800/40' : 'bg-white dark:bg-kcs-blue-950/30')}>
             <button type="button" aria-label={tr('Sélectionner cet élève', 'Select this learner')} onClick={() => setSelectedStudentIds((current) => selected ? current.filter((id) => id !== student.id) : [...current, student.id])} className="text-kcs-blue-700 dark:text-sky-200">{selected ? <CheckSquare size={21}/> : <Square size={21}/>}</button>
             <div><p className="font-bold text-kcs-blue-950 dark:text-white">{personName(student)}</p><p className="text-xs text-slate-500">{student.studentNumber} · {student.grade}</p></div>
             <span className={'w-fit rounded-full px-3 py-1 text-xs font-bold ' + (student.section ? 'bg-sky-100 text-sky-800' : 'bg-emerald-100 text-emerald-800')}>{student.section ? `${student.grade} ${student.section}` : tr('Classe entière', 'Whole class')}</span>
@@ -266,23 +268,25 @@ export default function AdministratorMainTeacherWorkspace() {
       </div>
     </section>
 
+    </div>
+    <div hidden={panel!=='leaders'} data-assignment-panel="leaders">
     <section className="rounded-2xl border border-sky-200 bg-white p-4 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600"><UserCheck size={16}/>{tr('Étape 2 · Responsables de classe', 'Step 2 · Class leadership')}</p><h3 className="mt-2 text-xl font-black text-kcs-blue-950 dark:text-white">{tr('Main Teachers et Assistants', 'Main Teachers and Assistants')}</h3></div>
-        <label className="relative block w-full lg:max-w-md"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={teacherQuery} onChange={(event) => setTeacherQuery(event.target.value)} className={fieldClass + ' pl-10'} placeholder={tr('Nom, e-mail, classe ou section', 'Name, email, class or section')}/></label>
+        <label className="relative block w-full lg:max-w-md"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={teacherQuery} onChange={(event) => setTeacherQuery(event.target.value)} className={fieldClass + ' pl-10'} placeholder={tr('Nom, e-mail, classe ou section', 'Name, email, class or section')}/></label><label className="assignment-grade-filter">{tr('Classe des responsables','Leadership class')}<select aria-label={tr('Classe des responsables','Leadership class')} value={teacherGrade} onChange={event=>setTeacherGrade(event.target.value)} className={fieldClass}><option value="ALL">{tr('Toutes les classes','All classes')}</option>{SCHOOL_LEVELS.map(grade=><option key={grade}>{grade}</option>)}</select></label>
       </div>
 
-      <div className="mt-4 divide-y overflow-hidden rounded-2xl border border-slate-200 dark:divide-kcs-blue-800 dark:border-kcs-blue-800">
-        <div className="hidden grid-cols-[minmax(12rem,1.4fr)_minmax(9rem,.8fr)_minmax(9rem,.8fr)_minmax(8rem,.8fr)_minmax(8rem,.7fr)_auto] gap-3 bg-slate-50 px-4 py-3 text-xs font-black uppercase text-slate-500 dark:bg-kcs-blue-950/70 dark:text-slate-300 md:grid">
+      <div className="assignment-list mt-4 divide-y overflow-hidden rounded-2xl border border-slate-200 dark:divide-kcs-blue-800 dark:border-kcs-blue-800">
+        <div className="assignment-list-heading hidden grid-cols-[minmax(12rem,1.4fr)_minmax(9rem,.8fr)_minmax(9rem,.8fr)_minmax(8rem,.8fr)_minmax(8rem,.7fr)_auto] gap-3 bg-slate-50 px-4 py-3 text-xs font-black uppercase text-slate-500 dark:bg-kcs-blue-950/70 dark:text-slate-300 md:grid">
           <span>{tr('Professeur', 'Teacher')}</span><span>Main Teacher</span><span>{tr('Assistant', 'Assistant')}</span><span>{tr('Classe', 'Class')}</span><span>{tr('Section', 'Section')}</span><span>{tr('Action', 'Action')}</span>
         </div>
         {filteredTeachers.map((teacher) => {
           const draft = teacherDrafts[teacher.id] ?? { status: 'TEACHER' as TeacherStatus, grade: SCHOOL_LEVELS[0], section: '' }
-          return <article key={teacher.id} className="grid gap-3 bg-white p-4 dark:bg-kcs-blue-950/30 md:grid-cols-[minmax(12rem,1.4fr)_minmax(9rem,.8fr)_minmax(9rem,.8fr)_minmax(8rem,.8fr)_minmax(8rem,.7fr)_auto] md:items-center">
+          return <article data-assignment-teacher key={teacher.id} className="grid gap-3 bg-white p-4 dark:bg-kcs-blue-950/30 md:grid-cols-[minmax(12rem,1.4fr)_minmax(9rem,.8fr)_minmax(9rem,.8fr)_minmax(8rem,.8fr)_minmax(8rem,.7fr)_auto] md:items-center">
             <div><p className="font-bold text-kcs-blue-950 dark:text-white">{personName(teacher)}</p><p className="text-xs text-slate-500">{teacher.user?.email} · {teacher._count?.courses ?? 0} {tr('cours', 'courses')}</p></div>
             <label className="flex items-center gap-2 text-sm font-semibold dark:text-white"><input type="checkbox" checked={draft.status === 'HOMEROOM_TEACHER'} onChange={(event) => updateTeacherDraft(teacher.id, { status: event.target.checked ? 'HOMEROOM_TEACHER' : 'TEACHER' })} className="h-5 w-5 accent-kcs-blue-700"/>Main Teacher</label>
             <label className="flex items-center gap-2 text-sm font-semibold dark:text-white"><input type="checkbox" checked={draft.status === 'ASSISTANT_TEACHER'} onChange={(event) => updateTeacherDraft(teacher.id, { status: event.target.checked ? 'ASSISTANT_TEACHER' : 'TEACHER' })} className="h-5 w-5 accent-amber-600"/>{tr('Assistant', 'Assistant')}</label>
-            <select value={draft.grade} disabled={draft.status === 'TEACHER'} onChange={(event) => updateTeacherDraft(teacher.id, { grade: event.target.value })} className={fieldClass + ' disabled:opacity-40'}>{SCHOOL_LEVELS.map((level) => <option key={level}>{level}</option>)}</select>
+            <select value={draft.grade} disabled={draft.status === 'TEACHER'} onChange={(event) => updateTeacherDraft(teacher.id, { grade: event.target.value })} aria-label={tr('Classe de ','Class for ')+personName(teacher)} className={fieldClass + ' disabled:opacity-40'}>{SCHOOL_LEVELS.map((level) => <option key={level}>{level}</option>)}</select>
             <div>
               <input list="official-section-options" value={draft.section} disabled={draft.status === 'TEACHER'} onChange={(event) => updateTeacherDraft(teacher.id, { section: event.target.value })} className={fieldClass + ' disabled:opacity-40'} placeholder={tr('Classe entière ou A, B, C…', 'Whole class or A, B, C…')}/>
               {draft.status !== 'TEACHER' && !draft.section.trim() ? <span className="mt-1 block text-xs font-bold text-emerald-700 dark:text-emerald-300">{tr('Classe entière · aucune section requise', 'Whole class · no section required')}</span> : null}
@@ -292,5 +296,10 @@ export default function AdministratorMainTeacherWorkspace() {
         })}
       </div>
     </section>
+    </div>
+    <div hidden={panel!=='overview'} data-assignment-panel="overview"><div className="assignment-overview-grid">{classGroups.map(key=>{
+     const[grade,section]=key.split('::'),learners=students.filter(student=>student.grade===grade&&(student.section||'')===section),leaders=teachers.filter(teacher=>teacher.homeroomGrade===grade&&(teacher.homeroomSection||'')===section),main=leaders.find(teacher=>teacher.status==='HOMEROOM_TEACHER'),assistant=leaders.find(teacher=>teacher.status==='ASSISTANT_TEACHER')
+     return <article key={key}><div className="assignment-class-title"><span><LayoutGrid size={18}/>{grade}{section?' · '+section:''}</span><b>{learners.length} {tr('élèves','learners')}</b></div><dl><div><dt>Main Teacher</dt><dd>{main?personName(main):tr('À affecter','Not assigned')}</dd></div><div><dt>{tr('Assistant','Assistant')}</dt><dd>{assistant?personName(assistant):tr('À affecter','Not assigned')}</dd></div></dl><div className="assignment-class-actions"><button type="button" onClick={()=>{setSelectedGrade(grade);setSectionFilter(section||'UNASSIGNED');setSelectedStudentIds([]);setPanel('learners')}}><Users size={15}/>{tr('Élèves','Learners')}</button><button type="button" onClick={()=>{setTeacherGrade(grade);setTeacherQuery('');setPanel('leaders')}}><UserCheck size={15}/>{tr('Responsables','Leadership')}<ArrowRight size={14}/></button></div></article>
+    })}</div>{!students.length&&!loading&&<p className="assignment-empty">{tr('Aucune classe dans le registre.','No class in the registry.')}</p>}</div>
   </div>
 }

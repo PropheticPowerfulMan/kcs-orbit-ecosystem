@@ -1,3 +1,4 @@
+import {isMediaAccount,mediaRequestAllowed} from '../utils/mediaAccount.js'
 import type { NextFunction, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import { assertAccountAccess } from '../services/accountAccess.service.js'
@@ -6,6 +7,7 @@ import { prisma } from '../config/prisma.js'
 import { ApiError } from '../utils/api.js'
 
 type AuthPayload = {
+  mediaOnly?:boolean
   sub: string
   role: 'admin' | 'staff' | 'teacher' | 'student' | 'parent'
 }
@@ -23,8 +25,10 @@ export const authenticate = async (req: AuthenticatedRequest, _res: Response, ne
   try {
     const token = header.replace('Bearer ', '')
     const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload
-    await assertAccountAccess(payload.sub)
-    req.user = payload
+    const account=await assertAccountAccess(payload.sub)
+    const mediaOnly=isMediaAccount(account)
+    if(mediaOnly&&!mediaRequestAllowed(req.method,req.originalUrl,payload.sub))return next(new ApiError(403,'This Media account can only manage news, gallery and its own settings. / Ce compte Media est limité aux actualités, à la galerie et à ses propres paramètres.'))
+    req.user = {...payload,...(mediaOnly?{role:'staff' as const,mediaOnly:true}:{})}
     next()
   } catch(error:any) {
     if(error?.status===503||error?.status===403)return next(new ApiError(error.status,error.message))
@@ -78,4 +82,10 @@ export const requireSuperAdmin = () => {
     }
     next()
   }
+}
+
+/** Website editing is a capability, not a general administrator role. */
+export const requireWebsiteEditor=()=> (req:AuthenticatedRequest,_res:Response,next:NextFunction)=>{
+ if(req.user&&(req.user.role==='admin'||req.user.mediaOnly))return next()
+ return next(new ApiError(403,'Website publishing permission required'))
 }

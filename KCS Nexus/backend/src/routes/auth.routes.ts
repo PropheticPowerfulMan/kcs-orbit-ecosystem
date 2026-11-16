@@ -1,3 +1,4 @@
+import {isMediaAccount} from '../utils/mediaAccount.js'
 import { assertAccountAccess, inactiveStudentStatus } from '../services/accountAccess.service.js'
 import { Router } from 'express'
 import type { User as PrismaUser } from '@prisma/client'
@@ -448,6 +449,7 @@ async function authenticateWithSharedProviders(identifier: string, password: str
 }
 
 async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true): Promise<PrismaUser> {
+  if(isMediaAccount(user))return user // The website account has no official Orbit identity to overwrite.
   if (!env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return user
   const collection = user.role === 'PARENT' ? 'parents' : user.role === 'STUDENT' ? 'students' : ['TEACHER', 'STAFF'].includes(user.role) ? 'teachers' : null
   if (!collection) return user
@@ -685,6 +687,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   }
 
   const user = await findLocalUserByIdentifier(identifier)
+  if(isMediaAccount(user)&&req.header('x-kcs-client')&&!['NEXUS','KCS_NEXUS','NEXUS_WEB'].includes(String(req.header('x-kcs-client')).toUpperCase()))throw new ApiError(403,'This account is reserved for the Nexus website media dashboard.')
   if (user) { await assertAccountAccess(user.id); await ensureAccountNotLocked(user) }
   const isFederatedUser = Boolean(user?.permissions?.some((permission) => permission.startsWith('ecosystem:')))
   if (user?.passwordHash && !isFederatedUser) {
@@ -910,7 +913,7 @@ authRouter.get('/avatar/:id', authenticate, asyncHandler(async (req: Authenticat
   const match = avatar.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s)
   if (!match) throw new ApiError(404, 'Profile photo format is unavailable')
   const image = Buffer.from(match[2], 'base64')
-  res.type(match[1]).set('Content-Length', String(image.length)).set('Cache-Control', 'private, max-age=86400').set('X-Content-Type-Options', 'nosniff')
+  res.type(match[1]).set('Content-Length', String(image.length)).set('Cache-Control', 'private, no-cache, must-revalidate').set('X-Content-Type-Options', 'nosniff')
   return res.send(image)
 }))
 
@@ -965,7 +968,7 @@ authRouter.put('/change-password', authenticate, asyncHandler(async (req: Authen
   const passwordHash = await bcrypt.hash(newPassword, 10)
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash, failedLoginAttempts: 0, loginLockedUntil: null, passwordChangedAt: new Date() } })
   await prisma.refreshToken.deleteMany({ where: { userId: user.id } })
-  return success(res, null, 'Password changed across the ecosystem')
+  return success(res, null, isMediaAccount(user)?'Media account password changed':'Password changed across the ecosystem')
 }))
 authRouter.put('/access-code', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (isConfiguredSuperAdminUser(req.user!.sub)) {
