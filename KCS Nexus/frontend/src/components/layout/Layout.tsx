@@ -19,7 +19,8 @@ const Layout = () => {
   const isPortalRoute = (location.pathname === '/portal' || location.pathname.startsWith('/portal/')) ||
                         (location.pathname === '/admin' || location.pathname.startsWith('/admin/'))
 
-  if (isPortalRoute) {
+  // Sign-in owns its compact navigation so the form remains immediately visible on mobile.
+  if (isPortalRoute || location.pathname === '/login') {
     return <Outlet />
   }
 

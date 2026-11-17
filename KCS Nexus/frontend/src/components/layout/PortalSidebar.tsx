@@ -248,6 +248,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
 
   const mediaAccount=isMediaAccount(user)
   const navItems: NavItem[] = mediaAccount?[
+   {to:'/portal/media/site',label:language==='fr'?'Gestion du site web':'Website management',icon:FileText},
    {to:'/portal/media/news',label:language==='fr'?'Actualités et événements':'News & Events',icon:Megaphone},
    {to:'/portal/media/gallery',label:language==='fr'?'Galerie et vidéos':'Gallery & Videos',icon:LibraryBig},
    {to:'/portal/media/settings',label:t('portalNav.settings'),icon:Settings},

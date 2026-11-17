@@ -1,7 +1,7 @@
 import {Router} from 'express'
 import {z} from 'zod'
 import {prisma} from '../config/prisma.js'
-import {authenticate,requireSuperAdmin,type AuthenticatedRequest} from '../middleware/auth.js'
+import {authenticate,requireWebsiteManager,type AuthenticatedRequest} from '../middleware/auth.js'
 import {asyncHandler,ApiError,success} from '../utils/api.js'
 import {databaseActorId} from '../utils/databaseActor.js'
 export const siteContentRouter=Router()
@@ -13,8 +13,8 @@ const empty=()=>({revision:0,draft:{en:{},fr:{}},published:{en:{},fr:{}},publish
 const key=(page:string)=>'nexus-public-site-'+page
 siteContentRouter.get('/publication-status',asyncHandler(async(_req,res)=>{res.setHeader('Cache-Control','no-store');const state=await prisma.auditLog.findUnique({where:{id:'nexus-publication-catalog-v1'},select:{id:true}});return success(res,{managed:Boolean(state)})}))
 siteContentRouter.get('/',asyncHandler(async(req,res)=>{const page=pageSchema.parse(req.query.page),language=languageSchema.parse(req.query.language);const rows=await prisma.auditLog.findMany({where:{id:{in:[key(page),key('shared')]}},select:{id:true,metadata:true}});const fields=Object.assign({},...(rows.sort((a,b)=>a.id===key('shared')?-1:b.id===key('shared')?1:0).map(row=>(row.metadata as any)?.published?.[language]??{})));res.setHeader('Cache-Control','public, max-age=15');return success(res,{fields})}))
-siteContentRouter.get('/manage',authenticate,requireSuperAdmin(),asyncHandler(async(_req,res)=>{const rows=await prisma.auditLog.findMany({where:{id:{in:sitePages.map(key)}},select:{id:true,metadata:true}});res.setHeader('Cache-Control','private, no-store');return success(res,sitePages.map(page=>({page,...empty(),...((rows.find(row=>row.id===key(page))?.metadata??{}) as object)})))}))
-siteContentRouter.put('/:page',authenticate,requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+siteContentRouter.get('/manage',authenticate,requireWebsiteManager(),asyncHandler(async(_req,res)=>{const rows=await prisma.auditLog.findMany({where:{id:{in:sitePages.map(key)}},select:{id:true,metadata:true}});res.setHeader('Cache-Control','private, no-store');return success(res,sitePages.map(page=>({page,...empty(),...((rows.find(row=>row.id===key(page))?.metadata??{}) as object)})))}))
+siteContentRouter.put('/:page',authenticate,requireWebsiteManager(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const page=pageSchema.parse(req.params.page),input=z.object({revision:z.number().int().min(0),language:languageSchema,action:z.enum(['draft','publish','restore']),fields:fieldsSchema}).strict().parse(req.body),actorId=await databaseActorId(req.user!.sub)
  const state=await prisma.$transaction(async tx=>{await tx.$queryRawUnsafe('SELECT 1 FROM pg_advisory_xact_lock(hashtext($1))',key(page));const previous=await tx.auditLog.findUnique({where:{id:key(page)},select:{metadata:true}}),old={...empty(),...(previous?.metadata as object||{})} as any;if(old.revision!==input.revision)throw new ApiError(409,'This page changed in another session. Reload before saving.');const draft={...old.draft,[input.language]:input.action==='restore'?old.published[input.language]:input.fields};const next={...old,revision:old.revision+1,draft,published:input.action==='publish'?{...old.published,[input.language]:input.fields}:old.published,publishedAt:input.action==='publish'?new Date().toISOString():old.publishedAt};await tx.auditLog.upsert({where:{id:key(page)},create:{id:key(page),actorId,action:'PUBLIC_SITE_CONTENT',targetType:'SitePage',targetId:page,metadata:next},update:{actorId,metadata:next}});await tx.auditLog.create({data:{actorId,action:'PUBLIC_SITE_'+input.action.toUpperCase(),targetType:'SitePage',targetId:page,metadata:{language:input.language,previous:old,next}}});return next});return success(res,{page,...state},'Site content saved and audited')
 }))

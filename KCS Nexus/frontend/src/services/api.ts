@@ -209,7 +209,8 @@ export const authAPI = {
   login: async (identifier: string, password: string, twoFactorCode?: string) => {
     const payload = { email: identifier, password, ...(twoFactorCode ? { twoFactorCode } : {}) }
     try {
-      return await api.post('/auth/login', payload)
+      // A rejected sign-in or 2FA attempt belongs to this form, not to session refresh.
+      return await api.post('/auth/login', payload, { headers: { 'x-skip-auth-logout': 'true' } })
     } catch (error) {
       const status = (error as AxiosError)?.response?.status
       // Older installed bundles could briefly resolve authentication against

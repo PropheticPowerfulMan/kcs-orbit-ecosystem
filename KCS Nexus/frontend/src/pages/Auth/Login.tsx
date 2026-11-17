@@ -1,137 +1,78 @@
 import {portalHome} from '@/utils/accountScope'
-import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Building2, Eye, EyeOff, Lock, LogIn, Mail, ShieldCheck, Loader2 } from 'lucide-react'
-import { API_BASE, authAPI } from '@/services/api'
-import { useAuthStore } from '@/store/authStore'
-import type { UserRole } from '@/types'
+import {useEffect,useMemo,useState} from 'react'
+import {Link,useNavigate} from 'react-router-dom'
+import {useForm} from 'react-hook-form'
+import {zodResolver} from '@hookform/resolvers/zod'
+import {z} from 'zod'
+import {ArrowLeft,ArrowRight,BookOpen,Eye,EyeOff,Globe2,GraduationCap,LockKeyhole,Mail,Moon,ShieldCheck,Sun,Users,Loader2} from 'lucide-react'
+import {authAPI} from '@/services/api'
+import {useAuthStore} from '@/store/authStore'
+import {useUIStore} from '@/store/uiStore'
+import './signIn.css'
 
-const loginSchema = z.object({
-  email: z.string().min(1, "E-mail ou code d’accès requis"),
-  password: z.string().min(6, 'Le mot de passe doit contenir au moins 6 caractères'),
-  twoFactorCode: z.string().regex(/^\d{6}$/, 'Saisissez le code à 6 chiffres').optional(),
-})
-type LoginFormValues = z.infer<typeof loginSchema>
-
-const administrativeIdentifiers = [
-  { label: 'Super administrateur', identifier: 'superadmin@kcsnexus.com', detail: 'Administration générale de la plateforme' },
-  { label: 'Personnel administratif', identifier: 'staff@kcsnexus.edu', detail: 'Opérations scolaires autorisées' },
-  { label: 'Administrateur', identifier: 'admin@kcsnexus.edu', detail: 'Administration de l’établissement' },
-]
-
-const getLoginErrorMessage = (error: any) => {
-  if (error?.response?.data?.message) return error.response.data.message
-  if (error?.code === 'ERR_NETWORK' || error?.message === 'Network Error') return `Connexion impossible à l’API KCS Nexus (${API_BASE}). Vérifiez que le service est disponible.`
-  if (error?.code === 'ECONNABORTED') return 'Le service d’authentification met trop de temps à répondre. Réessayez.'
-  return error?.message || 'Identifiant ou mot de passe incorrect.'
+type LoginFormValues={email:string;password:string;twoFactorCode?:string}
+export default function LoginPage(){
+ const navigate=useNavigate(),{login,user,isAuthenticated,setLoading,isLoading}=useAuthStore()
+ const{language,setLanguage,theme,toggleTheme}=useUIStore(),tr=(fr:string,en:string)=>language==='fr'?fr:en
+ const[showPassword,setShowPassword]=useState(false),[errorMessage,setErrorMessage]=useState(''),[requiresTwoFactor,setRequiresTwoFactor]=useState(false)
+ const[recoveryOpen,setRecoveryOpen]=useState(false),[recoveryEmail,setRecoveryEmail]=useState(''),[recoveryChannel,setRecoveryChannel]=useState<'email'|'sms'>('email')
+ const[resetToken,setResetToken]=useState(''),[newPassword,setNewPassword]=useState(''),[recoveryMessage,setRecoveryMessage]=useState(''),[recoveryError,setRecoveryError]=useState('')
+ const loginSchema=useMemo(()=>z.object({email:z.string().min(1,language==='fr'?'E-mail ou code d’accès requis':'Email or access code is required'),password:z.string().min(6,language==='fr'?'Le mot de passe doit contenir au moins 6 caractères':'Password must contain at least 6 characters'),twoFactorCode:z.string().regex(/^\d{6}$/,language==='fr'?'Saisissez le code à 6 chiffres':'Enter the 6-digit code').optional()}),[language])
+ const form=useForm<LoginFormValues>({resolver:zodResolver(loginSchema),defaultValues:{email:'',password:''}})
+ useEffect(()=>{const token=new URLSearchParams(window.location.search).get('resetToken')||'';if(token){setResetToken(token);setRecoveryOpen(true)}},[])
+ const loginError=(error:any)=>{
+  const message=error?.response?.data?.message
+  const known:Record<string,string>={
+   'Two-factor authentication code required':tr('Saisissez votre code d’authentification à 6 chiffres.','Enter your 6-digit authentication code.'),
+   'Invalid two-factor authentication code':tr('Code d’authentification invalide. Réessayez avec le code actuel.','Invalid authentication code. Try again with the current code.'),
+   'Identifiant ou mot de passe incorrect.':tr('Identifiant ou mot de passe incorrect.','Incorrect identifier or password.'),
+  }
+  if(message)return known[message]||message
+  if(error?.code==='ERR_NETWORK'||error?.message==='Network Error')return tr('Connexion indisponible. Vérifiez votre connexion et réessayez.','Connection unavailable. Check your connection and try again.')
+  if(error?.code==='ECONNABORTED')return tr('Le service met trop de temps à répondre. Réessayez.','The service is taking too long to respond. Please try again.')
+  return error?.message||tr('Identifiant ou mot de passe incorrect.','Incorrect identifier or password.')
+ }
+ const onSubmit=async(values:LoginFormValues)=>{
+  setLoading(true);setErrorMessage('')
+  try{const response=await authAPI.login(values.email.trim(),values.password,values.twoFactorCode),data=response.data?.data
+   if(!data?.user||!data?.token||!data?.refreshToken)throw new Error(tr('Réponse d’authentification invalide.','Invalid authentication response.'))
+   login(data.user,data.token,data.refreshToken);navigate(portalHome({...data.user,role:data.user.role.toLowerCase()}),{replace:true})
+  }catch(error:any){if(error?.response?.status===428){setRequiresTwoFactor(true);setErrorMessage(loginError(error))}else setErrorMessage(loginError(error))}finally{setLoading(false)}
+ }
+ const requestRecovery=async()=>{
+  setLoading(true);setRecoveryError('');setRecoveryMessage('')
+  try{await authAPI.forgotPassword((recoveryEmail||form.getValues('email')).trim(),recoveryChannel);setRecoveryMessage(recoveryChannel==='sms'?tr('Si ce compte existe, les instructions de récupération ont été envoyées par SMS.','If this account exists, recovery instructions have been sent by SMS.'):tr('Si ce compte existe, les instructions de récupération ont été envoyées par e-mail.','If this account exists, recovery instructions have been sent by email.'))}
+  catch(error:any){setRecoveryError(error?.response?.data?.message||tr('Récupération temporairement indisponible.','Recovery is temporarily unavailable.'))}finally{setLoading(false)}
+ }
+ const completeRecovery=async()=>{
+  setLoading(true);setRecoveryError('');setRecoveryMessage('')
+  try{await authAPI.resetPassword(resetToken.trim(),newPassword);setRecoveryMessage(tr('Mot de passe réinitialisé. Vous pouvez maintenant vous connecter.','Password reset. You can now sign in.'));setResetToken('');setNewPassword('');window.history.replaceState({},document.title,window.location.pathname)}catch(error:any){setRecoveryError(error?.response?.data?.message||tr('Lien invalide ou expiré.','Invalid or expired link.'))}finally{setLoading(false)}
+ }
+ return <div className="nexus-signin" data-signin-page>
+  <nav className="signin-topbar" aria-label={tr('Navigation de connexion','Sign-in navigation')}>
+   <Link to="/" className="signin-brand"><img src="/images/kcs.jpg" alt="KCS" width="44" height="44"/><span><strong>KCS Nexus <span>AI</span></strong><small>Kinshasa Christian School</small></span></Link>
+   <div className="signin-tools"><button type="button" onClick={()=>setLanguage(language==='fr'?'en':'fr')} aria-label={tr('Passer en anglais','Switch to French')}><Globe2 size={17}/><span>{language==='fr'?'EN':'FR'}</span></button><button type="button" onClick={toggleTheme} aria-label={tr(theme==='dark'?'Activer le mode clair':'Activer le mode sombre',theme==='dark'?'Switch to light mode':'Switch to dark mode')}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><Link to="/" className="signin-home"><ArrowLeft size={16}/><span>{tr('Le site KCS','KCS website')}</span></Link></div>
+  </nav>
+  <main className="signin-stage"><div className="signin-layout">
+   <aside className="signin-story" aria-label={tr('Bienvenue à KCS','Welcome to KCS')}>
+    <img className="signin-story-photo" src="/images/kcs/high-school.jpg" alt="" width="900" height="1100" fetchPriority="low"/>
+    <div className="signin-story-shade"/><div className="signin-story-content"><span className="signin-eyebrow"><span/>KCS ORBIT ECOSYSTEM</span><div className="signin-story-title"><span className="signin-story-line"/><h1>{tr('Une école.','One school.')}<br/><em>{tr('Toutes vos possibilités.','Every possibility.')}</em></h1><p>{tr('Apprendre, accompagner, partager. Votre communauté scolaire se retrouve ici.','Learn, support, connect. Your school community comes together here.')}</p></div><div className="signin-community">{[[GraduationCap,tr('Élèves','Students')],[Users,tr('Familles','Families')],[BookOpen,tr('Équipe KCS','KCS team')]].map(([Icon,label]:any)=><span key={label}><Icon size={18}/>{label}</span>)}</div><p className="signin-story-footer">KINSHASA CHRISTIAN SCHOOL <span>KINSHASA · DRC</span></p></div>
+   </aside>
+   <section className="signin-panel" aria-labelledby="signin-title"><div className="signin-panel-inner">
+    <span className="signin-secure"><ShieldCheck size={15}/>{tr('Votre espace sécurisé','Your secure workspace')}</span>
+    <header className="signin-heading"><p>KCS NEXUS AI</p><h2 id="signin-title">{tr('Heureux de vous revoir.','Welcome back.')}</h2><span>{tr('Connectez-vous à votre espace personnel.','Sign in to your personal workspace.')}</span></header>
+    {errorMessage&&<div className="signin-notice signin-error" role="alert">{errorMessage}</div>}
+    {isAuthenticated&&user&&<div className="signin-notice" role="status">{tr('Session active :','Active session:')} {user.firstName} {user.lastName}. {tr('Une nouvelle connexion remplacera cette session.','A new sign-in will replace this session.')}</div>}
+    <form onSubmit={form.handleSubmit(onSubmit)} autoComplete="off" noValidate>
+     <div className="signin-field"><label htmlFor="nexus-login-identifier">{tr('E-mail ou code d’accès','Email or access code')}</label><div className="signin-input"><Mail size={18} aria-hidden="true"/><input id="nexus-login-identifier" {...form.register('email')} autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder={tr('Votre e-mail ou code Orbit','Your email or Orbit code')} aria-invalid={Boolean(form.formState.errors.email)} aria-describedby={form.formState.errors.email?'signin-identifier-error':undefined}/></div>{form.formState.errors.email&&<p id="signin-identifier-error" className="signin-field-error" role="alert">{form.formState.errors.email.message}</p>}</div>
+     <div className="signin-field"><label htmlFor="nexus-login-password">{tr('Mot de passe','Password')}</label><div className="signin-input"><LockKeyhole size={18} aria-hidden="true"/><input id="nexus-login-password" {...form.register('password')} type={showPassword?'text':'password'} autoComplete="new-password" placeholder={tr('Votre mot de passe','Your password')} aria-invalid={Boolean(form.formState.errors.password)} aria-describedby={form.formState.errors.password?'signin-password-error':undefined}/><button type="button" onClick={()=>setShowPassword(v=>!v)} aria-pressed={showPassword} aria-label={showPassword?tr('Masquer le mot de passe','Hide password'):tr('Afficher le mot de passe','Show password')}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div>{form.formState.errors.password&&<p id="signin-password-error" className="signin-field-error" role="alert">{form.formState.errors.password.message}</p>}</div>
+     {requiresTwoFactor&&<div className="signin-field"><label htmlFor="nexus-login-2fa">{tr('Code d’authentification','Authentication code')}</label><div className="signin-input"><ShieldCheck size={18}/><input id="nexus-login-2fa" {...form.register('twoFactorCode')} inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" autoFocus/></div>{form.formState.errors.twoFactorCode&&<p className="signin-field-error" role="alert">{form.formState.errors.twoFactorCode.message}</p>}</div>}
+     <div className="signin-forgot"><button type="button" aria-expanded={recoveryOpen} aria-controls="signin-recovery" onClick={()=>{setRecoveryEmail(form.getValues('email'));setRecoveryOpen(v=>!v);setRecoveryError('');setRecoveryMessage('')}}>{tr('Mot de passe oublié ?','Forgot password?')}</button></div>
+     <button type="submit" data-kcs-no-processing="true" className="signin-submit" disabled={isLoading} aria-busy={isLoading}><span className="signin-submit-glow" aria-hidden="true"/>{isLoading?<Loader2 size={19} className="animate-spin"/>:<LockKeyhole size={17}/>}<span>{isLoading?tr('Connexion sécurisée…','Signing in securely…'):tr('Se connecter','Sign in')}</span>{!isLoading&&<ArrowRight size={18} className="signin-submit-arrow"/>}</button>
+    </form>
+    {recoveryOpen&&<section id="signin-recovery" className="signin-recovery" aria-labelledby="signin-recovery-title"><h3 id="signin-recovery-title">{tr('Récupération sécurisée','Secure account recovery')}</h3>{!resetToken?<><div className="signin-recovery-channels" role="group" aria-label={tr('Canal de récupération','Recovery channel')}>{(['email','sms']as const).map(channel=><button type="button" key={channel} aria-pressed={recoveryChannel===channel} onClick={()=>setRecoveryChannel(channel)}>{channel==='sms'?'SMS':tr('E-mail','Email')}</button>)}</div><label htmlFor="signin-recovery-email">{tr('Adresse e-mail du compte','Account email address')}</label><input id="signin-recovery-email" type="email" value={recoveryEmail} onChange={e=>setRecoveryEmail(e.target.value)} autoComplete="off"/><button type="button" className="signin-recovery-action" disabled={isLoading} onClick={()=>void requestRecovery()}>{tr('Recevoir les instructions','Send recovery instructions')}</button></>:<><label htmlFor="signin-new-password">{tr('Nouveau mot de passe','New password')}</label><input id="signin-new-password" type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} autoComplete="new-password" minLength={12}/><p>{tr('12 caractères minimum, avec majuscule, minuscule, chiffre et symbole.','At least 12 characters, including uppercase, lowercase, a number and a symbol.')}</p><button type="button" className="signin-recovery-action" disabled={isLoading||newPassword.length<12} onClick={()=>void completeRecovery()}>{tr('Réinitialiser le mot de passe','Reset password')}</button></>}{recoveryMessage&&<p className="signin-recovery-success" role="status">{recoveryMessage}</p>}{recoveryError&&<p className="signin-field-error" role="alert">{recoveryError}</p>}</section>}
+    <p className="signin-privacy"><ShieldCheck size={15}/>{tr('Vos identifiants personnels, votre espace KCS.','Your personal credentials. Your KCS workspace.')}</p><div className="signin-help">{tr('Besoin d’un coup de main ?','Need a hand?')} <Link to="/contact">{tr('Contacter l’école','Contact the school')}<ArrowRight size={13}/></Link></div>
+   </div></section>
+  </div></main><footer className="signin-footer"><span>© {new Date().getFullYear()} Kinshasa Christian School</span><span>KCS Orbit · {tr('Unis pour apprendre.','Connected to learn.')}</span></footer>
+ </div>
 }
-
-const LoginPage = () => {
-  const navigate = useNavigate()
-  const { login, user, isAuthenticated, setLoading, isLoading } = useAuthStore()
-  const [showPassword, setShowPassword] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
-  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false)
-  const [recoveryOpen, setRecoveryOpen] = useState(false)
-  const [recoveryEmail, setRecoveryEmail] = useState('')
-  const [recoveryChannel, setRecoveryChannel] = useState<'email' | 'sms'>('email')
-  const [resetToken, setResetToken] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [recoveryMessage, setRecoveryMessage] = useState('')
-  const [recoveryError, setRecoveryError] = useState('')
-
-  useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get('resetToken') || ''
-    if (token) { setResetToken(token); setRecoveryOpen(true) }
-  }, [])
-
-  const form = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema), defaultValues: { email: '', password: '' } })
-  const resolveDestination = (role: UserRole) => role === 'admin' ? '/admin' : `/portal/${role}`
-
-  const onSubmit = async (values: LoginFormValues) => {
-    setLoading(true); setErrorMessage('')
-    try {
-      const response = await authAPI.login(values.email.trim(), values.password, values.twoFactorCode)
-      const data = response.data?.data
-      if (!data?.user || !data?.token || !data?.refreshToken) throw new Error('Réponse d’authentification invalide.')
-      login(data.user, data.token, data.refreshToken)
-      navigate(portalHome({...data.user,role:data.user.role.toLowerCase() as UserRole}), { replace: true })
-    } catch (error: any) {
-      if (error?.response?.status === 428) {
-        setRequiresTwoFactor(true)
-        setErrorMessage(error.response.data?.message || 'Saisissez votre code d’authentification.')
-      } else setErrorMessage(getLoginErrorMessage(error))
-    } finally { setLoading(false) }
-  }
-
-  const requestRecovery = async () => {
-    setLoading(true); setRecoveryError(''); setRecoveryMessage('')
-    try {
-      const email = (recoveryEmail || form.getValues('email')).trim()
-      await authAPI.forgotPassword(email, recoveryChannel)
-      setRecoveryMessage(`Si ce compte existe, un nouveau mot de passe temporaire a été envoyé par ${recoveryChannel === 'sms' ? 'SMS' : 'e-mail'}.`)
-    } catch (error: any) { setRecoveryError(error?.response?.data?.message || 'Récupération temporairement indisponible.') }
-    finally { setLoading(false) }
-  }
-
-  const completeRecovery = async () => {
-    setLoading(true); setRecoveryError(''); setRecoveryMessage('')
-    try {
-      await authAPI.resetPassword(resetToken.trim(), newPassword)
-      setRecoveryMessage('Mot de passe réinitialisé. Vous pouvez maintenant vous connecter.')
-      setResetToken(''); setNewPassword(''); window.history.replaceState({}, document.title, window.location.pathname)
-    } catch (error: any) { setRecoveryError(error?.response?.data?.message || 'Lien invalide ou expiré.') }
-    finally { setLoading(false) }
-  }
-
-  return (
-    <div className="relative min-h-screen overflow-hidden bg-kcs-blue-950">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(29,78,216,0.34),transparent_38%)]"/>
-      <div className="absolute inset-0 dots-bg opacity-25"/>
-      <div className="relative container-custom flex min-h-screen items-center justify-center py-10 sm:py-16">
-        <div className="grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl lg:grid-cols-[0.9fr_1.1fr]">
-          <aside className="border-b border-kcs-blue-700 bg-kcs-blue-950 p-7 text-white shadow-[inset_-1px_0_0_rgba(255,255,255,0.08)] lg:border-b-0 lg:border-r lg:p-10">
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-1.5 text-sm text-emerald-200"><ShieldCheck size={14}/> Accès sécurisé de production</span>
-            <h1 className="mt-7 font-display text-3xl font-bold leading-tight sm:text-4xl">Votre espace scolaire, selon vos autorisations</h1>
-            <p className="mt-4 max-w-lg text-sm leading-6 text-kcs-blue-100">Élèves, parents et enseignants utilisent les identifiants personnels créés par l’administration. Aucun compte collectif ou mot de passe de démonstration n’est accepté.</p>
-            <div className="mt-8 space-y-3">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-300">Identifiants administratifs réservés</p>
-              {import.meta.env.DEV && administrativeIdentifiers.map((account) => (
-                <button key={account.identifier} type="button" onClick={() => { form.setValue('email', account.identifier, { shouldValidate: true }); form.setFocus('password') }} className="flex w-full items-center gap-3 rounded-2xl border border-white/20 bg-white/10 p-4 text-left text-white shadow-sm transition hover:border-kcs-gold-300/60 hover:bg-white/15">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-kcs-gold-400/15 text-kcs-gold-300"><Building2 size={18}/></span>
-                  <span className="min-w-0 flex-1"><span className="block font-semibold">{account.label}</span><span className="block truncate text-sm text-kcs-blue-200">{account.identifier}</span><span className="mt-1 block text-xs text-kcs-blue-300">{account.detail}</span></span>
-                </button>
-              ))}
-            </div>
-          </aside>
-
-          <motion.main initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="bg-sky-50 p-7 dark:bg-kcs-blue-950/95 sm:p-10">
-            <div className="mx-auto max-w-md">
-              <Link to="/" className="inline-flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl kcs-gradient text-sm font-bold text-white shadow-kcs">KCS</div><div><p className="font-display text-sm font-bold text-kcs-blue-900 dark:text-white">Kinshasa Christian School</p><p className="text-xs text-kcs-gold-600 dark:text-kcs-gold-400">KCS Nexus</p></div></Link>
-              <div className="mb-8 mt-9"><h2 className="font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">Connexion</h2><p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Utilisez votre e-mail ou votre code d’accès personnel.</p></div>
-
-              {errorMessage && <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">{errorMessage}</div>}
-              {isAuthenticated && user && <div className="mb-5 rounded-2xl border border-kcs-blue-200 bg-kcs-blue-50 px-4 py-3 text-sm text-kcs-blue-800 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">Une session est active pour {user.firstName} {user.lastName}. Une nouvelle connexion remplacera cette session.</div>}
-
-              <form onSubmit={form.handleSubmit(onSubmit)} autoComplete="off" className="space-y-4">
-                <label className="block"><span className="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-300">E-mail ou code d’accès</span><span className="relative block"><Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/><input {...form.register('email')} className="input-kcs pl-11" autoComplete="off" placeholder="nom@ecole.cd ou ACC-..."/></span>{form.formState.errors.email && <span className="mt-1 block text-xs text-red-500">{form.formState.errors.email.message}</span>}</label>
-                <label className="block"><span className="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-300">Mot de passe</span><span className="relative block"><Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/><input {...form.register('password')} type={showPassword?'text':'password'} className="input-kcs pl-11 pr-11" autoComplete="new-password" placeholder="Votre mot de passe"/><button type="button" onClick={()=>setShowPassword((value)=>!value)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" aria-label={showPassword?'Masquer':'Afficher'}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></span>{form.formState.errors.password && <span className="mt-1 block text-xs text-red-500">{form.formState.errors.password.message}</span>}</label>
-                {requiresTwoFactor && <label className="block"><span className="mb-1.5 block text-xs font-semibold text-gray-600">Code d’authentification</span><input {...form.register('twoFactorCode')} inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="input-kcs tracking-[0.35em]" placeholder="000000" autoFocus/></label>}
-                <div className="flex items-center justify-end"><button type="button" onClick={()=>{setRecoveryEmail(form.getValues('email'));setRecoveryOpen((value)=>!value);setRecoveryError('');setRecoveryMessage('')}} className="text-sm font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">Mot de passe oublié ?</button></div>
-                {recoveryOpen && <div className="rounded-2xl border border-kcs-blue-200 bg-kcs-blue-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30"><p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">Récupération sécurisée</p>{!resetToken?<div className="mt-3 space-y-3"><div className="grid grid-cols-2 gap-2" role="group" aria-label="Canal de récupération"><button type="button" onClick={()=>setRecoveryChannel('email')} className={recoveryChannel==='email'?'btn-primary':'btn-secondary'}>E-mail</button><button type="button" onClick={()=>setRecoveryChannel('sms')} className={recoveryChannel==='sms'?'btn-primary':'btn-secondary'}>SMS</button></div><input type="email" value={recoveryEmail} onChange={(event)=>setRecoveryEmail(event.target.value)} className="input-kcs" placeholder="Adresse e-mail du compte"/><button type="button" onClick={()=>void requestRecovery()} disabled={isLoading} className="btn-secondary w-full disabled:opacity-60">Recevoir un lien sécurisé</button></div>:<div className="mt-3 space-y-3"><input type="password" value={newPassword} onChange={(event)=>setNewPassword(event.target.value)} className="input-kcs" placeholder="12 caractères, majuscule, minuscule, chiffre et symbole" minLength={12}/><button type="button" onClick={()=>void completeRecovery()} disabled={isLoading||newPassword.length<12} className="btn-secondary w-full disabled:opacity-60">Réinitialiser</button></div>}{recoveryMessage&&<p className="mt-3 text-sm text-emerald-600">{recoveryMessage}</p>}{recoveryError&&<p className="mt-3 text-sm text-red-600">{recoveryError}</p>}</div>}
-                <button type="submit" disabled={isLoading} aria-busy={isLoading} className="btn-primary relative flex w-full items-center justify-center gap-2 overflow-hidden py-3 disabled:opacity-90">{isLoading&&<span className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/20 to-transparent"/>}<span className="relative flex items-center gap-2">{isLoading?<Loader2 size={18} className="animate-spin"/>:<LogIn size={16}/>}<span>{isLoading?'Traitement sécurisé…':'Se connecter'}</span>{isLoading&&<span className="flex gap-1"><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-white"/><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-white [animation-delay:120ms]"/><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-white [animation-delay:240ms]"/></span>}</span></button>
-              </form>
-              <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">Besoin d’aide ? Contactez l’administration de votre établissement.</p>
-            </div>
-          </motion.main>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default LoginPage
