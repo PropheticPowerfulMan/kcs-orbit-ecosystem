@@ -27,8 +27,8 @@ export const authenticate = async (req: AuthenticatedRequest, _res: Response, ne
     const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload
     const account=await assertAccountAccess(payload.sub)
     const mediaOnly=isMediaAccount(account)
-    if(mediaOnly&&!mediaRequestAllowed(req.method,req.originalUrl,payload.sub))return next(new ApiError(403,'This Media account can only manage news, gallery and its own settings. / Ce compte Media est limité aux actualités, à la galerie et à ses propres paramètres.'))
-    req.user = {...payload,...(mediaOnly?{role:'staff' as const,mediaOnly:true}:{})}
+    if(mediaOnly&&!mediaRequestAllowed(req.method,req.originalUrl,payload.sub))return next(new ApiError(403,'This Media account can only manage the school website and its own settings. / Ce compte Media est limité au site web de l’école et à ses propres paramètres.'))
+    req.user = {...payload,mediaOnly,...(mediaOnly?{role:'staff' as const}:{})}
     next()
   } catch(error:any) {
     if(error?.status===503||error?.status===403)return next(new ApiError(error.status,error.message))
@@ -88,4 +88,10 @@ export const requireSuperAdmin = () => {
 export const requireWebsiteEditor=()=> (req:AuthenticatedRequest,_res:Response,next:NextFunction)=>{
  if(req.user&&(req.user.role==='admin'||req.user.mediaOnly))return next()
  return next(new ApiError(403,'Website publishing permission required'))
+}
+
+/** Full website co-management is limited to the configured SuperAdmin and the explicit Media capability. */
+export const requireWebsiteManager=()=> (req:AuthenticatedRequest,_res:Response,next:NextFunction)=>{
+ if(req.user&&(req.user.sub==='configured-superadmin'||req.user.mediaOnly===true))return next()
+ return next(new ApiError(403,'Website management permission required'))
 }
