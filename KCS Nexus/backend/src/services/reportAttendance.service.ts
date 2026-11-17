@@ -5,7 +5,7 @@ import { env } from '../config/env.js'
 type Window = { gte: Date; lte: Date }
 type SchoolDayContext={nonSchoolRanges?:NonSchoolRange[];calendar?:SchoolCalendar}
 const schoolDayContexts=new WeakMap<Window,SchoolDayContext>()
-type Calendar = { isCurrent?: boolean; status?: string; name: string; startDate: string; endDate: string; periods?: Array<{ type: string; sequence: number; startDate: string; endDate: string }> }
+export type Calendar = { isCurrent?: boolean; status?: string; name: string; startDate: string; endDate: string; periods?: Array<{ type: string; sequence: number; startDate: string; endDate: string }> }
 let cached: Calendar[] = []
 let expiresAt = 0
 let pending: Promise<Calendar[]> | null = null
@@ -42,7 +42,19 @@ export function attendanceWindowForCalendar(year: string, term: string, calendar
 
 export function invalidateAcademicCalendarCache() { expiresAt = 0 }
 
-export async function academicCalendars(): Promise<Calendar[]> {
+export async function academicCalendars(options: { strict?: boolean } = {}): Promise<Calendar[]> {
+  if (options.strict) {
+    const base = env.ACADEMIC_CALENDAR_ORBIT_API_URL || env.KCS_ORBIT_API_URL
+    const key = env.ACADEMIC_CALENDAR_ORBIT_API_KEY || env.KCS_ORBIT_API_KEY
+    const organization = env.ACADEMIC_CALENDAR_ORBIT_ORGANIZATION_ID || env.KCS_ORBIT_ORGANIZATION_ID
+    if (!base || !key || !organization) throw new Error('Published calendar connection is not configured')
+    const response = await fetch(base.replace(/\/$/, '') + '/api/integration/academic-year/calendar?organizationId=' + encodeURIComponent(organization), { headers: { 'x-api-key': key, 'x-app-slug': 'KCS_NEXUS' }, signal: AbortSignal.timeout(4000) })
+    if (!response.ok) throw new Error('Published calendar is unavailable; automatic closure postponed')
+    const data = await response.json() as { calendars?: Calendar[] }
+    if (!Array.isArray(data.calendars)) throw new Error('Published calendar response is invalid; automatic closure postponed')
+    return data.calendars
+  }
+
   if (Date.now() < expiresAt) return cached
   if (pending) return pending
   const base = env.ACADEMIC_CALENDAR_ORBIT_API_URL || env.KCS_ORBIT_API_URL

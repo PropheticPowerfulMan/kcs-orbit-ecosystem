@@ -1,3 +1,4 @@
+import { adminDashboardText, adminDashboardMonth } from '@/utils/adminDashboardLanguage'
 import '@/components/admin/adminOverview.css'
 import { confirmPortalAction, promptPortalAction } from '@/utils/portalActionDialogs'
 import RegistryRecordBanner, { useRegistryDialogFocus } from '@/components/admin/RegistryRecordBanner'
@@ -3708,8 +3709,10 @@ const AdminSectionView = ({
 
 const AdminDashboard = () => {
   const language = useUIStore((state) => state.language)
+  const dt=(value:unknown)=>adminDashboardText(value,language)
+  const locale=language==='fr'?'fr-CD':'en-US'
   const { user } = useAuthStore()
-  const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+  const currency = new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' })
   const location = useLocation()
   const activeSegment = getAdminSegment(location.pathname)
   const [officialRoster, setOfficialRoster] = useState<AdminStudentRecord[]>(readStoredRoster)
@@ -3724,12 +3727,12 @@ const AdminDashboard = () => {
   const [reportCardControl, setReportCardControl] = useState<any>(null)
   const pendingAdmissions = admissionRequests.filter((item) => item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW')
   const hasOperationalData = officialRoster.length > 0 || admissionRequests.length > 0 || Boolean(dashboardOverview)
-  const dashboardEnrollmentTrend = dashboardOverview?.enrollmentTrend ?? []
+  const dashboardEnrollmentTrend = (dashboardOverview?.enrollmentTrend ?? []).map((item:any)=>({...item,month:adminDashboardMonth(item.month,language)}))
   const dashboardDepartmentPerformance = dashboardOverview?.departmentPerformance ?? []
   const dashboardLiveEvents = (dashboardOverview?.events ?? []).map((event: any) => ({
     ...event,
     status: event.status === 'live' ? 'Live now' : 'Scheduled',
-    audience: new Date(event.startsAt).toLocaleString(),
+    audience: new Date(event.startsAt).toLocaleString(locale),
     nextStep: event.location || 'School event',
   }))
   const dashboardRiskAlerts = dashboardOverview?.risks ?? []
@@ -3739,7 +3742,7 @@ const AdminDashboard = () => {
     aiSupport: staff.department || 'Unassigned department',
   }))
   const dashboardRecentActivity = (dashboardOverview?.recentActivity ?? []).map((item: any) =>
-    item.actor + ' · ' + item.action + ' · ' + new Date(item.createdAt).toLocaleString(),
+    (item.actor==='System'?dt('System'):item.actor) + ' · ' + dt(item.action) + ' · ' + new Date(item.createdAt).toLocaleString(locale),
   )
   const dashboardSystemSignals = [
     { title: 'Shared registry', severity: dashboardDirectory ? 'healthy' : 'unavailable', detail: dashboardDirectory ? 'Orbit directory synchronized.' : 'Orbit directory could not be loaded.', roles: ['admin'] },
@@ -3862,13 +3865,13 @@ const AdminDashboard = () => {
               { label: 'Parents / Families', value: String(dashboardDirectory?.counts?.families ?? 0), icon: Users, tone: 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300', sub: 'official responsible families' },
               { label: 'Faculty Members', value: String(dashboardDirectory?.counts?.teachers ?? 0), icon: Users, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300', sub: 'employees in the shared registry' },
               { label: 'Open Applications', value: String(pendingAdmissions.length), icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', sub: 'approval or refusal required' },
-              { label: 'AI Risk Alerts', value: String(dashboardOverview?.stats?.riskAlerts ?? 0), icon: Brain, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: 'no active alert' },
-              { label: 'Live Events', value: String(dashboardOverview?.stats?.liveEvents ?? 0), icon: Radio, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: 'no scheduled event' },
+              { label: 'AI Risk Alerts', value: String(dashboardOverview?.stats?.riskAlerts ?? 0), icon: Brain, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: (dashboardOverview?.stats?.riskAlerts??0)>0?'Follow-up required':'no active alert' },
+              { label: 'Live Events', value: String(dashboardOverview?.stats?.liveEvents ?? 0), icon: Radio, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: (dashboardOverview?.stats?.liveEvents??0)>0?'Live broadcasts in progress':'no scheduled event' },
             ].map((item) => {
               const Icon = item.icon
               return (
                 <motion.div
-                  key={item.label}
+                  key={dt(item.label)}
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="admin-summary-metric rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"
@@ -3877,26 +3880,26 @@ const AdminDashboard = () => {
                     <Icon size={18} />
                   </div>
                   <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{item.value}</p>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{item.label}</p>
-                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{item.sub}</p>
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{dt(item.label)}</p>
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{dt(item.sub)}</p>
                 </motion.div>
               )
             })}
           </div>
 
           <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">{language==='fr'?'Raccourcis institutionnels':'Institutional shortcuts'}</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{language==='fr'?'Communiquer et rendre compte':'Communications and reporting'}</h2></div><div className="grid grid-cols-3 gap-2"><button type="button" onClick={openEmailAction} className={`${adminButton} flex items-center justify-center gap-2`}><Mail size={16}/> Email</button><button type="button" onClick={openSmsAction} className={`${adminButton} flex items-center justify-center gap-2`}><Phone size={16}/> SMS</button><button type="button" onClick={() => { exportAdminReport('executive', 'weekly', 'pdf', officialRoster, admissionRequests); setDashboardAction('The official weekly Super Admin report was generated.') }} className={`${adminButton} flex items-center justify-center gap-2`}><FileSpreadsheet size={16}/> Report</button></div></div>
-            {dashboardAction && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{dashboardAction}</p>}
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">{language==='fr'?'Raccourcis institutionnels':'Institutional shortcuts'}</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{language==='fr'?'Communiquer et rendre compte':'Communications and reporting'}</h2></div><div className="grid grid-cols-3 gap-2"><button type="button" onClick={openEmailAction} className={`${adminButton} flex items-center justify-center gap-2`}><Mail size={16}/> {dt("Email")}</button><button type="button" onClick={openSmsAction} className={`${adminButton} flex items-center justify-center gap-2`}><Phone size={16}/> {dt("SMS")}</button><button type="button" onClick={() => { exportAdminReport('executive', 'weekly', 'pdf', officialRoster, admissionRequests); setDashboardAction('The official weekly Super Admin report was generated.') }} className={`${adminButton} flex items-center justify-center gap-2`}><FileSpreadsheet size={16}/> {dt("Report")}</button></div></div>
+            {dashboardAction && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{dt(dashboardAction)}</p>}
           </section>
 
           <div data-admin-tone="dark" className="rounded-2xl border border-gray-100 bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-6 text-white dark:border-kcs-blue-800">
             <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
               <div>
-                <p className="mb-2 text-sm font-semibold text-kcs-gold-300">Operational Pulse</p>
+                <p className="mb-2 text-sm font-semibold text-kcs-gold-300">{dt("Operational Pulse")}</p>
                 <h2 className="font-display text-2xl font-bold">
                   {hasOperationalData
-                    ? 'Operational indicators are calculated from the current official registry.'
-                    : 'No operational data is available yet. The indicators will populate after the first registrations.'}
+                    ? dt('Operational indicators are calculated from the current official registry.')
+                    : dt('No operational data is available yet. The indicators will populate after the first registrations.')}
                 </h2>
               </div>
               <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -3915,8 +3918,8 @@ const AdminDashboard = () => {
           <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Enrollment and Applications Trend</h2>
-                <span className="badge-blue text-xs">Rolling 8 months</span>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Enrollment and Applications Trend")}</h2>
+                <span className="badge-blue text-xs">{dt("Rolling 8 months")}</span>
               </div>
               <ResponsiveContainer width="100%" height={290}>
                 <AreaChart data={dashboardEnrollmentTrend}>
@@ -3934,16 +3937,16 @@ const AdminDashboard = () => {
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ background: '#0f2352', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px' }} />
-                  <Area type="monotone" dataKey="students" stroke="#1d4ed8" fill="url(#studentsFill)" strokeWidth={2.5} />
-                  <Area type="monotone" dataKey="applications" stroke="#f59e0b" fill="url(#applicationsFill)" strokeWidth={2.5} />
+                  <Area type="monotone" dataKey="students" name={dt("Students")} stroke="#1d4ed8" fill="url(#studentsFill)" strokeWidth={2.5} />
+                  <Area type="monotone" dataKey="applications" name={dt("Applications")} stroke="#f59e0b" fill="url(#applicationsFill)" strokeWidth={2.5} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Department Health Score</h2>
-                <span className="text-xs text-gray-400">AI synthesized</span>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Department Health Score")}</h2>
+                <span className="text-xs text-gray-400">{dt("AI synthesized")}</span>
               </div>
               <ResponsiveContainer width="100%" height={290}>
                 <BarChart data={dashboardDepartmentPerformance} layout="vertical" margin={{ left: 10, right: 10 }}>
@@ -3951,7 +3954,7 @@ const AdminDashboard = () => {
                   <XAxis type="number" hide />
                   <YAxis dataKey="name" type="category" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
                   <Tooltip contentStyle={{ background: '#0f2352', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px' }} />
-                  <Bar dataKey="score" fill="#1d4ed8" radius={[8, 8, 8, 8]} barSize={20} />
+                  <Bar dataKey="score" name={dt("Score")} fill="#1d4ed8" radius={[8, 8, 8, 8]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -3960,7 +3963,7 @@ const AdminDashboard = () => {
           <div className="grid gap-6 xl:grid-cols-3">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Event Live Broadcasts</h2>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Event Live Broadcasts")}</h2>
                 <Video size={18} className="text-red-500" />
               </div>
               <div className="space-y-3">
@@ -3969,11 +3972,11 @@ const AdminDashboard = () => {
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{event.title}</p>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${event.status === 'Live now' ? 'bg-red-600 text-white' : 'bg-kcs-gold-100 text-kcs-blue-800 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-300'}`}>
-                        {event.status}
+                        {dt(event.status)}
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{event.platform} • {event.audience}</p>
-                    <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{event.nextStep}</p>
+                    <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{dt(event.nextStep)}</p>
                   </div>
                 ))}
               </div>
@@ -3981,8 +3984,8 @@ const AdminDashboard = () => {
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Admissions Queue</h2>
-                <span className="badge-gold text-xs">Priority review</span>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Admissions Queue")}</h2>
+                <span className="badge-gold text-xs">{dt("Priority review")}</span>
               </div>
               <div className="space-y-3">
                 {admissionRequests.slice(0, 5).map((item) => (
@@ -3993,16 +3996,16 @@ const AdminDashboard = () => {
                         <p className="text-xs text-gray-500 dark:text-gray-400">{item.gradeApplying} - {item.parentName}</p>
                       </div>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${pillTone(item.status)}`}>
-                        {item.status.replace('_', ' ')}
+                        {dt(item.status)}
                       </span>
                     </div>
                     <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
-                      <Clock3 size={12} /> Submitted {new Date(item.submittedAt).toLocaleDateString()}
+                      <Clock3 size={12} /> {dt('Submitted')} {new Date(item.submittedAt).toLocaleDateString(locale)}
                     </div>
                     {(item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW') && (
                       <div className="mt-3 grid grid-cols-2 gap-2">
-                        <a href="/admin/admissions" className="rounded-lg bg-green-600 px-3 py-2 text-center text-xs font-bold text-white">Review & approve</a>
-                        <button className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white" onClick={() => void rejectAdmission(item)}>Refuse</button>
+                        <a href="/admin/admissions" className="rounded-lg bg-green-600 px-3 py-2 text-center text-xs font-bold text-white">{dt("Review & approve")}</a>
+                        <button className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white" onClick={() => void rejectAdmission(item)}>{dt("Refuse")}</button>
                       </div>
                     )}
                   </div>
@@ -4012,19 +4015,19 @@ const AdminDashboard = () => {
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">AI Risk & Opportunity Signals</h2>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("AI Risk & Opportunity Signals")}</h2>
                 <Brain size={18} className="text-kcs-gold-500" />
               </div>
               <div className="space-y-3">
                 {dashboardRiskAlerts.map((alert: any) => (
-                  <div key={alert.title} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
+                  <div key={dt(alert.title)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                     <div className="mb-2 flex items-center justify-between gap-3">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{alert.title}</p>
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{dt(alert.title)}</p>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${alert.level === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : alert.level === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
-                        {alert.level}
+                        {dt(alert.level)}
                       </span>
                     </div>
-                    <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300">{alert.description}</p>
+                    <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300">{dt(alert.description)}</p>
                   </div>
                 ))}
               </div>
@@ -4032,7 +4035,7 @@ const AdminDashboard = () => {
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Teacher Load Snapshot</h2>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Teacher Load Snapshot")}</h2>
                 <BookOpen size={18} className="text-purple-500" />
               </div>
               <div className="space-y-3">
@@ -4040,11 +4043,11 @@ const AdminDashboard = () => {
                   <div key={staff.teacher} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/20">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{staff.teacher}</p>
-                      <span className="text-xs text-gray-400">{staff.load}</span>
+                      <span className="text-xs text-gray-400">{dt(staff.load)}</span>
                     </div>
                     <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="text-gray-500 dark:text-gray-400">AI support level</span>
-                      <span className="font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">{staff.aiSupport}</span>
+                      <span className="text-gray-500 dark:text-gray-400">{dt("AI support level")}</span>
+                      <span className="font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">{dt(staff.aiSupport)}</span>
                     </div>
                   </div>
                 ))}
@@ -4057,20 +4060,20 @@ const AdminDashboard = () => {
           <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Role Permissions Matrix</h2>
-                <span className="badge-blue text-xs">Super Admin control</span>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Role Permissions Matrix")}</h2>
+                <span className="badge-blue text-xs">{dt("Super Admin control")}</span>
               </div>
               <div className="space-y-3">
                 {Object.entries(rolePermissions).map(([role, permissions]) => (
                   <div key={role} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold capitalize text-kcs-blue-900 dark:text-white">{role === 'admin' ? 'Super Admin' : role}</p>
-                      <span className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{permissions.length} permissions</span>
+                      <p className="font-semibold capitalize text-kcs-blue-900 dark:text-white">{dt(role === 'admin' ? 'Super Admin' : role)}</p>
+                      <span className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{permissions.length} {dt('permissions')}</span>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {permissions.slice(0, 5).map((permission) => (
-                        <span key={permission} className="rounded-full bg-white px-2.5 py-1 text-xs text-gray-600 dark:bg-kcs-blue-900/60 dark:text-gray-300">
-                          {permission}
+                        <span key={dt(permission)} className="rounded-full bg-white px-2.5 py-1 text-xs text-gray-600 dark:bg-kcs-blue-900/60 dark:text-gray-300">
+                          {dt(permission)}
                         </span>
                       ))}
                     </div>
@@ -4081,18 +4084,18 @@ const AdminDashboard = () => {
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Interconnected System Signals</h2>
-                <span className="badge-gold text-xs">Data driven</span>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Interconnected System Signals")}</h2>
+                <span className="badge-gold text-xs">{dt("Data driven")}</span>
               </div>
               <div className="space-y-3">
                 {dashboardSystemSignals.map((signal) => (
-                  <div key={signal.title} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
+                  <div key={dt(signal.title)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{signal.title}</p>
-                      <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{signal.severity}</span>
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{dt(signal.title)}</p>
+                      <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{dt(signal.severity)}</span>
                     </div>
-                    <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{signal.detail}</p>
-                    <p className="mt-2 text-xs text-gray-400">Visible to: {signal.roles.join(', ')}</p>
+                    <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{dt(signal.detail)}</p>
+                    <p className="mt-2 text-xs text-gray-400">{dt('Visible to:')} {signal.roles.map(dt).join(', ')}</p>
                   </div>
                 ))}
               </div>
@@ -4102,18 +4105,18 @@ const AdminDashboard = () => {
           <div className="grid gap-6 xl:grid-cols-3">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Sensitive Action Approvals</h2>
-                <span className="badge-gold text-xs">Super Admin only</span>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Sensitive Action Approvals")}</h2>
+                <span className="badge-gold text-xs">{dt("Super Admin only")}</span>
               </div>
               <div className="space-y-3">
                 {dashboardSensitiveActions.map((item) => (
-                  <div key={item.action} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
+                  <div key={dt(item.action)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.action}</p>
-                      <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-300">{item.risk}</span>
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{dt(item.action)}</p>
+                      <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-300">{dt(item.risk)}</span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.requester}</p>
-                    <p className="mt-2 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{item.status}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{dt(item.requester)}</p>
+                    <p className="mt-2 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{dt(item.status)}</p>
                   </div>
                 ))}
               </div>
@@ -4121,27 +4124,27 @@ const AdminDashboard = () => {
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Finance Control</h2>
-                <button type="button" onClick={() => void refreshDashboardFinance()} className="badge-blue text-xs">Refresh EduPay</button>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Finance Control")}</h2>
+                <button type="button" onClick={() => void refreshDashboardFinance()} className="badge-blue text-xs">{dt("Refresh EduPay")}</button>
               </div>
               <div className="space-y-3">
                 {dashboardFinance?.parentAccounts.slice(0, 6).map((account, index) => (
-                  <button type="button" key={`${account.parentName}-${index}`} onClick={() => setDashboardAction(`${account.parentName ?? 'Family account'}: paid ${currency.format(account.totalPaid ?? 0)}, outstanding ${currency.format(account.totalDebt ?? 0)}.`)} className="w-full rounded-xl bg-gray-50 p-4 text-left transition hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800/60">
+                  <button type="button" key={`${account.parentName}-${index}`} onClick={() => setDashboardAction(`${account.parentName ?? dt('Family account')}: paid ${currency.format(account.totalPaid ?? 0)}, outstanding ${currency.format(account.totalDebt ?? 0)}.`)} className="w-full rounded-xl bg-gray-50 p-4 text-left transition hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800/60">
                     <div className="flex items-center justify-between">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{account.parentName ?? 'Family account'}</p>
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{account.parentName ?? dt('Family account')}</p>
                       <span className="text-sm font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{currency.format(account.totalDebt ?? 0)}</span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">EduPay synchronized • Paid {currency.format(account.totalPaid ?? 0)} • {account.studentCount ?? 0} student(s)</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{dt('EduPay synchronized')} · {dt('Paid')} {currency.format(account.totalPaid ?? 0)} · {account.studentCount ?? 0} {dt('student(s)')}</p>
                   </button>
-                )) ?? <p className="text-sm text-gray-500 dark:text-gray-400">Loading synchronized EduPay accounts...</p>}
-                {dashboardFinanceError && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{dashboardFinanceError}</p>}
+                )) ?? <p className="text-sm text-gray-500 dark:text-gray-400">{dt("Loading synchronized EduPay accounts...")}</p>}
+                {dashboardFinanceError && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{dt(dashboardFinanceError)}</p>}
               </div>
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Report Cards & Transcripts</h2>
-                <span className="badge-gold text-xs">Principal workflow</span>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Report Cards & Transcripts")}</h2>
+                <span className="badge-gold text-xs">{dt("Principal workflow")}</span>
               </div>
               <div className="space-y-3">
                 {([] as any[]).slice(0, 6).map((item: any) => (
@@ -4159,15 +4162,15 @@ const AdminDashboard = () => {
           <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Interdependence Engine</h2>
-                <span className="badge-blue text-xs">Notifications and RBAC</span>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Interdependence Engine")}</h2>
+                <span className="badge-blue text-xs">{dt("Notifications and RBAC")}</span>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {communicationFlows.map((flow) => (
-                  <div key={flow.trigger} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{flow.trigger}</p>
-                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{flow.update}</p>
-                    <p className="mt-2 text-xs text-gray-400">Recipients: {flow.recipients.join(', ')}</p>
+                  <div key={dt(flow.trigger)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
+                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{dt(flow.trigger)}</p>
+                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{dt(flow.update)}</p>
+                    <p className="mt-2 text-xs text-gray-400">{dt('Recipients:')} {flow.recipients.map(dt).join(', ')}</p>
                   </div>
                 ))}
               </div>
@@ -4175,21 +4178,21 @@ const AdminDashboard = () => {
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">AI Governance</h2>
-                <span className="badge-gold text-xs">Usage and recommendations</span>
+                <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("AI Governance")}</h2>
+                <span className="badge-gold text-xs">{dt("Usage and recommendations")}</span>
               </div>
               <div className="space-y-3">
                 {aiRecommendations.map((item) => (
-                  <div key={`${item.owner}-${item.title}`} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.owner}: {item.title}</p>
-                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{item.action}</p>
-                    <p className="mt-2 text-xs font-semibold text-kcs-gold-600 dark:text-kcs-gold-300">{item.impact}</p>
+                  <div key={`${item.owner}-${dt(item.title)}`} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.owner}: {dt(item.title)}</p>
+                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{dt(item.action)}</p>
+                    <p className="mt-2 text-xs font-semibold text-kcs-gold-600 dark:text-kcs-gold-300">{dt(item.impact)}</p>
                   </div>
                 ))}
                 {financeReadiness.slice(1).map((item) => (
-                  <div key={item.feature} className="rounded-xl border border-green-100 bg-green-50 p-4 dark:border-green-900/30 dark:bg-green-900/10">
-                    <p className="text-sm font-semibold text-green-800 dark:text-green-300">{item.feature}</p>
-                    <p className="mt-1 text-xs text-green-700 dark:text-green-400">{item.note}</p>
+                  <div key={dt(item.feature)} className="rounded-xl border border-green-100 bg-green-50 p-4 dark:border-green-900/30 dark:bg-green-900/10">
+                    <p className="text-sm font-semibold text-green-800 dark:text-green-300">{dt(item.feature)}</p>
+                    <p className="mt-1 text-xs text-green-700 dark:text-green-400">{dt(item.note)}</p>
                   </div>
                 ))}
               </div>
@@ -4198,41 +4201,41 @@ const AdminDashboard = () => {
 
           <div className="grid gap-6 xl:grid-cols-3">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Student Risk Control</h2>
+              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">{dt("Student Risk Control")}</h2>
               <div className="space-y-3">
                 {officialRoster.slice(0, 6).map((student) => (
                   <div key={student.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
-                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${pillTone(student.discipline)}`}>{student.discipline}</span>
+                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${pillTone(student.discipline)}`}>{dt(student.discipline)}</span>
                     </div>
-                    <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">{formatClassName(student.grade, student.section)} - GPA {student.gpa} - attendance {student.attendance}% - parent: {student.parent}</p>
+                    <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">{formatClassName(student.grade, student.section)} - GPA {student.gpa} - {dt('attendance')} {student.attendance}% - {dt('parent:')} {student.parent}</p>
                   </div>
                 ))}
               </div>
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Staff Operations</h2>
+              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">{dt("Staff Operations")}</h2>
               <div className="space-y-3">
                 {staffOperations.map((item) => (
-                  <div key={item.function} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+                  <div key={dt(item.function)} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.function}</p>
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{dt(item.function)}</p>
                       <span className="font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{item.value}</span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.metric} • {item.status}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{dt(item.metric)} • {dt(item.status)}</p>
                   </div>
                 ))}
               </div>
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Sensitive Audit Logs</h2>
+              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">{dt("Sensitive Audit Logs")}</h2>
               <div className="space-y-3">
                 {auditLogs.map((log) => (
                   <div key={`${log.actor}-${log.time}`} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{log.action}</p>
+                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{dt(log.action)}</p>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{log.actor} • {log.target}</p>
                     <p className="mt-1 text-xs text-gray-400">{log.time}</p>
                   </div>
@@ -4243,18 +4246,18 @@ const AdminDashboard = () => {
 
           <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="font-bold text-kcs-blue-900 dark:text-white">Schedule Conflict Control</h2>
+              <h2 className="font-bold text-kcs-blue-900 dark:text-white">{dt("Schedule Conflict Control")}</h2>
               <span className="badge-blue text-xs">Teacher • room • class timetable</span>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               {scheduleConflicts.map((conflict) => (
-                <div key={conflict.title} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+                <div key={dt(conflict.title)} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{conflict.title}</p>
-                    <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{conflict.severity}</span>
+                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{dt(conflict.title)}</p>
+                    <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{dt(conflict.severity)}</span>
                   </div>
-                  <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">{conflict.detail}</p>
-                  <p className="mt-2 text-xs text-gray-400">Notify: {conflict.affected.join(', ')}</p>
+                  <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">{dt(conflict.detail)}</p>
+                  <p className="mt-2 text-xs text-gray-400">{dt('Notify:')} {conflict.affected.map(dt).join(', ')}</p>
                 </div>
               ))}
             </div>
@@ -4267,19 +4270,19 @@ const AdminDashboard = () => {
             </div>
           </section>
           {reportCardControl && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4" role="dialog" aria-modal="true" aria-label="Report card control">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4" role="dialog" aria-modal="true" aria-label={dt('Report card control')}>
               <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900">
                 <div className="flex items-start justify-between gap-4">
-                  <div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">Super Admin report card control</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{reportCardControl.student}</h2></div>
-                  <button type="button" onClick={() => setReportCardControl(null)} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-kcs-blue-800" aria-label="Close"><X size={18}/></button>
+                  <div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">{dt("Super Admin report card control")}</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{reportCardControl.student}</h2></div>
+                  <button type="button" onClick={() => setReportCardControl(null)} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-kcs-blue-800" aria-label={dt('Close')}><X size={18}/></button>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">Academic period</p><p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{reportCardControl.term ?? reportCardControl.years}</p></div>
-                  <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">Workflow status</p><p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{reportCardControl.principalStatus ?? reportCardControl.status}</p></div>
+                  <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{dt("Academic period")}</p><p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{reportCardControl.term ?? reportCardControl.years}</p></div>
+                  <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{dt("Workflow status")}</p><p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{reportCardControl.principalStatus ?? reportCardControl.status}</p></div>
                 </div>
                 <div className="mt-5 flex flex-wrap justify-end gap-2">
-                  <button type="button" onClick={() => { exportAdminReport('academic', 'monthly', 'pdf', officialRoster.filter((student) => student.name === reportCardControl.student), admissionRequests); setDashboardAction(`Academic document generated for ${reportCardControl.student}.`) }} className={adminButton}><Download size={16}/> Download</button>
-                  <button type="button" onClick={() => { setDashboardAction(`${reportCardControl.student}'s academic document was approved for publication.`); setReportCardControl(null) }} className={adminButton}><CheckCircle2 size={16}/> Approve and publish</button>
+                  <button type="button" onClick={() => { exportAdminReport('academic', 'monthly', 'pdf', officialRoster.filter((student) => student.name === reportCardControl.student), admissionRequests); setDashboardAction(`Academic document generated for ${reportCardControl.student}.`) }} className={adminButton}><Download size={16}/> {dt("Download")}</button>
+                  <button type="button" onClick={() => { setDashboardAction(`${reportCardControl.student}'s academic document was approved for publication.`); setReportCardControl(null) }} className={adminButton}><CheckCircle2 size={16}/> {dt("Approve and publish")}</button>
                 </div>
               </div>
             </div>
