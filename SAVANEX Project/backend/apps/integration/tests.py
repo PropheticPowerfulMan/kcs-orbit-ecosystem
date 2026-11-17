@@ -1,3 +1,4 @@
+from apps.communication.models import Notification
 from unittest.mock import patch
 
 from django.test import TestCase, override_settings
@@ -243,6 +244,12 @@ class EcosystemEmployeeIntegrationTests(TestCase):
         sync_teacher.assert_called_once_with(teacher)
         deliver.assert_called_once()
         self.assertEqual(response.data['notificationDelivery'], [])
+        deliver.reset_mock()
+        response = self.client.patch(f'/api/integration/employees/{teacher.pk}/', {'first_name':'Immediate'}, format='json', HTTP_X_API_KEY='nexus-test-key', HTTP_X_KCS_NOTIFICATION_OWNER='NEXUS')
+        self.assertEqual(response.status_code,200,response.data)
+        deliver.assert_not_called()
+        self.assertEqual(Notification.objects.filter(user=user).count(),1)
+
 
 
 @override_settings(KCS_NEXUS_AUTH_KEY='synthetic-graduation-key')

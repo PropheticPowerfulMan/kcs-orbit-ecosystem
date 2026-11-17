@@ -295,12 +295,14 @@ export const studentsAPI = {
 // --- Registry API ---
 export const registryAPI = {
   getFamilies: () => api.get('/registry/families'),
-  getDirectory: (forceRefresh = false, requireFresh = false) => api.get('/registry/directory', {
-    timeout: 60_000,
-    params: forceRefresh || requireFresh
-      ? { force: '1', ...(requireFresh ? { requireFresh: '1' } : {}), _fresh: Date.now() }
+  getDirectory: (forceRefresh = false, requireFresh = false, compact = false) => api.get('/registry/directory', {
+    timeout: compact ? 15_000 : 60_000,
+    ...(compact ? { headers: { 'x-no-network-retry': 'true' } } : {}),
+    params: forceRefresh || requireFresh || compact
+      ? { ...(compact ? { compact: '1' } : {}), ...(forceRefresh || requireFresh ? { force: '1', _fresh: Date.now() } : {}), ...(requireFresh ? { requireFresh: '1' } : {}) }
       : undefined,
   }),
+
   createEntity: (entityType: 'parent' | 'student' | 'teacher', data: object) => api.post(`/registry/entities/${entityType}`, data),
   updateEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, data: object, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.patch(`/registry/entities/${entityType}/${identifier}`, data, { params: { identifierType } }),
   resetAccess: (entityType: 'parent' | 'student' | 'teacher', identifier: string) => api.post(`/registry/entities/${entityType}/${encodeURIComponent(identifier)}/reset-access`),
@@ -423,6 +425,7 @@ export const admissionsAPI = {
     api.post('/admissions', data),
   updateStatus: (id: string, status: string, notes?: string) =>
     api.patch(`/admissions/${id}/status`, { status, notes }),
+  deleteRejected: (id: string) => api.delete('/admissions/' + encodeURIComponent(id), { data: { confirmed: true }, timeout: 20000 }),
   approve: (id: string, options?: { language?: 'fr' | 'en'; includeAuthentication?: boolean; academicYear?: string }) => api.post('/admissions/' + id + '/approve', options ?? {}),
   uploadDocument: (id: string, formData: FormData) =>
     api.post(`/admissions/${id}/documents`, formData, {
@@ -592,6 +595,8 @@ export const lessonPlanAPI = {
 export const academicCalendarAPI = {
   attendanceSettings: (academicYear: string) => api.get('/academic-calendar/attendance-settings', {params:{academicYear}}),
   saveAttendanceSettings: (data: unknown) => api.put('/academic-calendar/attendance-settings', data),
+  reopenings: () => api.get('/academic-calendar/reopenings'),
+  reopenPeriod: (data: object) => api.post('/academic-calendar/reopen-period', data, { headers: { 'x-ui-language': useUIStore.getState().language } }),
   periodAccess: () => api.get('/academic-calendar/period-access'),
   closePeriod: (academicYear: string, term: string, confirmation: string) => api.post('/academic-calendar/close-period', { academicYear, term, confirmation }, { timeout: 90_000, headers: { 'x-silent-feedback': 'true', 'x-ui-language': useUIStore.getState().language } }),
   current: () => api.get('/academic-calendar/current'),
@@ -619,6 +624,7 @@ export const academicRecordsAPI = {
   teacherReportDashboard: (params: { academicYear: string; term: string }) => api.get('/academic-records/report-cards/teacher-dashboard', { params, timeout: 30_000 }),
   teacherReportStudentPhoto: (studentId: string) => api.get('/academic-records/report-cards/student-photo/' + studentId, { timeout: 15_000 }),
   saveTeacherReportDraft: (studentId: string, data: object, silentFeedback = false) => api.put(`/academic-records/report-cards/teacher-draft/${studentId}`, data, {headers:{'x-silent-feedback':String(silentFeedback)}}),
+  restoreTeacherReportVisibility: (studentId:string,data:{academicYear:string;term:string;confirmed:true}) => api.post('/academic-records/report-cards/teacher-visibility/restore/'+encodeURIComponent(studentId),data,{headers:{'x-silent-feedback':'true'}}),
   updateTeacherReportVisibilityBulk: (data: { academicYear: string; term: string; action: 'HIDE' | 'RESTORE'; studentIds: string[]; courseIds: string[] }) => api.post('/academic-records/report-cards/teacher-visibility/bulk', data),
   submitTeacherReport: (studentId: string, data: object, silentFeedback = false) => api.post(`/academic-records/report-cards/teacher-submit/${studentId}`, data, {headers:{'x-silent-feedback':String(silentFeedback)}}),
   review: (params?: object) => api.get('/academic-records/review', { params, timeout: 60_000 }),

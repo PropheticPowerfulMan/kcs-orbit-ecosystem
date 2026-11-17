@@ -150,6 +150,7 @@ export const ParentPayloadSchema = z.object({
   mustChangePassword: z.boolean().optional(),
   photoData: z.string().optional(),
   photoSource: TrimmedStringSchema.optional(),
+  additionalEmails: z.array(z.string().trim().email()).max(3).optional(),
   familyContacts: z.array(z.object({
     kind: z.enum(["MOTHER", "RELATIVE", "HOUSEHOLD_AGENT"]),
     firstName: TrimmedStringSchema,

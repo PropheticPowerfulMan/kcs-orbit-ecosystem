@@ -618,3 +618,14 @@ model KitchenManagerInbox {
   @@index([createdAt])
   @@index([readAt, createdAt])
 }
+
+model KitchenManagerCredential {
+  id String @id @default(cuid())
+  orbitPersonId String @unique
+  nexusUserId String @unique
+  email String @unique
+  passwordHash String
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

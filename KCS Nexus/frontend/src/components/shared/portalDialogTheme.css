@@ -29,3 +29,15 @@ body[data-nexus-dashboard] [data-nexus-dialog-panel][data-nexus-dialog-level=pol
 body[data-nexus-dashboard] [data-nexus-dialog-panel][data-nexus-dialog-level=full] [data-nexus-dialog-header]{padding:17px 18px;border-radius:16px;background:linear-gradient(110deg,#e3f2fa,#eff8fc);color:#0b304e}
 .dark body[data-nexus-dashboard] [data-nexus-dialog-panel][data-nexus-dialog-level=full] [data-nexus-dialog-header]{background:linear-gradient(110deg,#123e58,#123149);color:#e8f4ff}
 body[data-nexus-dashboard] [data-nexus-dialog-panel][data-nexus-dialog-level=full] [data-nexus-dialog-title]{letter-spacing:-.025em}
+
+
+/* Shared viewport guard applies to modern and legacy panels without replacing their design. */
+body[data-nexus-dashboard] [data-nexus-dialog=overlay]{top:var(--nexus-dialog-viewport-top,0px)!important;bottom:auto!important;height:var(--nexus-dialog-viewport-height,100vh)!important;max-height:var(--nexus-dialog-viewport-height,100vh)!important;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain}
+body[data-nexus-dashboard] [data-nexus-dialog-panel]{min-height:0!important;max-height:calc(100vh - 24px);max-height:var(--nexus-dialog-room,calc(100vh - 24px))!important;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#3d87a8 transparent;scrollbar-gutter:stable}
+body[data-nexus-dashboard] [data-nexus-dialog-panel]::-webkit-scrollbar,body[data-nexus-dashboard] [data-newsroom-dialog-body]::-webkit-scrollbar{width:8px}
+body[data-nexus-dashboard] [data-nexus-dialog-panel]::-webkit-scrollbar-thumb,body[data-nexus-dashboard] [data-newsroom-dialog-body]::-webkit-scrollbar-thumb{background:#3d87a8;border-radius:8px}
+body[data-nexus-dashboard] [data-newsroom-dialog-panel]{height:var(--nexus-dialog-room,calc(100vh - 32px));max-height:900px!important;display:grid!important;grid-template-rows:auto minmax(0,1fr);overflow:hidden!important}
+body[data-nexus-dashboard] [data-newsroom-dialog-panel]>header{min-height:0;flex-shrink:0}
+body[data-nexus-dashboard] [data-newsroom-dialog-body]{min-height:0;overflow-y:scroll;overscroll-behavior:contain;scrollbar-gutter:stable;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+body[data-nexus-dashboard] [data-newsroom-dialog-panel][data-nexus-dialog-compact=true]>header{padding:10px 12px}
+body[data-nexus-dashboard] [data-newsroom-dialog-panel][data-nexus-dialog-compact=true]>header h2{margin-top:3px;font-size:16px;line-height:1.25}

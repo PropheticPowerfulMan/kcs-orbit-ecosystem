@@ -5,7 +5,7 @@ import { ApiError, asyncHandler } from '../utils/api.js'
 import { renderOfficialPdf } from '../services/reportPdfRenderer.service.js'
 
 const MAX_SNAPSHOT_BYTES = 6 * 1024 * 1024
-const snapshotSchema = z.object({ html: z.string().min(40).max(MAX_SNAPSHOT_BYTES), filename: z.string().min(1).max(180) }).strict()
+const snapshotSchema = z.object({ html: z.string().min(40).max(MAX_SNAPSHOT_BYTES), filename: z.string().min(1).max(240) }).strict()
 
 export function pdfSnapshot(input: unknown) {
   const data = snapshotSchema.parse(input)
@@ -17,7 +17,7 @@ export function pdfSnapshot(input: unknown) {
   if (urls.some(([, value]) => !/^(?:data:image\/(?:png|jpe?g|webp|svg\+xml|gif);|#|https?:\/\/)/i.test(value))) throw new ApiError(400, 'Invalid document resource')
   // External links remain clickable. Images/styles must already be self-contained.
   if (/<(?:img|image)\b[^>]*(?:src|href)\s*=\s*["'](?!data:image\/)/i.test(data.html) || [...data.html.matchAll(/url\(\s*(?:["']([^"']*)["']|([^\s)]+))\s*\)/gi)].some(([, quoted, bare]) => !/^(?:data:|#)/i.test(quoted ?? bare))) throw new ApiError(400, 'Document images and styles must be embedded')
-  const filename = data.filename.replace(/[\x00-\x1f\x7f/\\<>:"|?*]/g, '-').replace(/\.pdf$/i, '').trim().slice(0, 140) || 'KCS-document'
+  const filename = data.filename.replace(/[\x00-\x1f\x7f/\\<>:"|?*]/g, '-').replace(/\.pdf$/i, '').trim().slice(0, 200) || 'KCS-document'
   return { html: data.html, filename: filename + '.pdf' }
 }
 

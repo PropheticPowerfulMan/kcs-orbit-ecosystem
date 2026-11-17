@@ -1,3 +1,4 @@
+import { prisma } from './db.js'
 import type { NextFunction, Request, Response } from 'express'
 import {createAccessVerifier} from './ecosystemAccessVerifier.js'
 import jwt from 'jsonwebtoken'
@@ -14,10 +15,15 @@ export type KitchenIdentity = {
   personType: PersonType
   role: KitchenRole
   hasOfficialPhoto: boolean
+  isSuperAdministrator?: boolean
+  credentialScope?: 'KITCHEN_LOCAL'
+  credentialVersion?: number
   canManageOwnCredentials: boolean
 }
 
 export type AuthRequest = Request & { kitchenUser?: KitchenIdentity }
+
+export async function verifyKitchenIdentityAccess(identity:KitchenIdentity){await verifyEcosystemAccess([identity.userId,identity.orbitPersonId,identity.email])}
 
 export function signSession(identity: KitchenIdentity) {
   return jwt.sign(identity, env.JWT_SECRET, { expiresIn: '8h', issuer: 'kcs-kitchen' })
@@ -29,6 +35,16 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
   try {
     req.kitchenUser = jwt.verify(header.slice(7), env.JWT_SECRET, { issuer: 'kcs-kitchen' }) as KitchenIdentity
     await verifyEcosystemAccess([req.kitchenUser.userId,req.kitchenUser.orbitPersonId,req.kitchenUser.email])
+    if (req.kitchenUser.role === 'KITCHEN_ADMIN' || req.kitchenUser.credentialScope === 'KITCHEN_LOCAL' || (req.kitchenUser.role === 'CASHIER' && !req.kitchenUser.userId.startsWith('kitchen-cashier:'))) {
+      const row=await prisma.kitchenManagerCredential.findUnique({where:{orbitPersonId:req.kitchenUser.orbitPersonId}})
+      if(row){
+        const access=await prisma.kitchenAccess.findUnique({where:{orbitPersonId:req.kitchenUser.orbitPersonId}})
+        if(!access?.isActive||access.role!=='KITCHEN_ADMIN')return res.status(403).json({message:'Kitchen manager access is disabled'})
+        if(row.nexusUserId!==req.kitchenUser.userId||req.kitchenUser.credentialScope!=='KITCHEN_LOCAL'||row.version!==req.kitchenUser.credentialVersion)return res.status(401).json({message:'Kitchen credentials changed. Sign in again.'})
+        req.kitchenUser.email=row.email
+      }else if(req.kitchenUser.credentialScope==='KITCHEN_LOCAL')return res.status(401).json({message:'Kitchen manager account is no longer available'})
+      else if(req.kitchenUser.role==='KITCHEN_ADMIN'&&!req.kitchenUser.isSuperAdministrator){const access=await prisma.kitchenAccess.findUnique({where:{orbitPersonId:req.kitchenUser.orbitPersonId}});if(!access?.isActive||access.role!=='KITCHEN_ADMIN')return res.status(403).json({message:'Kitchen manager access is disabled'})}
+    }
     if (req.kitchenUser.personType === 'STUDENT') {
       const url = new URL('/api/integration/read/identity-access/'+encodeURIComponent(req.kitchenUser.orbitPersonId),env.ORBIT_API_URL)
       url.searchParams.set('organizationId',env.ORBIT_ORGANIZATION_ID)

@@ -17,7 +17,7 @@ export async function submitCourseFinalGrades(actorId: string, payload: Submissi
   const window = await attendanceWindow(payload.academicYear, payload.term)
   await academicPeriodAccess()
   return prisma.$transaction(async tx => {
-    await protectGradebookEntry(tx, payload.academicYear, payload.term)
+    await protectGradebookEntry(tx, payload.academicYear, payload.term, actorId)
     await tx.$queryRaw(Prisma.sql`SELECT id FROM "Course" WHERE id = ${payload.courseId} FOR UPDATE`)
     const course = await tx.course.findUnique({ where: { id: payload.courseId }, include: { teacher: true, enrollments: { select: { studentId: true, student: { select: { studentNumber: true, user: { select: { orbitUserId: true } } } } } } } })
     if (!course) throw new ApiError(404, 'Course not found')

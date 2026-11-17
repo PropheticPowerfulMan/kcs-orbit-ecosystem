@@ -1,3 +1,4 @@
+import { familyEmailRecipients } from '../services/familyEmailRecipients.js'
 import { timingSafeEqual } from 'node:crypto'
 import { Router } from 'express'
 import { z } from 'zod'
@@ -39,7 +40,7 @@ sentinelNotificationsRouter.post('/deliver', asyncHandler(async (req, res) => {
         ...(input.email ? [{ email: { equals: input.email, mode: 'insensitive' as const } }] : []),
       ],
     },
-    select: { id: true, email: true, phone: true },
+    select: { id: true, email: true, phone: true, role: true, firstName: true, middleName: true, lastName: true },
   })
   const eventLink = `/sentinel/#alert-${encodeURIComponent(input.eventId)}`
   const existing = user
@@ -49,10 +50,9 @@ sentinelNotificationsRouter.post('/deliver', asyncHandler(async (req, res) => {
     return success(res, { delivered: true, duplicate: true, notificationId: existing.id, email: 'SKIPPED', sms: 'SKIPPED' }, 'Sentinel event already delivered')
   }
 
-  const [emailResult, smsResult] = await Promise.all([
-    input.channels.includes('EMAIL') && (user?.email || input.email)
-      ? sendSchoolMail({ to: user?.email || input.email, subject: input.title, text: input.text, branded: true })
-      : Promise.resolve(null),
+  const recipients = user?.role === 'PARENT' ? ((await familyEmailRecipients([user])).get(user.id) ?? []).map(target => target.email) : [user?.email || input.email].filter((email): email is string => Boolean(email))
+  const [emailResults, smsResult] = await Promise.all([
+    input.channels.includes('EMAIL') ? Promise.all(recipients.map(to => sendSchoolMail({ to, subject: input.title, text: input.text, branded: true }))) : Promise.resolve([]),
     input.channels.includes('SMS')
       ? sendSchoolSms(user?.phone || input.phone, input.text, { brand: false })
       : Promise.resolve(null),
@@ -67,7 +67,7 @@ sentinelNotificationsRouter.post('/deliver', asyncHandler(async (req, res) => {
     delivered: true,
     nexusAccount: Boolean(user),
     notificationId: notification?.id || null,
-    email: emailResult ? (emailResult.sent ? 'SENT' : emailResult.reason) : 'SKIPPED',
+    email: emailResults.length ? (emailResults.every(result => result.sent) ? 'SENT' : emailResults.find(result => !result.sent)?.reason) : 'SKIPPED',
     sms: smsResult ? (smsResult.sent ? 'SENT' : smsResult.reason) : 'SKIPPED',
   }, 'Sentinel late-arrival alert processed')
 }))

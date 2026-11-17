@@ -33,6 +33,7 @@ export type OrbitRegistryEntitySnapshot = {
   jobTitle?: string | null
   subject?: string | null
   mustChangePassword?: boolean
+  additionalEmails?: string[]
   familyContacts?: Array<{ email?: string | null; phone?: string | null }>
   externalIds?: Array<{ appSlug: string; externalId: string }>
 }
@@ -71,7 +72,7 @@ const mutableOrbitFields = new Set([
   'fullName', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'accessCode',
   'photoData', 'photoSource', 'physicalAddress', 'studentNumber', 'studentIds',
   'className', 'status', 'dateOfBirth', 'gender', 'parentId', 'employeeId',
-  'employeeType', 'department', 'jobTitle', 'subject', 'mustChangePassword', 'familyContacts',
+  'employeeType', 'department', 'jobTitle', 'subject', 'mustChangePassword', 'familyContacts', 'additionalEmails',
 ])
 
 export function buildOrbitRollbackPatch(before: OrbitRegistryEntitySnapshot, requestedPatch: OrbitRegistryEntitySnapshot): OrbitRollbackPlan {

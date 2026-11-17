@@ -1,3 +1,6 @@
+import { hashLocalPassword, verifyLocalPassword } from './local-password.js'
+import { bootstrapManagerCredential, managerCredentialForChange, KitchenCredentialError } from './manager-credentials.js'
+import { passwordPolicyIssues } from './password-policy.js'
 import { resolveSalePortion } from './sale-portion.js'
 import express, { type NextFunction, type Request, type Response } from 'express'
 import cors from 'cors'
@@ -9,7 +12,7 @@ import { Prisma, type KitchenRole, type PersonType } from '@prisma/client'
 import { z } from 'zod'
 import { env } from './config.js'
 import { prisma } from './db.js'
-import { allow, authenticate, signSession, type AuthRequest, type KitchenIdentity } from './auth.js'
+import { allow, authenticate, signSession, verifyKitchenIdentityAccess, type AuthRequest, type KitchenIdentity } from './auth.js'
 import { calculateSchoolSubsidy } from './staff-subsidy.js'
 import { DAILY_STAPLE_PRODUCT_NAMES, ensureOfficialMenu } from './kcs-menu-2026.js'
 import { loadDirectory, resolvePerson } from './directory.js'
@@ -104,21 +107,6 @@ const statementVerificationKeys = loadStatementVerificationKeys()
 const asyncRoute = (handler: (req: any, res: Response, next: NextFunction) => Promise<unknown>) =>
   (req: Request, res: Response, next: NextFunction) => void handler(req, res, next).catch(next)
 
-function hashLocalPassword(password: string) {
-  const salt = crypto.randomBytes(16)
-  const digest = crypto.scryptSync(password, salt, 64)
-  return `scrypt:${salt.toString('hex')}:${digest.toString('hex')}`
-}
-
-function verifyLocalPassword(password: string, stored: string) {
-  const [algorithm, saltHex, digestHex] = stored.split(':')
-  if (algorithm !== 'scrypt' || !saltHex || !digestHex) return false
-  try {
-    const expected = Buffer.from(digestHex, 'hex')
-    const actual = crypto.scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length)
-    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual)
-  } catch { return false }
-}
 
 function routeParam(req: Request, name: string) { return String(req.params[name] || '') }
 
@@ -173,8 +161,9 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   }).parse(req.body)
 
   const normalizedIdentifier = payload.identifier.toLowerCase()
-  const requestedMode = payload.accessMode || 'CUSTOMER'
-  const cashier = ['CASHIER', 'STAFF'].includes(requestedMode)
+  const requestedMode = payload.accessMode || 'AUTO'
+  const managerAdminMode = requestedMode === 'ADMIN' || requestedMode === 'AUTO'
+  const cashier = ['CASHIER', 'STAFF', 'AUTO'].includes(requestedMode)
     ? await prisma.kitchenCashierAccount.findUnique({ where: { email: normalizedIdentifier } })
     : null
   if (cashier) {
@@ -193,6 +182,18 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     }
     await prisma.kitchenCashierAccount.update({ where: { id: cashier.id }, data: { lastLoginAt: new Date() } })
     return res.json({ token: signSession(identity), user: identity })
+  }
+
+  const manager = requestedMode !== 'CUSTOMER' ? await prisma.kitchenManagerCredential.findUnique({ where: { email: normalizedIdentifier } }) : null
+  if (manager) {
+    const access = await prisma.kitchenAccess.findUnique({ where: {orbitPersonId:manager.orbitPersonId} })
+    if (!access?.isActive || access.role !== 'KITCHEN_ADMIN' || !verifyLocalPassword(payload.password, manager.passwordHash)) return res.status(401).json({message:'Kitchen manager email or password is incorrect'})
+    const person = await resolvePerson(manager.orbitPersonId)
+    if (!person) return res.status(403).json({message:'The official manager identity is not active'})
+    const identity: KitchenIdentity = {userId:manager.nexusUserId,orbitPersonId:manager.orbitPersonId,email:manager.email,fullName:person.fullName,personType:access.personType,role:managerAdminMode?'KITCHEN_ADMIN':'CASHIER',hasOfficialPhoto:Boolean(person.photoData),canManageOwnCredentials:managerAdminMode,credentialScope:'KITCHEN_LOCAL',credentialVersion:manager.version}
+    // Reuse the central blocking verifier before issuing a local session.
+    await verifyKitchenIdentityAccess(identity)
+    return res.json({token:signSession(identity),user:identity})
   }
 
   const response = await fetch(new URL('/api/auth/login', env.NEXUS_API_URL), {
@@ -215,9 +216,11 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const type = person ? personTypeFrom(person.kind) : 'ADMINISTRATIVE_STAFF'
   const access = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId } })
   const personalRole = defaultRole(String(nexusUser.role), type)
+  if (requestedMode !== 'CUSTOMER' && await prisma.kitchenManagerCredential.findUnique({where:{orbitPersonId}})) return res.status(401).json({message:'Use your current Kitchen manager email and password. Institutional consumer access remains separate.'})
   if (access && !access.isActive) return res.status(403).json({ message: 'KCS Kitchen access is disabled' })
 
   const identity: KitchenIdentity = {
+    isSuperAdministrator: nexusUser.isSuperAdministrator === true,
     userId: String(nexusUser.id),
     orbitPersonId,
     fullName: person?.fullName || [nexusUser.lastName, nexusUser.firstName].filter(Boolean).join(' ') || 'KCS Administrator',
@@ -231,6 +234,11 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
       explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
     }),
   }
+  if (requestedMode !== 'CUSTOMER' && identity.role === 'KITCHEN_ADMIN' && identity.canManageOwnCredentials && !nexusUser.isSuperAdministrator) {
+    const local = await bootstrapManagerCredential(identity,payload.password,nexusUser)
+    identity.email=local.email;identity.credentialScope='KITCHEN_LOCAL';identity.credentialVersion=local.version
+  }
+  if (nexusUser.isSuperAdministrator) identity.canManageOwnCredentials=false
   if (requestedMode === 'CUSTOMER') {
     if (!['TEACHER', 'STAFF', 'STUDENT'].includes(personalRole)) {
       return res.status(403).json({ message: 'This portal is reserved for Kitchen consumers with an active Orbit identity' })
@@ -245,7 +253,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     }
     identity.canManageOwnCredentials = false
   }
-  if (requestedMode === 'ADMIN' && identity.role !== 'KITCHEN_ADMIN') {
+  if (requestedMode === 'ADMIN' && identity.role !== 'KITCHEN_ADMIN' && !identity.isSuperAdministrator) {
     return res.status(403).json({ message: 'Only the explicitly assigned Kitchen manager may use the administration portal' })
   }
   res.json({ token: signSession(identity), user: identity })
@@ -256,71 +264,51 @@ app.get('/api/me', authenticate, asyncRoute(async (req: AuthRequest, res) => {
   res.json({ user: req.kitchenUser, balance })
 }))
 
-app.put('/api/me/change-password', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
-  const access = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId: req.kitchenUser!.orbitPersonId } })
-  if (!canManageOwnKitchenCredentials({
-    userId: req.kitchenUser!.userId,
-    orbitPersonId: req.kitchenUser!.orbitPersonId,
-    explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
-  })) return res.status(403).json({ message: 'Only the explicitly assigned Kitchen manager may change their own credentials. The Nexus Super Administrator account is protected.' })
-  const input = z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(14).max(128) }).parse(req.body)
-  const identifier = req.kitchenUser!.email
-  if (!identifier) return res.status(409).json({ message: 'No institutional email is linked to this Kitchen account' })
-  const loginResponse = await fetch(new URL('/api/auth/login', env.NEXUS_API_URL), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-kcs-client': 'KCS_KITCHEN' },
-    body: JSON.stringify({ identifier, password: input.currentPassword }),
-    signal: AbortSignal.timeout(12_000),
+const managerCredentialLimiter=rateLimit({windowMs:15*60_000,limit:10,standardHeaders:true,legacyHeaders:false,keyGenerator:(req)=>String((req as AuthRequest).kitchenUser?.userId||req.ip)})
+app.put('/api/me/change-password', authenticate, allow('KITCHEN_ADMIN'), managerCredentialLimiter, asyncRoute(async (req: AuthRequest, res) => {
+  const input=z.object({currentPassword:z.string().min(1).max(200),newPassword:z.string().min(14).max(128)}).parse(req.body)
+  const row=await managerCredentialForChange(req.kitchenUser!,input.currentPassword)
+  const issues=passwordPolicyIssues(input.newPassword,[req.kitchenUser!.fullName,row.email])
+  if(issues.length)throw new KitchenCredentialError(400,issues.join(' '))
+  if(input.currentPassword===input.newPassword)throw new KitchenCredentialError(400,'The new password must differ from the current password')
+  const hash=hashLocalPassword(input.newPassword)
+  await prisma.$transaction(async tx=>{
+    const changed=await tx.kitchenManagerCredential.updateMany({where:{id:row.id,nexusUserId:req.kitchenUser!.userId,version:row.version},data:{passwordHash:hash,version:{increment:1}}})
+    if(changed.count!==1)throw new KitchenCredentialError(409,'Kitchen credentials changed concurrently. Sign in again before retrying.')
+    await tx.auditLog.create({data:{actorId:req.kitchenUser!.orbitPersonId,actorRole:req.kitchenUser!.role,action:'KITCHEN_LOCAL_PASSWORD_CHANGED',entityType:'KitchenManagerCredential',entityId:row.id,newValue:{scope:'KITCHEN_ONLY',sessionsRevoked:true},ipAddress:req.ip}})
   })
-  const loginBody = await loginResponse.json().catch(() => null) as any
-  if (!loginResponse.ok || !loginBody?.data?.token) return res.status(400).json({ message: loginBody?.message || 'Current password is incorrect' })
-  if (!reauthenticatedAsSameAccount(req.kitchenUser!.userId, loginBody?.data?.user?.id)) {
-    return res.status(409).json({ message: 'The reauthenticated account does not match the Kitchen manager session. No credential was changed.' })
-  }
-  const changeResponse = await fetch(new URL('/api/auth/change-password', env.NEXUS_API_URL), {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + loginBody.data.token, 'x-kcs-client': 'KCS_KITCHEN' },
-    body: JSON.stringify(input),
-    signal: AbortSignal.timeout(12_000),
+  res.json({changed:true,scope:'KITCHEN_ONLY',signInAgain:true,message:'Kitchen password changed. Nexus and other accounts remain unchanged.'})
+}))
+app.put('/api/me/email', authenticate, allow('KITCHEN_ADMIN'), managerCredentialLimiter, asyncRoute(async (req:AuthRequest,res)=>{
+  const input=z.object({currentPassword:z.string().min(1).max(200),newEmail:z.string().trim().email().max(180)}).parse(req.body)
+  const row=await managerCredentialForChange(req.kitchenUser!,input.currentPassword),email=input.newEmail.toLowerCase()
+  const [officialPeople,cashier]=await Promise.all([loadDirectory(true),prisma.kitchenCashierAccount.findUnique({where:{email}})])
+  if(cashier||officialPeople.some(person=>person.id!==req.kitchenUser!.orbitPersonId&&person.email?.trim().toLowerCase()===email))throw new KitchenCredentialError(409,'This email is reserved for another institutional or cashier account')
+  const owner=await prisma.kitchenManagerCredential.findUnique({where:{email}})
+  if(owner&&owner.id!==row.id)throw new KitchenCredentialError(409,'This Kitchen email belongs to another manager')
+  await prisma.$transaction(async tx=>{
+    const changed=await tx.kitchenManagerCredential.updateMany({where:{id:row.id,nexusUserId:req.kitchenUser!.userId,version:row.version},data:{email,version:{increment:1}}})
+    if(changed.count!==1)throw new KitchenCredentialError(409,'Kitchen credentials changed concurrently. Sign in again before retrying.')
+    await tx.auditLog.create({data:{actorId:req.kitchenUser!.orbitPersonId,actorRole:req.kitchenUser!.role,action:'KITCHEN_LOCAL_EMAIL_CHANGED',entityType:'KitchenManagerCredential',entityId:row.id,oldValue:{email:row.email},newValue:{email,scope:'KITCHEN_ONLY'},ipAddress:req.ip}})
   })
-  const changeBody = await changeResponse.json().catch(() => null) as any
-  if (!changeResponse.ok) return res.status(changeResponse.status).json({ message: changeBody?.message || 'The ecosystem password could not be changed' })
-  await audit(req, 'INSTITUTIONAL_PASSWORD_CHANGED_FROM_KITCHEN', 'User', req.kitchenUser!.userId, undefined, { propagatedBy: 'NEXUS' })
-  res.json({ changed: true, message: 'Password changed across the KCS ecosystem. Sign in again with the new password.' })
+  res.json({changed:true,email,scope:'KITCHEN_ONLY',signInAgain:true,message:'Kitchen email changed. Institutional email remains unchanged.'})
+}))
+app.post('/api/access/:orbitPersonId/reset-kitchen-credentials',authenticate,asyncRoute(async(req:AuthRequest,res)=>{
+  if(!req.kitchenUser!.isSuperAdministrator)throw new KitchenCredentialError(403,'Only the Nexus Super Administrator may reset a manager Kitchen-only credential')
+  z.object({confirmed:z.literal(true)}).parse(req.body)
+  const orbitPersonId=routeParam(req,'orbitPersonId'),access=await prisma.kitchenAccess.findUnique({where:{orbitPersonId}})
+  if(!access?.isActive||access.role!=='KITCHEN_ADMIN')throw new KitchenCredentialError(409,'Select an active designated Kitchen manager')
+  const row=await prisma.kitchenManagerCredential.findUnique({where:{orbitPersonId}})
+  if(!row)throw new KitchenCredentialError(409,'This manager must first sign in using their institutional account')
+  let password='';do{password=crypto.randomBytes(18).toString('base64url')+'#aB7'}while(passwordPolicyIssues(password,[row.email]).length)
+  const hash=hashLocalPassword(password)
+  await prisma.$transaction(async tx=>{
+    await tx.kitchenManagerCredential.update({where:{id:row.id},data:{passwordHash:hash,version:{increment:1}}})
+    await tx.auditLog.create({data:{actorId:req.kitchenUser!.orbitPersonId,actorRole:req.kitchenUser!.role,action:'KITCHEN_LOCAL_MANAGER_ACCESS_RESET',entityType:'KitchenManagerCredential',entityId:row.id,newValue:{scope:'KITCHEN_ONLY',sessionsRevoked:true},ipAddress:req.ip}})
+  })
+  res.setHeader('Cache-Control','no-store');res.json({email:row.email,temporaryPassword:password,scope:'KITCHEN_ONLY'})
 }))
 
-app.put('/api/me/email', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
-  const access = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId: req.kitchenUser!.orbitPersonId } })
-  if (!canManageOwnKitchenCredentials({
-    userId: req.kitchenUser!.userId,
-    orbitPersonId: req.kitchenUser!.orbitPersonId,
-    explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
-  })) return res.status(403).json({ message: 'Only the explicitly assigned Kitchen manager may change their own credentials. The Nexus Super Administrator account is protected.' })
-  const input = z.object({ currentPassword: z.string().min(1).max(200), newEmail: z.string().trim().email().max(180) }).parse(req.body)
-  const identifier = req.kitchenUser!.email
-  if (!identifier) return res.status(409).json({ message: 'No institutional email is linked to this Kitchen account' })
-  const loginResponse = await fetch(new URL('/api/auth/login', env.NEXUS_API_URL), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-kcs-client': 'KCS_KITCHEN' },
-    body: JSON.stringify({ identifier, password: input.currentPassword }),
-    signal: AbortSignal.timeout(12_000),
-  })
-  const loginBody = await loginResponse.json().catch(() => null) as any
-  if (!loginResponse.ok || !loginBody?.data?.token) return res.status(400).json({ message: loginBody?.message || 'Current password is incorrect' })
-  if (!reauthenticatedAsSameAccount(req.kitchenUser!.userId, loginBody?.data?.user?.id)) {
-    return res.status(409).json({ message: 'The reauthenticated account does not match the Kitchen manager session. No credential was changed.' })
-  }
-  const updateResponse = await fetch(new URL('/api/auth/email', env.NEXUS_API_URL), {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + loginBody.data.token, 'x-kcs-client': 'KCS_KITCHEN' },
-    body: JSON.stringify(input),
-    signal: AbortSignal.timeout(12_000),
-  })
-  const updateBody = await updateResponse.json().catch(() => null) as any
-  if (!updateResponse.ok) return res.status(updateResponse.status).json({ message: updateBody?.message || 'The institutional email could not be changed' })
-  await audit(req, 'INSTITUTIONAL_EMAIL_CHANGED_FROM_KITCHEN', 'User', req.kitchenUser!.userId, { email: identifier }, { email: input.newEmail.toLowerCase() })
-  res.json({ changed: true, email: input.newEmail.toLowerCase(), message: 'Institutional email updated. Sign in again with the new address.' })
-}))
 app.get('/api/me/avatar', authenticate, asyncRoute(async (req: AuthRequest, res) => {
 
   const people = await loadDirectory()
@@ -460,7 +448,11 @@ app.post('/api/discount-rules', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'),
   res.status(201).json({ rule })
 }))
 
-app.put('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+const allowAccessManagement=(readOnly=false)=>(req:AuthRequest,res:Response,next:NextFunction)=>{
+ if(req.kitchenUser?.isSuperAdministrator||req.kitchenUser?.role==='KITCHEN_ADMIN'||readOnly&&['FINANCE','AUDITOR'].includes(req.kitchenUser?.role||''))return next()
+ return res.status(403).json({message:'Kitchen access-management permission required'})
+}
+app.put('/api/access/:orbitPersonId', authenticate, allowAccessManagement(), asyncRoute(async (req: AuthRequest, res) => {
   const person = await resolvePerson(routeParam(req, 'orbitPersonId'))
   if (!person) return res.status(404).json({ message: 'Active Orbit identity not found' })
   const data = z.object({
@@ -500,7 +492,7 @@ app.put('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN'), asyn
   res.json({ access })
 }))
 
-app.get('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'), asyncRoute(async (req, res) => {
+app.get('/api/access/:orbitPersonId', authenticate, allowAccessManagement(true), asyncRoute(async (req, res) => {
   const person = await resolvePerson(routeParam(req, 'orbitPersonId'))
   if (!person) return res.status(404).json({ message: 'Active Orbit identity not found' })
   const [access, payments, balance] = await Promise.all([
@@ -509,7 +501,7 @@ app.get('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN', 'FINA
     balanceFor(person.id)
   ])
   res.setHeader('Cache-Control', 'no-store')
-  res.json({ person, access, payments, balance })
+  res.json({ person, access, payments, balance, canResetManagerCredentials:Boolean((req as AuthRequest).kitchenUser?.isSuperAdministrator), managerLocalCredential:await prisma.kitchenManagerCredential.findUnique({where:{orbitPersonId:person.id},select:{email:true}}) })
 }))
 
 app.get('/api/debts', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'AUDITOR'), asyncRoute(async (_req, res) => {
@@ -2131,6 +2123,7 @@ app.get('/api/audit', authenticate, allow('KITCHEN_ADMIN', 'AUDITOR'), asyncRout
 
 app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof z.ZodError) return res.status(400).json({ message: 'Validation failed', fields: error.flatten().fieldErrors })
+  if (error?.code === 'P2002') return res.status(409).json({message:'This value is already assigned to another account. No change was made.'})
   if (error?.code === 'P2025') return res.status(404).json({ message: 'Record not found' })
   const status = Number(error?.statusCode || 500)
   if (status >= 500) console.error(error)

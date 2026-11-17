@@ -1,3 +1,5 @@
+import { env } from '../config/env.js'
+import { Prisma } from '@prisma/client'
 import { Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
@@ -115,9 +117,18 @@ admissionsRouter.post('/', upload.any(), asyncHandler(async (req, res) => {
 admissionsRouter.post('/:id/approve', authenticate, requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const certificateOptions = z.object({ language: z.enum(['fr', 'en']).default('fr'), includeAuthentication: z.boolean().default(true), academicYear: z.string().trim().regex(/^\d{4}-\d{4}$/).default('2026-2027') }).parse(req.body || {})
   const id = getRouteParam(req.params.id)
-  const application = await prisma.admissionApplication.findUnique({ where: { id }, include: { documents: true } })
-  if (!application) throw new ApiError(404, 'Application not found')
-  if (application.provisionedAt) throw new ApiError(409, 'This application has already been provisioned')
+  const actorId = req.user!.sub === 'configured-superadmin' ? (await prisma.user.findUnique({ where: { email: env.SUPERADMIN_EMAIL }, select: { id: true } }))?.id : req.user!.sub
+  const application = await prisma.$transaction(async tx => {
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "AdmissionApplication" WHERE id = ${id} FOR UPDATE`)
+    const current = await tx.admissionApplication.findUnique({ where: { id }, include: { documents: true } })
+    if (!current) throw new ApiError(404, 'Application not found')
+    if (current.provisionedAt || current.provisionedParentId) throw new ApiError(409, 'This application has already been provisioned')
+    const attempt = await tx.auditLog.findFirst({ where: { targetType: 'AdmissionApplication', targetId: id, action: { in: ['ADMISSION_TRANSFER_STARTED', 'ADMISSION_TRANSFER_FAILED', 'ADMISSION_TRANSFER_COMPLETED'] } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
+    if (attempt?.action === 'ADMISSION_TRANSFER_STARTED') throw new ApiError(409, 'An enrollment transfer is already in progress. Verify the official family before retrying.')
+    await tx.auditLog.create({ data: { actorId, action: 'ADMISSION_TRANSFER_STARTED', targetType: 'AdmissionApplication', targetId: id } })
+    return current
+  })
+  try {
   const children = (Array.isArray(application.children) ? application.children : []) as unknown as Child[]
   const parentDetails = (application.parentDetails || {}) as unknown as Partial<Parent>
   const submittedChildren = children.length ? children : [{ firstName: application.firstName, middleName: application.middleName || undefined, lastName: application.lastName, dateOfBirth: application.dateOfBirth, gender: application.gender, nationality: application.nationality, gradeApplying: application.gradeApplying, previousSchool: application.previousSchool || undefined }]
@@ -146,7 +157,12 @@ admissionsRouter.post('/:id/approve', authenticate, requireSuperAdmin(), asyncHa
     admissionCertificateDelivery = await sendSchoolMail({ to: application.parentEmail, replyTo: OFFICIAL_SCHOOL_EMAIL, subject: fr ? `Admission officielle KCS · ${application.applicationNumber}` : `Official KCS admission · ${application.applicationNumber}`, text: fr ? `Bonjour ${application.parentName},\n\nL’admission de votre/vos enfant(s) à Kinshasa Christian School est confirmée. Vous trouverez le(s) certificat(s) officiel(s) en pièce jointe.\n\nDossier : ${application.applicationNumber}` : `Dear ${application.parentName},\n\nYour child/children's admission to Kinshasa Christian School is confirmed. The official certificate(s) are attached.\n\nApplication: ${application.applicationNumber}`, attachments })
   } catch (error) { console.error('[admissions] admission certificate delivery failed without rolling back provisioning', error); admissionCertificateDelivery = { sent: false, reason: 'CERTIFICATE_OR_SMTP_FAILED' } }
   await prisma.auditLog.create({ data: { actorId: req.user!.sub, action: 'admission.certificates_issued', targetType: 'AdmissionApplication', targetId: application.id, metadata: { language: certificateOptions.language, includeAuthentication: certificateOptions.includeAuthentication, delivery: admissionCertificateDelivery } as any } }).catch(() => undefined)
+  await prisma.auditLog.create({ data: { actorId, action: 'ADMISSION_TRANSFER_COMPLETED', targetType: 'AdmissionApplication', targetId: id } })
   return success(res, { application: publicApplication(updated), family, temporaryCredentials: family.temporaryCredentials, credentialDelivery: family.credentialDelivery, admissionCertificateDelivery }, 'Application approved, family provisioned and admission certificate processed')
+  } catch (error) {
+    await prisma.auditLog.create({ data: { actorId, action: 'ADMISSION_TRANSFER_FAILED', targetType: 'AdmissionApplication', targetId: id } }).catch(() => undefined)
+    throw error
+  }
 }))
 
 admissionsRouter.patch('/:id/status', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (req: import('../middleware/auth.js').AuthenticatedRequest, res) => {
@@ -154,6 +170,21 @@ admissionsRouter.patch('/:id/status', authenticate, requireRoles('admin', 'staff
   if (req.user!.role === 'staff' && !['UNDER_REVIEW', 'INTERVIEW_SCHEDULED'].includes(payload.status)) throw new ApiError(403, 'Final admission decisions require Super Admin approval')
   const application = await prisma.admissionApplication.update({ where: { id: getRouteParam(req.params.id) }, data: { status: payload.status, notes: payload.notes } })
   return success(res, application, 'Application status updated')
+}))
+
+admissionsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(async (req:AuthenticatedRequest,res)=>{
+  z.object({confirmed:z.literal(true)}).parse(req.body)
+  const id=getRouteParam(req.params.id)
+  await prisma.$transaction(async tx=>{
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "AdmissionApplication" WHERE id = ${id} FOR UPDATE`)
+    const current=await tx.admissionApplication.findUnique({where:{id}})
+    if(!current)return
+    if(current.status!=='REJECTED'||current.provisionedAt||current.provisionedParentId)throw new ApiError(409,'Only a rejected application that has never been enrolled may be deleted')
+    if (await tx.auditLog.findFirst({ where: { targetType: 'AdmissionApplication', targetId: id, action: 'ADMISSION_TRANSFER_STARTED' }, select: { id: true } })) throw new ApiError(409, 'An enrollment transfer was attempted. Verify the official family before deleting this application.')
+    await tx.auditLog.create({data:{actorId:req.user!.sub==='configured-superadmin'?(await tx.user.findUnique({where:{email:env.SUPERADMIN_EMAIL},select:{id:true}}))?.id:req.user!.sub,action:'REJECTED_ADMISSION_DELETED',targetType:'AdmissionApplication',targetId:id,metadata:{applicationNumber:current.applicationNumber,status:current.status,officialAccountsUnchanged:true}}})
+    await tx.admissionApplication.delete({where:{id}})
+  })
+  return success(res,{id,deleted:true},'Rejected application deleted; official student accounts were not changed')
 }))
 
 admissionsRouter.post('/:id/documents', authenticate, requireRoles('admin'), upload.single('file'), asyncHandler(async (req, res) => {

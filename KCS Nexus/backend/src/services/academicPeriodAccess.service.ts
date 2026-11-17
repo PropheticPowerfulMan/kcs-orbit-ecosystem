@@ -13,8 +13,9 @@ import { academicCalendars } from "./reportAttendance.service.js";
 type Database = Prisma.TransactionClient | typeof prisma;
 export async function academicPeriodAccess(
   db: Database = prisma,
+  actorId?: string,
 ): Promise<AcademicPeriodAccess & { activeEntryTerm: string | null; pendingClosureTerm: string | null; closureMode: string }> {
-  const [calendars, closures] = await Promise.all([
+  const [calendars, closures, grants] = await Promise.all([
     academicCalendars(),
     db.auditLog.findMany({
       where: {
@@ -23,8 +24,20 @@ export async function academicPeriodAccess(
       },
       select: { metadata: true, createdAt: true },
     }),
+    actorId ? db.auditLog.findMany({
+      where: { targetType: 'AcademicPeriodReopening', action: { in: ['ACADEMIC_PERIOD_REOPENED', 'ACADEMIC_PERIOD_REOPENING_REVOKED'] } },
+      select: { metadata: true, createdAt: true, action: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    }) : Promise.resolve([]),
   ]);
+  const latest = new Map<string, { academicYear: string; term: string; teacherUserId: string; enabled: boolean }>();
+  for (const row of grants) {
+    const m = row.metadata as { academicYear: string; term: string; teacherUserId: string };
+    if (m.teacherUserId === actorId || m.teacherUserId === '*') latest.set(m.academicYear + '::' + m.term + '::' + m.teacherUserId,
+      { ...m, enabled: row.action === 'ACADEMIC_PERIOD_REOPENED' });
+  }
   const access: AcademicPeriodAccess = {
+    canManageClosedPeriods: actorId === "configured-superadmin",
+    reopenedPeriods: [...latest.values()].filter(item => item.enabled).map(({ academicYear, term }) => ({ academicYear, term })),
     calendars: calendars.map((calendar) => ({
       name: calendar.name,
       startDate: calendar.startDate,
@@ -38,7 +51,7 @@ export async function academicPeriodAccess(
       closedAt: row.createdAt.toISOString(),
     })),
   };
-  return { ...access, ...academicEntryPeriod(access, access.activeAcademicYear || ''), closureMode: 'EXPLICIT_SUPERADMIN' as const };
+  return { ...access, ...academicEntryPeriod({ ...access, canManageClosedPeriods: false, reopenedPeriods: [] }, access.activeAcademicYear || ''), closureMode: 'EXPLICIT_SUPERADMIN' as const };
 }
 export async function lockAcademicYears(
   db: Prisma.TransactionClient,
@@ -76,9 +89,10 @@ export async function protectAcademicPeriod(
   db: Prisma.TransactionClient,
   year: string,
   term: string,
+  actorId?: string,
 ) {
   await lockAcademicYears(db, [year]);
-  assertAcademicPeriodOpen(await academicPeriodAccess(db), year, term);
+  assertAcademicPeriodOpen(await academicPeriodAccess(db, actorId), year, term);
 }
 export async function academicCycleForDate(date: Date) {
   const calendars = await academicCalendars();
@@ -106,10 +120,10 @@ export async function academicCycleForDate(date: Date) {
   };
 }
 
-export async function protectGradebookEntry(db: Prisma.TransactionClient, year: string, term: string) {
+export async function protectGradebookEntry(db: Prisma.TransactionClient, year: string, term: string, actorId?: string) {
   if (term.trim().toLowerCase() === 'annual final') throw new ApiError(409, 'ANNUAL_SUMMARY_READ_ONLY: Enter and submit assessments in their quarter. The annual result is derived from submitted periods.');
   await lockAcademicYears(db, [year]);
-  const access = await academicPeriodAccess(db);
+  const access = await academicPeriodAccess(db, actorId);
   assertAcademicPeriodOpen(access, year, term);
   if (futureGradebookPeriods(access, year).includes(term.replace(/Trimester/gi, 'Quarter'))) {
     throw new ApiError(409, 'ACADEMIC_PERIOD_NOT_ACTIVE: ' + year + ' · ' + term

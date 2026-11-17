@@ -1,3 +1,4 @@
+import { deliveryRecipientUnavailable } from './deliveryRecipientAccess.js'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
 import { sendSchoolSms } from '../utils/sms.js'
@@ -18,6 +19,7 @@ export async function processOutboundSmsQueue() {
     for (const row of candidates) {
       const metadata = await claimQueuedDelivery(row)
       if (!metadata) continue
+    if(await deliveryRecipientUnavailable(row)){await prisma.correspondenceLog.update({where:{id:row.id},data:{status:'FAILED',failureReason:'RECIPIENT_ARCHIVED_OR_BLOCKED'}});continue}
       const result = await sendSchoolSms(row.recipientPhone, row.subject + '\n\n' + row.body, { brand: false })
       const attempts = Number(metadata.attempts ?? 0) + 1
       const retryable = !result.sent && !['PHONE_MISSING', 'SMS_INVALID_PHONE'].includes(result.reason)

@@ -1,3 +1,4 @@
+import { applyConfirmedRegistryDeletions } from '../services/registryMirror.service.js'
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { randomInt } from 'node:crypto'
@@ -69,6 +70,7 @@ async function getFamiliesFromOrbit() {
 }
 
 type ChangeDeliveryEntity = OrbitRegistryEntitySnapshot & {
+  additionalEmails?: string[]
   familyContacts?: Array<{ email?: string | null; phone?: string | null }>
 }
 
@@ -78,29 +80,24 @@ function findDirectoryEntity(directory: SharedDirectoryResponse, entityType: Reg
 }
 
 async function deliverEntityChange(directory: SharedDirectoryResponse | null, entityType: RegistryEntityType, entity: ChangeDeliveryEntity | undefined, action: 'created' | 'updated' | 'deleted') {
-  if (!entity) return { email: [], sms: [], dashboard: false }
-  const parent = entityType === 'student' && entity.parentId ? directory?.parents.find((candidate) => candidate.id === entity.parentId) : undefined
+  if (!entity) return { email: [], sms: [], dashboard: false, queued: true }
+  const parent = entityType === 'student' && entity.parentId ? directory?.parents.find(candidate => candidate.id === entity.parentId) : undefined
   const contacts = [...(entity.familyContacts ?? []), ...(parent?.familyContacts ?? [])]
-  const emails = [...new Set([entity.email, parent?.email, ...contacts.map((contact) => contact.email)].filter(Boolean) as string[])]
-  const phones = [...new Set([entity.phone, parent?.phone, ...contacts.map((contact) => contact.phone)].filter(Boolean) as string[])]
-  const labels = { created: 'cree', updated: 'modifie', deleted: 'supprime' }
+  const emails = [...new Set([entity.email, ...(entity.additionalEmails ?? []), parent?.email, ...(parent?.additionalEmails ?? []), ...contacts.map(contact => contact.email)].filter((value): value is string => typeof value === 'string' && z.string().email().safeParse(value.trim()).success).map(value => value.trim().toLowerCase()))]
+  const phones = [...new Set([entity.phone, parent?.phone, ...contacts.map(contact => contact.phone)].filter((value): value is string => Boolean(value)))]
+  const labels = { created: 'créé', updated: 'modifié', deleted: 'supprimé' }
   const subject = `Dossier institutionnel ${labels[action]}`
-  const body = `Le dossier de ${entity.fullName || 'votre famille'} a ete ${labels[action]} dans le registre officiel KCS.`
-  const [emailResults, smsResults] = await Promise.all([
-    Promise.all(emails.map(async (to) => {
-      const result = await sendSchoolMail({ to, subject, text: body, html: `<p>${body}</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const }))
-      await prisma.correspondenceLog.create({ data: { channel: 'EMAIL', status: result.sent ? 'SENT' : 'FAILED', subject, body, recipientName: entity.fullName || null, recipientEmail: to, sentAt: result.sent ? new Date() : null, failureReason: result.sent ? null : result.reason, metadata: { kind: 'ENTITY_CHANGE', entityType, action } } })
-      return { to, ...result }
-    })),
-    Promise.all(phones.map(async (phone) => {
-      const result = await sendSchoolSms(phone, `KCS: ${body}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const }))
-      await prisma.correspondenceLog.create({ data: { channel: 'TEXT', status: result.sent ? 'SENT' : 'FAILED', subject, body, recipientName: entity.fullName || null, recipientPhone: phone, sentAt: result.sent ? new Date() : null, failureReason: result.sent ? null : result.reason, metadata: { kind: 'ENTITY_CHANGE', entityType, action } } })
-      return { phone, ...result }
-    })),
-  ])
+  const body = `Le dossier de ${entity.fullName || 'votre famille'} a été ${labels[action]} dans le registre officiel KCS.`
   const localUsers = emails.length ? await prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true } }) : []
-  if (localUsers.length) await prisma.notification.createMany({ data: localUsers.map(({ id }) => ({ userId: id, title: subject, message: body, type: 'MESSAGE' as const, link: '/messages' })) })
-  return { email: emailResults, sms: smsResults, dashboard: localUsers.length > 0 }
+  const now = new Date().toISOString()
+  await prisma.$transaction(async tx => {
+    if (emails.length || phones.length) await tx.correspondenceLog.createMany({ data: [
+      ...emails.map(to => ({ channel: 'EMAIL' as const, status: 'QUEUED' as const, subject, body, recipientName: entity.fullName || null, recipientEmail: to, metadata: { kind: 'ENTITY_CHANGE', entityType, action, mailQueueVersion: 1, attempts: 0, nextAttemptAt: now, priority: 'NORMAL', language: 'fr' } })),
+      ...phones.map(phone => ({ channel: 'TEXT' as const, status: 'QUEUED' as const, subject, body, recipientName: entity.fullName || null, recipientPhone: phone, metadata: { kind: 'ENTITY_CHANGE', entityType, action, smsQueueVersion: 1, attempts: 0, nextAttemptAt: now } })),
+    ] })
+    if (localUsers.length) await tx.notification.createMany({ data: localUsers.map(({ id }) => ({ userId: id, title: subject, message: body, type: 'MESSAGE' as const, link: '/messages' })) })
+  })
+  return { email: emails.map(to => ({ to, queued: true })), sms: phones.map(phone => ({ phone, queued: true })), dashboard: localUsers.length > 0, queued: true }
 }
 
 async function sendRegistryEntityToOrbit(entityType: RegistryEntityType, payload: object) {
@@ -114,6 +111,7 @@ async function sendRegistryEntityToOrbit(entityType: RegistryEntityType, payload
         'x-app-slug': 'KCS_NEXUS',
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15_000),
     }
   )
 
@@ -136,6 +134,7 @@ async function deleteRegistryEntityInOrbit(entityType: RegistryEntityType, ident
     `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/${registryEntityType}/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(organizationId)}&identifierType=${encodeURIComponent(identifierType)}`,
     {
       method: 'DELETE',
+      signal: AbortSignal.timeout(15_000),
       headers: {
         'x-api-key': env.KCS_ORBIT_API_KEY!,
         'x-app-slug': 'KCS_NEXUS',
@@ -162,6 +161,7 @@ async function updateRegistryEntityInOrbit(entityType: RegistryEntityType, ident
         'x-app-slug': 'KCS_NEXUS',
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15_000),
     }
   )
 
@@ -350,7 +350,7 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (req, res) => 
     const requireFresh = ['1', 'true', 'yes'].includes(String(req.query.requireFresh ?? '').toLowerCase())
     const force = requireFresh || ['1', 'true', 'yes'].includes(String(req.query.force ?? '').toLowerCase())
     const orbitData = await getSharedDirectoryFromOrbit(force, requireFresh)
-    return success(res, orbitData, 'Shared directory loaded from Orbit')
+    return success(res, req.query.compact === '1' ? { ...orbitData, parents: orbitData.parents.map(({photoData, ...parent}) => parent), students: orbitData.students.map(({photoData, ...student}) => student), teachers: orbitData.teachers.map(({photoData, ...teacher}) => teacher) } : orbitData, 'Shared directory loaded from Orbit')
   }
 
   throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.')
@@ -584,7 +584,7 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireS
       console.error('[registry-update] Entity saved, but secondary delivery is degraded', { entityType, identifier, reason })
       return { email: [], sms: [], dashboard: false, degraded: true as const, reason }
     })
-    return success(res, { ...(updated as object), localSynchronization, notificationDelivery }, 'Shared entity updated through Orbit and synchronized in Nexus')
+    return success(res, { ...(updated as object), canonicalEntity: updatedEntity, localSynchronization, notificationDelivery }, 'Shared entity updated through Orbit and synchronized in Nexus')
   }
 
   if (entityType !== 'parent') {
@@ -823,12 +823,15 @@ registryRouter.delete('/entities/:entityType/:identifier', authenticate, require
 
   const deleted = await deleteRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, identifierType)
   confirmOrbitRegistryDeletion((deleted as {removed?:OrbitDeletedIdentity[]}).removed??[{id:String(req.params.identifier),entityType}])
-  const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, before, 'deleted').catch((error) => {
+  const receipts=(deleted as {removed?:OrbitDeletedIdentity[]}).removed??[{id:String(req.params.identifier),entityType}]
+  const localSynchronization=await applyConfirmedRegistryDeletions(receipts.map(row=>({...row,email:row.id===before?.id?before.email:undefined}))).catch(error=>{console.error('[registry-delete] Confirmed deletion awaiting local reconciliation',error instanceof Error?error.message:'unknown');return {degraded:true,reconciliationPending:true}})
+  if(entityType==='parent'&&before)await prisma.auditLog.create({data:{action:'PARENT_OFFICIAL_RECORD_ARCHIVED',targetType:'ParentArchive',targetId:String(before.id),metadata:JSON.parse(JSON.stringify({snapshot:before,removedAt:new Date().toISOString()}))}})
+  const notificationDelivery = await (entityType === 'parent' ? Promise.resolve({email:[],sms:[],dashboard:false,archived:true}) : deliverEntityChange(directoryBefore, entityType, before, 'deleted')).catch((error) => {
     const reason = error instanceof Error ? error.message : 'Unknown notification delivery failure'
     console.error('[registry-delete] Entity deleted, but secondary delivery is degraded', { entityType, identifier: req.params.identifier, reason })
     return { email: [], sms: [], dashboard: false, degraded: true as const, reason }
   })
-  return success(res, { ...(deleted as object), notificationDelivery }, 'Shared entity deleted through Orbit')
+  return success(res, { ...(deleted as object), localSynchronization, notificationDelivery }, 'Shared entity deleted through Orbit')
 }))
 
 registryRouter.post('/families', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {

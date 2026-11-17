@@ -1,7 +1,7 @@
 import { api } from '@/services/api'
 
 type PreviewOptions = { filename: string; language?: 'fr' | 'en'; autoPrint?: boolean; onError?: (message: string) => void; onClose?: () => void }
-const fileName = (value: string) => (value.replace(/[\u0000-\u001f\u007f/\\<>:"|?*]/g, '-').replace(/\.pdf$/i, '').trim().slice(0, 140) || 'KCS-document') + '.pdf'
+const fileName = (value: string) => (value.replace(/[\u0000-\u001f\u007f/\\<>:"|?*]/g, '-').replace(/\.pdf$/i, '').trim().slice(0, 200) || 'KCS-document') + '.pdf'
 const imageData = (blob: Blob) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error('Image unavailable')); reader.readAsDataURL(blob)
 })
@@ -39,6 +39,7 @@ export async function showOfficialDocument(win: Window, html: string, options: P
   // Older generators included inline print scripts; controls now own the print lifecycle.
   const cleaned = html.replace(/<script\b[^>]*>[\s\S]*?(?:<\/script\s*>|<\\\/script\s*>)/gi, '')
   win.document.open(); win.document.write(cleaned); win.document.close()
+  win.document.title = fileName(options.filename).replace(/\.pdf$/i, '')
   const style = win.document.createElement('style')
   style.dataset.kcsDocumentControls = ''
   style.textContent = '[data-kcs-document-controls]{box-sizing:border-box!important;position:sticky;top:0;z-index:9999;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;padding:12px;background:#073b70;color:white;font:14px Arial,sans-serif;box-shadow:0 3px 12px #10284933}[data-kcs-document-controls] button{border:1px solid #aac8e0;border-radius:9px;padding:10px 18px;background:#e9f5fc;color:#073b70;font:700 14px Arial,sans-serif;cursor:pointer}[data-kcs-document-controls] button[data-download]{background:#b9f4e4;border-color:#75dcc0;color:#064b46}[data-kcs-document-controls] button:disabled{opacity:.65;cursor:wait}[data-kcs-document-controls] [role=status]{flex-basis:100%;text-align:center;font-size:13px}[data-kcs-document-controls] [role=status]:empty{display:none}@media print{[data-kcs-document-controls]{display:none!important}}'

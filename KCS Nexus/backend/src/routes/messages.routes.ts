@@ -1,5 +1,4 @@
 import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
-import { personalizeParentCorrespondence } from '../utils/parentCorrespondence.js'
 import { queueMessageBatch } from '../services/messageBatch.js'
 import { Router } from 'express'
 import multer from 'multer'
@@ -50,7 +49,7 @@ const resolveMessageActorId = async (req: AuthenticatedRequest) => {
 const canManageParentCommunications = (req: AuthenticatedRequest) =>
   req.user!.sub === 'configured-superadmin' || req.user!.role === 'teacher'
 
-type OrbitContact = { id: string; fullName?: string; firstName?: string; middleName?: string | null; lastName?: string; email?: string | null; phone?: string | null; accessCode?: string | null; studentIds?: string[]; parentId?: string | null; className?: string | null; familyContacts?: Array<{ kind?: string; firstName?: string; middleName?: string; lastName?: string; email?: string | null; phone?: string | null }> }
+type OrbitContact = { additionalEmails?: string[]; id: string; fullName?: string; firstName?: string; middleName?: string | null; lastName?: string; email?: string | null; phone?: string | null; accessCode?: string | null; studentIds?: string[]; parentId?: string | null; className?: string | null; familyContacts?: Array<{ kind?: string; firstName?: string; middleName?: string; lastName?: string; email?: string | null; phone?: string | null }> }
 type OrbitDirectory = { parents?: OrbitContact[]; students?: OrbitContact[]; teachers?: OrbitContact[] }
 let orbitDirectoryCache: { expiresAt: number; value: OrbitDirectory } | null = null
 const identityKey = (value: string) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).sort().join('|')
@@ -156,7 +155,7 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
 messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const allowedRoles = req.user!.role === 'parent' || req.user!.role === 'student' ? ['ADMIN', 'STAFF', 'TEACHER'] as const : undefined
   const actorId = await resolveMessageActorId(req)
-  const contacts = await prisma.user.findMany({ where: { id: { not: actorId }, ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}) }, select: { id: true, firstName: true, middleName: true, lastName: true, role: true, accessCode: true, staffProfile: { select: { function: true, department: true } }, teacherProfile: { select: { department: true } } }, orderBy: [{ role: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }] })
+  const contacts = await prisma.user.findMany({ where: { accountBlockedAt: null, id: { not: actorId }, ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}) }, select: { id: true, firstName: true, middleName: true, lastName: true, role: true, accessCode: true, staffProfile: { select: { function: true, department: true } }, teacherProfile: { select: { department: true } } }, orderBy: [{ role: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }] })
   return success(res, contacts)
 }))
 
@@ -166,7 +165,7 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
   const superAdmin = req.user!.sub === 'configured-superadmin'
   const [recipients, directory] = await Promise.all([
     prisma.user.findMany({
-    where: { id: { not: actorId } },
+    where: { accountBlockedAt: null, id: { not: actorId } },
     select: {
       id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, accessCode: true, role: true,
       studentProfile: { select: { grade: true, section: true } },
@@ -225,7 +224,7 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
   const recipientIds = [...new Set(data.recipientIds)]
   const [parents, directory] = await Promise.all([
     prisma.user.findMany({
-      where: { id: { in: recipientIds }, ...(req.user!.sub === 'configured-superadmin' ? {} : { role: 'PARENT' as const }) },
+      where: { accountBlockedAt: null, id: { in: recipientIds }, ...(req.user!.sub === 'configured-superadmin' ? {} : { role: 'PARENT' as const }) },
       select: { id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, role: true },
     }),
     getOrbitDirectory(),
@@ -250,27 +249,26 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
   const allTargets: Array<typeof targets[number] & { relationship?: string }> = [...targets]
   for (const parent of deliveryParents.filter((person) => person.role === 'PARENT')) {
     const official = findOfficialContact(directory, parent)
+    for (const email of official?.additionalEmails ?? []) allTargets.push({ userId: parent.id, name: [parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '), email, phone: null, relationship: 'PARENT_ADDITIONAL' })
     for (const mother of (official?.familyContacts ?? []).filter((contact) => (contact.email || contact.phone))) {
       if (mother.email?.trim().toLowerCase() === parent.email?.trim().toLowerCase() && mother.phone?.trim() === parent.phone?.trim()) continue
       allTargets.push({ userId: parent.id, name: [mother.lastName, mother.middleName, mother.firstName].filter(Boolean).join(' ') || 'Family contact / Contact familial', email: mother.email || null, phone: mother.phone || null, relationship: mother.kind||'FAMILY_CONTACT' })
     }
   }
-  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients: deliveryParents.map((parent) => ({ id: parent.id, role: parent.role, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') })), targets: allTargets, channels: data.channels, attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: req.user!.sub === 'configured-superadmin', intent: { recipientIds: [...recipientIds].sort() } })
+  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients: deliveryParents.map((parent) => ({ id: parent.id, role: parent.role, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') })), targets: allTargets, channels: data.channels, attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: false, intent: { recipientIds: [...recipientIds].sort() } })
   return success(res, { ...result, requestedRecipients: recipientIds.length, skippedRecipients: skippedRecipientIds.length }, 'Parent communication recorded for every valid recipient; external delivery safely queued', 201)
 }))
 
 messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const data = messageSchema.parse(req.body)
   const senderId = await resolveMessageActorId(req)
-  const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true, email: true, phone: true, firstName: true, middleName: true, lastName: true } })
-  if (!recipient) throw new ApiError(404, 'Recipient not found')
+  const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true, email: true, phone: true, firstName: true, middleName: true, lastName: true, accountBlockedAt: true } })
+  if (!recipient || recipient.accountBlockedAt) throw new ApiError(404, 'Active recipient not found')
   if ((req.user!.role === 'parent' || req.user!.role === 'student') && !['ADMIN', 'STAFF', 'TEACHER'].includes(recipient.role)) {
     throw new ApiError(403, 'Parents and students may only contact authorized school staff.')
   }
   const { language = 'fr', ...messageData } = data
-  const emailBody = req.user!.sub === 'configured-superadmin' && recipient.role === 'PARENT'
-    ? personalizeParentCorrespondence(data.body, [recipient.lastName, recipient.middleName, recipient.firstName].filter(Boolean).join(' '), language, `${senderId}:${data.recipientId}:${Date.now()}`)
-    : data.body
+  const emailBody = data.body
   const message = await prisma.$transaction(async (tx) => {
     const created = await tx.internalMessage.create({ data: { ...messageData, body: emailBody, senderId, attachmentName: req.file?.originalname, attachmentMime: req.file?.mimetype, attachmentSize: req.file?.size, attachmentData: req.file?.buffer }, include: { sender: true, recipient: true } })
     await tx.notification.create({ data: { userId: data.recipientId, title: data.subject, message: data.body, type: 'MESSAGE', link: messageLink(recipient.role) } })
@@ -293,15 +291,15 @@ messagesRouter.post('/broadcast', attachmentUpload.single('attachment'), asyncHa
   const roleMap = { PARENTS: ['PARENT'], STUDENTS: ['STUDENT'], TEACHERS: ['TEACHER'], STAFF: ['ADMIN','STAFF','TEACHER'], ALL: ['ADMIN','STAFF','TEACHER','STUDENT','PARENT'] } as const
   const users = await prisma.user.findMany({
     where: data.audience === 'GRADE_9_12_FAMILIES'
-      ? { role: 'PARENT', parentLinks: { some: { student: { grade: { in: ['Grade 9','Grade 10','Grade 11','Grade 12'] } } } } }
-      : { role: { in: [...roleMap[data.audience as keyof typeof roleMap]] }, id: { not: senderId } },
+      ? { accountBlockedAt: null, role: 'PARENT', parentLinks: { some: { student: { grade: { in: ['Grade 9','Grade 10','Grade 11','Grade 12'] } } } } }
+      : { accountBlockedAt: null, role: { in: [...roleMap[data.audience as keyof typeof roleMap]] }, id: { not: senderId } },
     select: { id: true, role: true, email: true, phone: true, firstName: true, middleName: true, lastName: true },
   })
   if (!users.length) return success(res, { recipients: 0, audience: data.audience, emailQueued: 0, emailMissing: 0 }, 'No matching recipients')
   const recipients = users.map((user) => ({ id: user.id, role: user.role, name: [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ') }))
   const families=await familyEmailRecipients(users.filter(user=>user.role==='PARENT'),undefined,true)
   const emailTargets=users.flatMap((user,index)=>user.role==='PARENT'?(families.get(user.id)??[]).map(target=>({userId:user.id,name:target.name,email:target.email,phone:target.phone})): [{userId:user.id,name:recipients[index].name,email:user.email,phone:user.phone}])
-  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients, targets:emailTargets, channels: ['email'], attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: true, intent: { audience: data.audience } })
+  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients, targets:emailTargets, channels: ['email'], attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: false, intent: { audience: data.audience } })
   return success(res, { ...result, recipients: users.length, audience: data.audience, emailMissing: users.filter(user=>user.role==='PARENT'?!(families.get(user.id)?.length):!user.email).length, estimatedMinutes: Math.ceil(result.emailQueued / 60) }, 'Communication recorded for every recipient and email delivery safely queued', 201)
 }))
 

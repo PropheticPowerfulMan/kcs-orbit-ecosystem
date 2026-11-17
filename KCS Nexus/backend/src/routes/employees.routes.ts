@@ -1,3 +1,4 @@
+import { queueEmployeeChangeNotice } from '../services/employeeChangeDelivery.service.js'
 import { Router } from 'express'
 import { z } from 'zod'
 import { env } from '../config/env.js'
@@ -11,5 +12,5 @@ const compactEmployee=(employee:Record<string,unknown>)=>{const {photo_data,left
 employeesRouter.get('/',asyncHandler(async(_q,res)=>{const employees=await call('employees/');return success(res,Array.isArray(employees)?employees.map(employee=>compactEmployee(employee as Record<string,unknown>)):employees)}))
 employeesRouter.post('/',asyncHandler(async(q,res)=>success(res,await call('employees/',{method:'POST',body:JSON.stringify(q.body)}),'Employee created',201)))
 employeesRouter.get('/:id',asyncHandler(async(q,res)=>success(res,await call('employees/'+id.parse(q.params.id)+'/'))))
-employeesRouter.patch('/:id',asyncHandler(async(q,res)=>success(res,await call('employees/'+id.parse(q.params.id)+'/',{method:'PATCH',body:JSON.stringify(q.body)}))))
+employeesRouter.patch('/:id',asyncHandler(async(q,res)=>{const employee=await call('employees/'+id.parse(q.params.id)+'/',{method:'PATCH',body:JSON.stringify(q.body),headers:{'x-kcs-notification-owner':'NEXUS'}});const notificationDelivery=await queueEmployeeChangeNotice(employee).catch(()=>({queued:false,degraded:true}));return success(res,{...employee,notificationDelivery})}))
 employeesRouter.delete('/:id',asyncHandler(async(q,res)=>success(res,await call('employees/'+id.parse(q.params.id)+'/',{method:'DELETE'}))))

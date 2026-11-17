@@ -1,4 +1,11 @@
+from django.db import transaction
 import json
+import os
+from contextlib import contextmanager
+try:
+    import fcntl
+except ImportError:  # Local Windows development uses the process lock.
+    fcntl = None
 import logging
 import sys
 from datetime import date, datetime, time, timezone
@@ -46,37 +53,84 @@ def _outbox_record(path: str, payload: dict, error_message: str, attempts: int =
     }
 
 
-def _append_outbox(record: dict) -> None:
+@contextmanager
+def _outbox_file_lock():
     OUTBOX_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with _outbox_lock:
+    with _outbox_lock, OUTBOX_PATH.with_suffix(".lock").open("a") as lock:
+        if fcntl:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if fcntl:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def _append_outbox(record: dict) -> None:
+    with _outbox_file_lock():
         with OUTBOX_PATH.open("a", encoding="utf-8") as stream:
+            os.chmod(OUTBOX_PATH, 0o600)
             stream.write(json.dumps(record, ensure_ascii=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
 
 
-def _load_outbox() -> list[dict]:
+def _load_outbox_unlocked() -> list[dict]:
     if not OUTBOX_PATH.exists():
         return []
-
-    records: list[dict] = []
-    with _outbox_lock:
-        with OUTBOX_PATH.open("r", encoding="utf-8") as stream:
-            for line in stream:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    records.append(json.loads(line))
-                except json.JSONDecodeError:
-                    logger.warning("Orbit outbox contains an unreadable line; skipping it")
+    records = []
+    with OUTBOX_PATH.open("r", encoding="utf-8") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+                if not isinstance(record, dict) or not record.get("id"):
+                    raise ValueError("Invalid outbox record")
+                records.append(record)
+            except (json.JSONDecodeError, ValueError):
+                logger.warning("Unreadable Orbit outbox record retained for recovery")
+                records.append({"_invalidLine": line.rstrip("\n")})
     return records
 
 
-def _write_outbox(records: list[dict]) -> None:
-    OUTBOX_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with _outbox_lock:
-        with OUTBOX_PATH.open("w", encoding="utf-8") as stream:
+def _load_outbox() -> list[dict]:
+    with _outbox_file_lock():
+        return _load_outbox_unlocked()
+
+
+def _write_outbox_unlocked(records: list[dict]) -> None:
+    temporary = OUTBOX_PATH.with_name(OUTBOX_PATH.name + "." + str(uuid4()) + ".tmp")
+    try:
+        with temporary.open("w", encoding="utf-8") as stream:
+            os.chmod(temporary, 0o600)
             for record in records:
-                stream.write(json.dumps(record, ensure_ascii=True) + "\n")
+                stream.write((record["_invalidLine"] if "_invalidLine" in record else json.dumps(record, ensure_ascii=True)) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, OUTBOX_PATH)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _write_outbox(records: list[dict]) -> None:
+    with _outbox_file_lock():
+        _write_outbox_unlocked(records)
+
+
+def _complete_outbox_batch(snapshot: list[dict], remaining: list[dict]) -> None:
+    # HTTP runs outside the file lock. Keep events appended while it was pending.
+    ids = {record["id"] for record in snapshot if record.get("id")}
+    retries = {record["id"]: record for record in remaining if record.get("id")}
+    with _outbox_file_lock():
+        latest = _load_outbox_unlocked()
+        merged = []
+        for record in latest:
+            if record.get("id") not in ids:
+                merged.append(record)
+            elif record["id"] in retries:
+                merged.append(retries[record["id"]])
+        _write_outbox_unlocked(merged)
 
 
 def _strip_empty_values(value):
@@ -177,6 +231,9 @@ def flush_outbox(max_items: int = OUTBOX_FLUSH_BATCH_SIZE) -> int:
     flushed = 0
 
     for index, record in enumerate(records):
+        if "_invalidLine" in record:
+            remaining.append(record)
+            continue
         if index < max_items:
             success, error_message = _send_json(record["path"], record["payload"])
             if success:
@@ -196,24 +253,17 @@ def flush_outbox(max_items: int = OUTBOX_FLUSH_BATCH_SIZE) -> int:
 
         remaining.append(record)
 
-    _write_outbox(remaining)
+    _complete_outbox_batch(records, remaining)
     return flushed
 
 
 def _post_json(path: str, payload: dict) -> None:
     if _running_tests():
         return
-
-    flushed = flush_outbox()
-    if flushed:
-        logger.info("Orbit outbox flushed %s pending event(s)", flushed)
-
-    success, error_message = _send_json(path, payload)
-    if success:
-        return
-
-    logger.warning("Orbit sync failed for %s: %s", path, error_message)
-    _append_outbox(_outbox_record(path, payload, error_message or "Unknown Orbit delivery error"))
+    # Request handlers never drain a remote backlog or wait for Orbit HTTP.
+    # Only committed source changes become eligible for the durable worker.
+    record = _outbox_record(path, payload, "Queued for background synchronization")
+    transaction.on_commit(lambda: _append_outbox(record))
 
 
 def _contract_datetime(value: datetime | None) -> str:

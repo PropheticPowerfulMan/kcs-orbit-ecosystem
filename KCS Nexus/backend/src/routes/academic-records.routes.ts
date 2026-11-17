@@ -1,3 +1,4 @@
+import { reportCardVisibility } from '../utils/reportCardVisibility.js'
 import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
 import {coursePeriodStates} from '../services/courseTeachingPeriods.service.js'
 import {courseMatchesPeriod} from '../utils/courseTeachingPeriods.js'
@@ -12,7 +13,7 @@ import {assertAcademicVisible,academicVisibilityPolicy,setIndividualTranscriptVi
 import { certificateDeliveryRouter, deliverOfficialDocuments } from './certificateDelivery.routes.js'
 import { officialStudentPortrait } from '../services/officialPortrait.service.js'
 import { databaseActorId } from '../utils/databaseActor.js'
-import { academicPeriodAccess, assertAcademicPeriodOpen, protectAcademicPeriod } from '../services/academicPeriodAccess.service.js'
+import { academicPeriodAccess, assertAcademicPeriodOpen, protectAcademicPeriod, lockAcademicYears } from '../services/academicPeriodAccess.service.js'
 import { Prisma } from '@prisma/client'
 import { Router } from 'express'
 import { z } from 'zod'
@@ -29,6 +30,7 @@ import { isTeacherHomeroomForStudent } from '../utils/teacherClassAccess.js'
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { MAX_IMPORT_BYTES, parseImportBuffer, validateImportFile } from '../modules/data-migration/file-parser.js'
+import { academicPeriodHasReopening } from '../utils/academicPeriodPolicy.js'
 import { academicPeriodKey, isKcsAcademicTerm, isSequentialAcademicYear, KCS_ACADEMIC_TERMS } from '../utils/academicCycle.js'
 import { isVisibleInSuperAdministrationQueue } from '../services/academicSubmissionWorkflow.js'
 import { summarizeAttendanceStatuses, normalizeAttendanceCorrection } from '../utils/attendancePolicy.js'
@@ -90,14 +92,6 @@ const lockedReportCard=async(tx:Prisma.TransactionClient,id:string)=>{
 type AcademicCorrections={subjects?:Array<{courseId:string;courseName?:string;percentage:number;letterGrade?:string}>;hiddenCourseIds?:string[]}
 const academicCorrections=(value:unknown):AcademicCorrections=>value&&typeof value==='object'&&!Array.isArray(value)?value as AcademicCorrections:{}
 const correctionMap=(value:unknown)=>new Map((academicCorrections(value).subjects??[]).map(item=>[item.courseId,item]))
-const reportCardVisibility=(courseIds:string[],requested:string[])=>{
- const official=new Set(courseIds),hidden=[...new Set(requested)]
- const invalid=hidden.filter(courseId=>!official.has(courseId))
- if(invalid.length)throw new ApiError(400,'A hidden course does not belong to this learner official enrollment')
- const visible=courseIds.filter(courseId=>!hidden.includes(courseId))
- if(!visible.length)throw new ApiError(400,'At least one official course must remain visible on the report card')
- return{hiddenCourseIds:hidden,visibleCourseIds:visible}
-}
 const resolveAcademicActorId=async(req:AuthenticatedRequest)=>req.user!.sub==='configured-superadmin'
  ? (await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{id:true}}))?.id??null
  : req.user!.sub
@@ -454,7 +448,7 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
    }
   })
   const reportCard=student.reportCards[0]??null
-  const hiddenCourseIds=academicCorrections(reportCard?.academicCorrections).hiddenCourseIds??[]
+  const hiddenCourseIds=(academicCorrections(reportCard?.academicCorrections).hiddenCourseIds??[]).filter(id=>subjects.some(subject=>subject.courseId===id))
   const visibleSubjects=subjects.filter(subject=>!hiddenCourseIds.includes(subject.courseId))
   const visibleEnrollments=uniqueEnrollments.filter(enrollment=>!hiddenCourseIds.includes(enrollment.course.id))
   const visibleSubmitted=visibleSubjects.filter(subject=>subject.percentage!==null)
@@ -477,7 +471,7 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
    allSubjectsSubmitted:visibleSubjects.length>0&&visibleSubmitted.length===visibleSubjects.length,
    average:visibleWeightedGrades.length?weightedCourseAverage(visibleWeightedGrades):null,
    attendance:summarizeAttendance(attendanceWithSuspensions(student.attendanceRecords,student.disciplineCases,window)),
-   reportCard:reportCard?{...reportCard,hiddenCourseIds,submissionHistory:submissionHistories.get(reportCard.id)??emptyReportCardSubmissionHistory()}:null,
+   reportCard:reportCard?{...reportCard,hiddenCourseIds,obsoleteHiddenCourseIds:(academicCorrections(reportCard.academicCorrections).hiddenCourseIds??[]).filter(id=>!hiddenCourseIds.includes(id)),submissionHistory:submissionHistories.get(reportCard.id)??emptyReportCardSubmissionHistory()}:null,
   }
  })
  res.setHeader('Cache-Control','private, no-store')
@@ -526,13 +520,13 @@ academicRecordsRouter.put('/report-cards/teacher-draft/:studentId',requireRoles(
  await ensureTeacherProfile(req.user!.sub)
  await academicPeriodAccess()
  const card=await prisma.$transaction(async tx=>{
- await protectAcademicPeriod(tx,payload.academicYear,payload.term)
+ await protectAcademicPeriod(tx,payload.academicYear,payload.term,req.user!.sub)
  await tx.$queryRaw(Prisma.sql`SELECT id FROM "StudentProfile" WHERE id = ${studentId} FOR UPDATE`)
  const context=await homeroomReportContext(req.user!.sub,studentId,payload.academicYear,payload.term,tx)
  const termLabel=reportCardTerm(payload.academicYear,payload.term)
  const current=await tx.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
- if(current&&['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus))throw new ApiError(409,'This report card is approved or published and is now read-only for the main teacher')
- const visibility=reportCardVisibility(context.enrollments.map(item=>item.courseId),payload.hiddenCourseIds??academicCorrections(current?.academicCorrections).hiddenCourseIds??[])
+ if(current&&['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus)&&!academicPeriodHasReopening(await academicPeriodAccess(tx,req.user!.sub),payload.academicYear,payload.term))throw new ApiError(409,'This report card is approved or published and is now read-only for the main teacher')
+ const visibility=reportCardVisibility(context.enrollments.map(item=>item.courseId),payload.hiddenCourseIds??academicCorrections(current?.academicCorrections).hiddenCourseIds??[],academicCorrections(current?.academicCorrections).hiddenCourseIds??[])
  const visibleGrades=context.grades.filter(item=>visibility.visibleCourseIds.includes(item.courseId))
  const visibleAverage=weightedCourseAverage(visibleGrades)
  const corrections={...academicCorrections(current?.academicCorrections),hiddenCourseIds:visibility.hiddenCourseIds,attendanceOverride:false}
@@ -547,6 +541,34 @@ academicRecordsRouter.put('/report-cards/teacher-draft/:studentId',requireRoles(
  return success(res,card,'Main-teacher report-card draft saved')
 }))
 
+academicRecordsRouter.post('/report-cards/teacher-visibility/restore/:studentId',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=cycleSchema.extend({confirmed:z.literal(true)}).parse(req.body)
+ const studentId=getRouteParam(req.params.studentId)
+ await ensureTeacherProfile(req.user!.sub)
+ const result=await prisma.$transaction(async tx=>{
+  await lockAcademicYears(tx,[payload.academicYear])
+  await tx.$queryRaw(Prisma.sql`SELECT id FROM "StudentProfile" WHERE id = ${studentId} FOR UPDATE`)
+  const context=await homeroomReportContext(req.user!.sub,studentId,payload.academicYear,payload.term,tx)
+  const existing=await tx.reportCard.findUnique({where:{studentId_term:{studentId,term:reportCardTerm(payload.academicYear,payload.term)}}})
+  if(!existing)return{removed:0,resultChanged:false}
+  const current=await lockedReportCard(tx,existing.id)
+  const correction=academicCorrections(current.academicCorrections),previous=correction.hiddenCourseIds??[]
+  if(!previous.length)return{removed:0,resultChanged:false}
+  const official=new Set(context.enrollments.map(e=>e.courseId)),resultChanged=previous.some(id=>official.has(id))
+  if(resultChanged){
+   const access=await academicPeriodAccess(tx,req.user!.sub)
+   assertAcademicPeriodOpen(access,payload.academicYear,payload.term)
+   if(['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus)&&!academicPeriodHasReopening(access,payload.academicYear,payload.term))throw new ApiError(409,'This report card is approved or published and is read-only')
+  }
+  await tx.reportCard.update({where:{id:current.id},data:{academicCorrections:{...correction,hiddenCourseIds:[]},...(resultChanged?{average:weightedCourseAverage(context.grades),publicationStatus:'DRAFT',principalStatus:'DRAFT',approvedById:null,approvedAt:null,portalPostedAt:null,emailedAt:null}:{})}})
+  if(resultChanged)await tx.correspondenceLog.updateMany({where:{reportCardId:current.id,status:'QUEUED',channel:'EMAIL'},data:{status:'FAILED',failureReason:'REPORT_CARD_SUPERSEDED'}})
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'REPORT_CARD_COURSE_VISIBILITY_RESTORED',targetType:'ReportCard',targetId:current.id,metadata:{previousHiddenCourseIds:previous,resultChanged,academicYear:payload.academicYear,term:payload.term}}})
+  if(resultChanged)await synchronizeStudentAcademicMetrics(tx,[studentId])
+  return{removed:previous.length,resultChanged}
+ },{maxWait:10000,timeout:30000})
+ return success(res,result,'Report-card course visibility restored')
+}))
+
 academicRecordsRouter.post('/report-cards/teacher-visibility/bulk',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const payload=teacherReportVisibilityBulkSchema.parse(req.body)
  const studentIds=[...new Set(payload.studentIds)],requestedCourseIds=[...new Set(payload.courseIds)]
@@ -555,11 +577,11 @@ academicRecordsRouter.post('/report-cards/teacher-visibility/bulk',requireRoles(
  for(const studentId of studentIds){
   const context=await homeroomReportContext(req.user!.sub,studentId,payload.academicYear,payload.term)
   const current=await prisma.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
-  if(current&&['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus))throw new ApiError(409,`The report card for ${context.student.studentNumber} is approved or published and is read-only`)
+  if(current&&['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus)&&!academicPeriodHasReopening(await academicPeriodAccess(prisma,req.user!.sub),payload.academicYear,payload.term))throw new ApiError(409,`The report card for ${context.student.studentNumber} is approved or published and is read-only`)
   const officialCourseIds=context.enrollments.map(item=>item.courseId)
   const applicable=requestedCourseIds.filter(courseId=>officialCourseIds.includes(courseId))
   if(!applicable.length)continue
-  const existing=new Set(academicCorrections(current?.academicCorrections).hiddenCourseIds??[])
+  const existing=new Set((academicCorrections(current?.academicCorrections).hiddenCourseIds??[]).filter(id=>officialCourseIds.includes(id)))
   for(const courseId of applicable){if(payload.action==='HIDE')existing.add(courseId);else existing.delete(courseId)}
   const visibility=reportCardVisibility(officialCourseIds,[...existing])
   const visibleGrades=context.grades.filter(item=>visibility.visibleCourseIds.includes(item.courseId))
@@ -568,7 +590,7 @@ academicRecordsRouter.post('/report-cards/teacher-visibility/bulk',requireRoles(
  if(!prepared.length)throw new ApiError(400,'None of the selected courses belongs to the selected main-teacher learners')
  await academicPeriodAccess()
  const cards=await prisma.$transaction(async tx=>{
- await protectAcademicPeriod(tx,payload.academicYear,payload.term)
+ await protectAcademicPeriod(tx,payload.academicYear,payload.term,req.user!.sub)
   const saved=[]
   for(const item of prepared){
    const corrections={...academicCorrections(item.current?.academicCorrections),hiddenCourseIds:item.hiddenCourseIds}
@@ -592,13 +614,13 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
  await ensureTeacherProfile(req.user!.sub)
  await academicPeriodAccess()
  const result=await prisma.$transaction(async tx=>{
- await protectAcademicPeriod(tx,payload.academicYear,payload.term)
+ await protectAcademicPeriod(tx,payload.academicYear,payload.term,req.user!.sub)
  await tx.$queryRaw(Prisma.sql`SELECT id FROM "StudentProfile" WHERE id = ${studentId} FOR UPDATE`)
  const context=await homeroomReportContext(req.user!.sub,studentId,payload.academicYear,payload.term,tx)
  const termLabel=reportCardTerm(payload.academicYear,payload.term)
  const existing=await tx.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
  const current=existing?await lockedReportCard(tx,existing.id):null
- const visibility=reportCardVisibility(context.enrollments.map(item=>item.courseId),payload.hiddenCourseIds??academicCorrections(current?.academicCorrections).hiddenCourseIds??[])
+ const visibility=reportCardVisibility(context.enrollments.map(item=>item.courseId),payload.hiddenCourseIds??academicCorrections(current?.academicCorrections).hiddenCourseIds??[],academicCorrections(current?.academicCorrections).hiddenCourseIds??[])
  const expectedCourseIds=visibility.visibleCourseIds
  const submittedCourseIds=new Set(context.grades.map(item=>item.courseId))
  const missingCourseIds=expectedCourseIds.filter(courseId=>!submittedCourseIds.has(courseId))
@@ -665,7 +687,7 @@ academicRecordsRouter.post('/report-cards/generate',requireRoles('admin','staff'
  const attendanceRecords=await prisma.attendanceRecord.findMany({where:{studentId:{in:[...grouped.keys()]},date:window},select:{studentId:true,status:true}})
  await academicPeriodAccess()
  const cards=await prisma.$transaction(async tx=>{
- await protectAcademicPeriod(tx,payload.academicYear,payload.term)
+ await protectAcademicPeriod(tx,payload.academicYear,payload.term,req.user!.sub)
   const created=[]
   for(const [studentId,items] of grouped){const average=weightedCourseAverage(items);const attendanceSummary=summarizeAttendance(attendanceRecords.filter(item=>item.studentId===studentId));created.push(await tx.reportCard.upsert({where:{studentId_term:{studentId,term:reportCardTerm(payload.academicYear,payload.term)}},create:{studentId,term:reportCardTerm(payload.academicYear,payload.term),average,attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'},update:{average,attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'}}))}
   await tx.auditLog.create({data:{actorId,action:'REPORT_CARDS_GENERATED',targetType:'ReportCardCycle',metadata:{...payload,count:created.length,sourceGradeCount:grades.length}}})
@@ -753,7 +775,7 @@ academicRecordsRouter.patch('/report-cards/:id/editorial',requireSuperAdmin(),as
  const lockedCycle=splitReportCardTerm(preview.term)
  await academicPeriodAccess()
  const card=await prisma.$transaction(async tx=>{
-  await protectAcademicPeriod(tx,lockedCycle.academicYear,lockedCycle.term)
+  await protectAcademicPeriod(tx,lockedCycle.academicYear,lockedCycle.term,req.user!.sub)
   const current=await lockedReportCard(tx,id)
   const previous={teacherComment:current.teacherComment,conduct:current.conduct,average:current.average,attendanceSummary:current.attendanceSummary,academicCorrections:current.academicCorrections,publicationStatus:current.publicationStatus}
  const parsedCycle=splitReportCardTerm(current.term)
@@ -857,7 +879,7 @@ const reportCardPrintDocumentHandler = (withTeacherReview: boolean) => asyncHand
   if(!teacher||!isTeacherHomeroomForStudent(teacher,card.student))throw new ApiError(403,'This report card is outside the assigned homeroom')
  }
  const unsavedReview=Boolean(review&&(review.teacherComment!==(card.teacherComment??'').trim()||review.conduct!==(card.conduct??'').trim()))
- if(unsavedReview){const cycle=splitReportCardTerm(card.term);assertAcademicPeriodOpen(await academicPeriodAccess(),cycle.academicYear,cycle.term)}
+ if(unsavedReview){const cycle=splitReportCardTerm(card.term);assertAcademicPeriodOpen(await academicPeriodAccess(prisma,req.user!.sub),cycle.academicYear,cycle.term)}
  const printCard=unsavedReview&&review?{...card,teacherComment:review.teacherComment,conduct:review.conduct,publicationStatus:'DRAFT' as const,approvedAt:null}:card
  if(req.user!.role==='student'||req.user!.role==='parent'){
   const role=req.user!.role
@@ -872,7 +894,7 @@ const reportCardPrintDocumentHandler = (withTeacherReview: boolean) => asyncHand
  const actorId=await resolveAcademicActorId(req)
  await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:doc.documentId,metadata:{fingerprint:doc.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:printCard.publicationStatus,approvedAt:printCard.approvedAt?.toISOString()??null,unsavedReviewPreview:unsavedReview}}})
  res.setHeader('Cache-Control','private, no-store')
- return success(res,{html:doc.html,documentId:doc.documentId,unsavedReviewPreview:unsavedReview},'Official report document prepared')
+ return success(res,{html:doc.html,filename:doc.filename,documentId:doc.documentId,unsavedReviewPreview:unsavedReview},'Official report document prepared')
 })
 academicRecordsRouter.get('/report-cards/:id/print-document',requireRoles('admin','staff','teacher'),reportCardPrintDocumentHandler(false))
 academicRecordsRouter.get('/report-cards/:id/portal-document',requireRoles('student','parent'),reportCardPrintDocumentHandler(false))
@@ -898,7 +920,7 @@ academicRecordsRouter.get('/report-cards/:id/pdf',requireSuperAdmin(),asyncHandl
  const actorId=await resolveAcademicActorId(req)
  await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:pdf.documentId,metadata:{fingerprint:pdf.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:card.publicationStatus,approvedAt:card.approvedAt?.toISOString()??null}}})
  res.setHeader('Cache-Control','private, no-store')
- res.setHeader('Content-Disposition',`inline; filename="${pdf.documentId}.pdf"`)
+ res.setHeader('Content-Disposition',"inline; filename=\"RC.pdf\"; filename*=UTF-8''"+encodeURIComponent(pdf.filename))
  res.type('application/pdf').send(pdf.buffer)
 }))
 
@@ -941,13 +963,14 @@ academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHand
    const subject=payload.language==='fr'?`KCS · Bulletin scolaire officiel · ${learner} · ${card.term}`:`KCS · Official report card · ${learner} · ${card.term}`
    const body=payload.language==='fr'?`Bonjour,\n\nVeuillez trouver en pièce jointe le bulletin officiel de ${learner} (${card.student.studentNumber}) pour ${card.term}. Moyenne officielle : ${card.average.toFixed(2)} %.\n\nLe document comporte un code QR permettant de vérifier son authenticité auprès du registre KCS Nexus.\n\nCordialement,\nKinshasa Christian School`:`Dear Parent/Guardian,\n\nPlease find attached the official report card for ${learner} (${card.student.studentNumber}) for ${card.term}. Official average: ${card.average.toFixed(2)}%.\n\nThe document includes a QR code to verify its authenticity in the KCS Nexus register.\n\nSincerely,\nKinshasa Christian School`
    const pdf=pdfByCard.get(card.id)!
-   const attachment=await tx.messageAttachment.create({data:{name:pdf.documentId+'.pdf',mime:'application/pdf',size:pdf.buffer.length,data:pdf.buffer},select:{id:true}})
+   const attachment=await tx.messageAttachment.create({data:{name:pdf.filename,mime:'application/pdf',size:pdf.buffer.length,data:pdf.buffer},select:{id:true}})
    const ids=new Map(linked.map(({parent})=>[parent.id,randomUUID()]))
    const parentBody=(parent:typeof linked[number]['parent'])=>personalizeParentCorrespondence(body,[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '),payload.language,batchId+':'+card.id+':'+parent.id)
-   await tx.internalMessage.createMany({data:linked.map(({parent})=>({id:ids.get(parent.id)!,senderId:actorId,recipientId:parent.id,subject,body:parentBody(parent),priority:'high',attachmentName:pdf.documentId+'.pdf',attachmentMime:'application/pdf',attachmentSize:pdf.buffer.length,sharedAttachmentId:attachment.id}))})
+   await tx.internalMessage.createMany({data:linked.map(({parent})=>({id:ids.get(parent.id)!,senderId:actorId,recipientId:parent.id,subject,body:parentBody(parent),priority:'high',attachmentName:pdf.filename,attachmentMime:'application/pdf',attachmentSize:pdf.buffer.length,sharedAttachmentId:attachment.id}))})
    await tx.notification.createMany({data:linked.map(({parent})=>({userId:parent.id,title:subject,message:parentBody(parent),type:'MESSAGE',link:'/portal/parent/grades'}))})
    const emailTargets=[...new Map(linked.flatMap(({parent})=>(familyEmails.get(parent.id)??[]).map(target=>[target.email,target] as const))).values()]
-   await tx.correspondenceLog.createMany({data:emailTargets.map(target=>({channel:'EMAIL',status:'QUEUED',subject,body:personalizeParentCorrespondence(body,target.name,payload.language,batchId+':'+card.id+':'+target.email),senderId:actorId,recipientName:target.name,recipientEmail:target.email,recipientPhone:target.phone,studentId:card.studentId,reportCardId:card.id,metadata:{mailQueueVersion:1,internalMessageId:ids.get(target.parentId)!,recipientId:target.parentId,relationship:target.relationship,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH',language:payload.language}}))})
+   if(!emailTargets.length)throw new ApiError(409,'No valid registered family email is available for a selected report card. No delivery was queued.')
+   await tx.correspondenceLog.createMany({data:emailTargets.map(target=>({channel:'EMAIL',status:'QUEUED',subject,body:personalizeParentCorrespondence(body,target.name,payload.language,batchId+':'+card.id+':'+target.email),senderId:actorId,recipientName:target.name,recipientEmail:target.email,recipientPhone:target.phone,studentId:card.studentId,reportCardId:card.id,metadata:{reportCardReceiptVersion:1,receiptDocumentId:pdf.documentId,receiptFingerprint:pdf.fingerprint,mailQueueVersion:1,internalMessageId:ids.get(target.parentId)!,recipientId:target.parentId,relationship:target.relationship,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH',language:payload.language}}))})
 
    recipients+=emailTargets.length
    await tx.reportCard.update({where:{id:card.id},data:{publicationStatus:'EMAILED',emailedAt:new Date(),portalPostedAt:card.portalPostedAt??new Date()}})

@@ -1,3 +1,4 @@
+import { getOrbitSharedDirectory } from '../services/orbitSharedDirectory.js'
 import {isMediaAccount} from '../utils/mediaAccount.js'
 import { assertAccountAccess, inactiveStudentStatus } from '../services/accountAccess.service.js'
 import { Router } from 'express'
@@ -35,6 +36,7 @@ const buildSafeUserWithAccess = async (user: PrismaUser, includeAvatar = true) =
   return {
     ...buildSafeUser(user, includeAvatar),
     staffFunction: user.staffFunction,
+    isSuperAdministrator: user.email.toLowerCase() === env.SUPERADMIN_EMAIL.toLowerCase(),
     permissions: user.permissions,
     accessRoles: [...accessRoles],
   }
@@ -268,6 +270,7 @@ function isConfiguredSuperAdminUser(userId?: string) {
 function buildConfiguredSuperAdminUser(account: PrismaUser) {
   return {
     id: configuredSuperAdmin.id,
+    isSuperAdministrator: true,
     email: account.email,
     accessCode: account.accessCode || 'ACC-ADM-SUPER1',
     firstName: account.firstName,
@@ -560,8 +563,19 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
     prisma.user.findUnique({ where: { accessCode: externalUser.accessCode } }),
     prisma.user.findUnique({ where: { email: externalUser.email } }),
   ])
+  if ([accessCodeUser,emailUser].some(user => user?.email?.toLowerCase() === env.SUPERADMIN_EMAIL.toLowerCase())) throw new ApiError(409,'The configured SuperAdmin credentials cannot be changed by an external login provider.')
   // The access code is the stable cross-application identity. Prefer it when
   // an older local copy already owns the canonical email.
+  if (accessCodeUser && emailUser && accessCodeUser.id !== emailUser.id) throw new ApiError(409, 'Conflicting institutional account identifiers. No account or password was changed.')
+  if (!accessCodeUser && emailUser?.accessCode && emailUser.accessCode.trim().toUpperCase() !== externalUser.accessCode.trim().toUpperCase()) {
+    let sameCanonicalIdentity = false
+    if(emailUser.orbitUserId && env.KCS_ORBIT_API_URL && env.KCS_ORBIT_API_KEY && env.KCS_ORBIT_ORGANIZATION_ID) {
+      const directory = await getOrbitSharedDirectory(true)
+      const official = [...directory.parents,...directory.students,...directory.teachers].find(person=>person.id===emailUser.orbitUserId)
+      sameCanonicalIdentity = Boolean(official && official.email?.trim().toLowerCase()===externalUser.email.trim().toLowerCase() && official.accessCode?.trim().toUpperCase()===externalUser.accessCode.trim().toUpperCase())
+    }
+    if(!sameCanonicalIdentity)throw new ApiError(409,'Conflicting institutional account identity. No account or password was changed.')
+  }
   const user = accessCodeUser || emailUser
 
   if (user) {
@@ -935,6 +949,7 @@ authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedReques
 }))
 
 authRouter.put('/change-password', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (String(req.headers['x-kcs-client'] ?? '').trim().toUpperCase() === 'KCS_KITCHEN') throw new ApiError(403, 'Kitchen credentials must be changed locally; Nexus credentials are protected.')
   const schema = z.object({ currentPassword: z.string().min(1), newPassword: strongPasswordSchema })
   const { currentPassword, newPassword } = schema.parse(req.body)
   if (isConfiguredSuperAdminUser(req.user!.sub)) {
@@ -1081,6 +1096,7 @@ authRouter.put('/document-assets', authenticate, asyncHandler(async (req: Authen
 }))
 
 authRouter.put('/email', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (String(req.headers['x-kcs-client'] ?? '').trim().toUpperCase() === 'KCS_KITCHEN') throw new ApiError(403, 'Kitchen email must be changed locally; institutional email is protected.')
   const schema = z.object({
     newEmail: z.string().email(),
     currentPassword: z.string().min(1).optional(),

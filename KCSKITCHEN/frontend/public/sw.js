@@ -1,4 +1,4 @@
-const CACHE = 'kcs-kitchen-culinary-shell-v13-workspaces'
+const CACHE = 'kcs-kitchen-culinary-shell-v14-local-credentials'
 const SCOPE_PATH = new URL('./', self.location.href).pathname
 const SHELL = [
   './',

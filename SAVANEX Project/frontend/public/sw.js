@@ -1,4 +1,4 @@
-const CACHE_NAME = "savanex-school-manager-v3";
+const CACHE_NAME = "savanex-school-manager-v4";
 const APP_SHELL = ["./", "./manifest.webmanifest", "./kcs.jpg"];
 
 self.addEventListener("install", (event) => {

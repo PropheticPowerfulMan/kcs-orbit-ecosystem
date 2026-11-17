@@ -1,3 +1,6 @@
+import { deliveryRecipientUnavailable } from './deliveryRecipientAccess.js'
+import { reportCardReceiptUrl } from '../utils/reportCardReceipt.js'
+import { env } from '../config/env.js'
 import { claimQueuedDelivery } from './deliveryLease.js'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
@@ -72,48 +75,54 @@ export async function processOutboundMailQueue() {
     const claimed = await claimQueuedDelivery(row)
     if (!claimed) continue
     const metadata = queueMetadata(claimed)
+    if(await deliveryRecipientUnavailable(row)){await prisma.correspondenceLog.update({where:{id:row.id},data:{status:'FAILED',failureReason:'RECIPIENT_ARCHIVED_OR_BLOCKED'}});continue}
     if (!row.recipientEmail) {
       await prisma.correspondenceLog.update({ where: { id: row.id }, data: { status: 'FAILED', failureReason: 'RECIPIENT_EMAIL_MISSING' } })
       continue
     }
+    if(row.reportCardId){const card=await prisma.reportCard.findUnique({where:{id:row.reportCardId},select:{publicationStatus:true}});if(!card||!['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(card.publicationStatus)){await prisma.correspondenceLog.update({where:{id:row.id},data:{status:'FAILED',failureReason:'REPORT_CARD_SUPERSEDED'}});continue}}
     const message = metadata.internalMessageId ? await prisma.internalMessage.findUnique({
       where: { id: metadata.internalMessageId },
       select: { attachmentName: true, attachmentMime: true, attachmentData: true, sharedAttachment: { select: { data: true } } },
     }) : null
     const attachmentData = message?.attachmentData ?? message?.sharedAttachment?.data
+    if (row.reportCardId && (!attachmentData?.length || message?.attachmentMime !== 'application/pdf')) { await prisma.correspondenceLog.update({where:{id:row.id},data:{status:'FAILED',failureReason:'REPORT_CARD_PDF_ATTACHMENT_MISSING'}}); continue }
     const language = metadata.language === 'en' ? 'en' : 'fr'
     const attachmentNote = message?.attachmentName ? (language === 'fr' ? `\n\nDocument joint : ${message.attachmentName}. Disponible aussi dans votre boîte Nexus.` : `\n\nAttached document: ${message.attachmentName}. Also available in your Nexus inbox.`) : ''
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] || character))
     const messageHtml = (row.body + attachmentNote).split(/\r?\n/).map((line) => line.trim() ? `<p style="margin:0 0 16px;line-height:1.72;color:#334155">${escapeHtml(line)}</p>` : '<div style="height:12px">&nbsp;</div>').join('')
     const trackingUrl = `${process.env.FRONTEND_URL?.replace(/\/$/, '') || ''}/api/messages/tracking/email/${encodeURIComponent(row.id)}.gif`
+    const receiptUrl = reportCardReceiptUrl(row, env.FRONTEND_URL, env.JWT_SECRET, language)
+    const receiptLabel = language === 'fr' ? 'Confirmer la réception du bulletin' : 'Confirm receipt of the report card'
+    const receiptText = receiptUrl ? '\n\n' + receiptLabel + ': ' + receiptUrl : ''
     const result = await sendSchoolMail({
       to: row.recipientEmail,
       replyTo: OFFICIAL_REPLY_TO,
       subject: row.subject,
-      text: row.body + attachmentNote,
-      html: `${messageHtml}<img src="${trackingUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`,
+      text: row.body + (row.reportCardId ? attachmentNote : '') + receiptText,
+      html: `${messageHtml}${receiptUrl ? `<p style="margin:24px 0"><a href="${escapeHtml(receiptUrl)}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:#086785;color:#fff;text-decoration:none;font-weight:bold">${receiptLabel}</a></p>` : ''}<img src="${trackingUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`,
       attachments: attachmentData && message?.attachmentName ? [{ filename: message.attachmentName, content: Buffer.from(attachmentData), contentType: message.attachmentMime ?? undefined }] : undefined,
       branded: true,
       language,
     })
     const attempts = (metadata.attempts ?? 0) + 1
     if (result.sent) {
-      await prisma.correspondenceLog.update({
-        where: { id: row.id },
-        data: { status: 'SENT', sentAt: new Date(), failureReason: null, metadata: { ...metadata, leaseId: null, leaseUntil: null, attempts, lastAttemptAt: now.toISOString(), nextAttemptAt: null } as Prisma.InputJsonValue },
+      await prisma.$transaction(async tx => {
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM "CorrespondenceLog" WHERE id = ${row.id} FOR UPDATE`)
+        const latest = await tx.correspondenceLog.findUniqueOrThrow({ where: {id:row.id} })
+        await tx.correspondenceLog.update({ where:{id:row.id}, data:{ status:latest.status === 'DELIVERED' ? 'DELIVERED' : 'SENT', sentAt:new Date(), failureReason:null, metadata:{ ...metadata, ...queueMetadata(latest.metadata), leaseId:null, leaseUntil:null, attempts, lastAttemptAt:now.toISOString(), nextAttemptAt:null } as Prisma.InputJsonValue } })
       })
       continue
     }
     const retryable = isRetryableMailFailure(result.reason, result.providerDetail)
     const delay = mailRetryDelayMs(result.providerDetail, attempts)
-    await prisma.correspondenceLog.update({
-      where: { id: row.id },
-      data: {
-        status: retryable ? 'QUEUED' : 'FAILED',
-        failureReason: result.providerDetail || result.reason,
-        metadata: { ...metadata, leaseId: null, leaseUntil: null, attempts, lastAttemptAt: now.toISOString(), nextAttemptAt: retryable ? new Date(now.getTime() + delay).toISOString() : null } as Prisma.InputJsonValue,
-      },
+    await prisma.$transaction(async tx=>{
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM "CorrespondenceLog" WHERE id = ${row.id} FOR UPDATE`)
+      const latest=await tx.correspondenceLog.findUniqueOrThrow({where:{id:row.id}}),m=queueMetadata(latest.metadata) as Record<string,unknown>
+      const acknowledged=Boolean(m.reportCardReceiptConfirmedAt)
+      await tx.correspondenceLog.update({where:{id:row.id},data:{status:acknowledged?'DELIVERED':retryable?'QUEUED':'FAILED',failureReason:acknowledged?null:result.providerDetail||result.reason,metadata:{...metadata,...m,leaseId:null,leaseUntil:null,attempts,lastAttemptAt:now.toISOString(),nextAttemptAt:!acknowledged&&retryable?new Date(now.getTime()+delay).toISOString():null} as Prisma.InputJsonValue}})
     })
+
     }
   } catch (error) {
     console.error('[mail-queue] Worker iteration failed', error)

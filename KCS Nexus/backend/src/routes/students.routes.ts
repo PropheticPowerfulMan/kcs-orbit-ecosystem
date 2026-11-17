@@ -418,17 +418,15 @@ async function deliverStudentUpdate(input: {
   if (userIds.length) {
     await prisma.notification.createMany({ data: userIds.map((userId) => ({ userId, title, message, type: 'MESSAGE' as const, link: '/messages' })) })
   }
-  const emailResults = await Promise.all(Array.from(new Set([...(input.studentEmail ? [input.studentEmail] : []), ...input.parentEmails])).map((to) =>
-    sendSchoolMail({ to, subject: title, text: message, html: `<p>${message}</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
-  ))
-  const smsResults = await Promise.all(Array.from(new Set(input.parentPhones)).map((phone) =>
-    sendSchoolSms(phone, `KCS Nexus: ${message}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
-  ))
-  return {
-    dashboard: userIds.length > 0,
-    email: emailResults.find((result) => result.sent) || emailResults[0] || { sent: false as const, reason: 'SMTP_SEND_FAILED' as const },
-    sms: smsResults.find((result) => result.sent) || smsResults[0] || { sent: false as const, reason: 'PHONE_MISSING' as const },
-  }
+  const emails=[...new Set([...(input.studentEmail?[input.studentEmail]:[]),...input.parentEmails].map(email=>email.trim().toLowerCase()))]
+  const phones=[...new Set(input.parentPhones)]
+  const nextAttemptAt=new Date().toISOString()
+  if(emails.length||phones.length)await prisma.correspondenceLog.createMany({data:[
+    ...emails.map(email=>({channel:'EMAIL' as const,status:'QUEUED' as const,subject:title,body:message,recipientEmail:email,metadata:{mailQueueVersion:1,kind:'STUDENT_CHANGE',action,attempts:0,nextAttemptAt,priority:'NORMAL',language:'fr'}})),
+    ...phones.map(phone=>({channel:'TEXT' as const,status:'QUEUED' as const,subject:title,body:message,recipientPhone:phone,metadata:{smsQueueVersion:1,kind:'STUDENT_CHANGE',action,attempts:0,nextAttemptAt}})),
+  ]})
+  return {dashboard:userIds.length>0,email:{queued:emails.length>0,sent:false as const,reason:'QUEUED' as const},sms:{queued:phones.length>0,sent:false as const,reason:phones.length?'QUEUED' as const:'PHONE_MISSING' as const}}
+
 }
 
 async function deliverStudentUpdateSafely(
@@ -1196,7 +1194,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
 
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
-    const target = directory.students.find((student) => student.id === studentId)
+    const target = directory.students.find((entry) => entry.id === studentId || entry.id === student?.user.orbitUserId || entry.externalIds?.some(link => link.externalId === studentId))
     if (!target) throw new ApiError(404, 'Student not found')
 
     const currentClass = splitClassName(target.className)
@@ -1269,7 +1267,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
 
     const parentId = updatedEntity.parentId ?? target.parentId
     const parent = parentId ? directory.parents.find((candidate) => candidate.id === parentId) : undefined
-    const parentEmails = [parent?.email, ...(parent?.familyContacts?.map((contact) => contact.email) ?? [])].filter(Boolean) as string[]
+    const parentEmails = [parent?.email, ...(parent?.additionalEmails ?? []), ...(parent?.familyContacts?.map((contact) => contact.email) ?? [])].filter(Boolean) as string[]
     const localParents = await prisma.user.findMany({
       where: {
         role: 'PARENT',
@@ -1289,7 +1287,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
       parentPhones: [parent?.phone, ...(parent?.familyContacts?.map((contact) => contact.phone) ?? [])].filter(Boolean) as string[],
     })
 
-    return success(res, { ...(updated as object), localSynchronization, notificationDelivery }, 'Student updated through Orbit and synchronized in Nexus')
+    return success(res, { ...(updated as object), canonicalEntity: updatedEntity, localSynchronization, notificationDelivery }, 'Student updated through Orbit and synchronized in Nexus')
   }
   const currentStudent = await prisma.studentProfile.findUnique({
     where: { id: studentId },
@@ -1386,7 +1384,7 @@ studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(as
 
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
-    const target = directory.students.find((student) => student.id === studentId)
+    const target = directory.students.find((entry) => entry.id === studentId || entry.id === student?.user.orbitUserId || entry.externalIds?.some(link => link.externalId === studentId))
     if (!target) throw new ApiError(404, 'Student not found')
     const studentNumber = orbitExternalId(target)
     student ??= await prisma.studentProfile.findFirst({
@@ -1401,9 +1399,11 @@ studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(as
   if (!student) throw new ApiError(404, 'Student not found')
   if (student.archive) throw new ApiError(409, 'This learner is already archived')
 
+  const familyParents = await prisma.user.findMany({where:{id:{in:student.parentLinks.map(link=>link.parentId)}},select:{id:true,orbitUserId:true,firstName:true,middleName:true,lastName:true,email:true,phone:true}})
   const fullName = [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' ')
   const snapshot = {
     archiveType: 'ADMINISTRATIVE_REMOVAL',
+    familyParents,
     identity: { userId: student.userId, orbitUserId: student.user.orbitUserId, studentNumber: student.studentNumber, fullName, email: student.user.email, accessCode: student.user.accessCode },
     academicPlacement: { grade: student.grade, section: student.section, enrollmentDate: student.enrollmentDate },
     parentUserIds: student.parentLinks.map((link) => link.parentId), courseEnrollments: student.enrollments,

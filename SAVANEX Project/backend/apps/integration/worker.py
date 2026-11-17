@@ -53,6 +53,12 @@ def _flush_once() -> None:
 
 def _worker_loop() -> None:
     interval = _retry_interval_seconds()
+    if _stop_event.wait(1):
+        return
+    try:
+        _flush_once()
+    except Exception:
+        logger.exception("Initial Orbit outbox flush failed")
     while not _stop_event.wait(interval):
         try:
             _flush_once()
@@ -69,11 +75,6 @@ def start_outbox_worker() -> None:
     with _worker_lock:
         if _worker_started:
             return
-
-        try:
-            _flush_once()
-        except Exception:
-            logger.exception("Initial Orbit outbox flush failed")
 
         thread = threading.Thread(
             target=_worker_loop,

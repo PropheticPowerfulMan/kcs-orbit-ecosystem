@@ -1,3 +1,4 @@
+import { familyEmailRecipients } from './familyEmailRecipients.js'
 import type { Event, User, UserRole } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
 import { sendSchoolSms } from '../utils/sms.js'
@@ -57,7 +58,8 @@ async function deliverReminder(event: ReminderEvent, user: ReminderUser) {
     if (claimed) delivery = { ...delivery, inAppSentAt: sentAt }
   }
   if (channels.has('EMAIL') && !delivery.emailQueuedAt && !delivery.emailFailure) {
-    if (!user.email?.trim()) {
+    const recipients = user.role === 'PARENT' ? (await familyEmailRecipients([user])).get(user.id) ?? [] : user.email?.trim() ? [{email:user.email,name:[user.lastName,user.middleName,user.firstName].filter(Boolean).join(' ')}] : []
+    if (!recipients.length) {
       delivery = await prisma.eventReminderDelivery.update({ where: { id: delivery.id }, data: { emailFailure: 'RECIPIENT_EMAIL_MISSING' } })
     } else {
       const fullName = [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')
@@ -65,11 +67,11 @@ async function deliverReminder(event: ReminderEvent, user: ReminderUser) {
       const claimed = await prisma.$transaction(async (tx) => {
         const claim = await tx.eventReminderDelivery.updateMany({ where: { id: delivery.id, emailQueuedAt: null, emailFailure: null }, data: { emailQueuedAt: queuedAt } })
         if (!claim.count) return false
-        await tx.correspondenceLog.create({ data: {
-          channel: 'EMAIL', status: 'QUEUED', subject: message.title, body: message.body,
-          recipientName: fullName, recipientEmail: user.email,
+        await tx.correspondenceLog.createMany({ data: recipients.map(recipient => ({
+          channel: 'EMAIL' as const, status: 'QUEUED' as const, subject: message.title, body: message.body,
+          recipientName: recipient.name || fullName, recipientEmail: recipient.email,
           metadata: { mailQueueVersion: 1, recipientId: user.id, eventId: event.id, reminderRevision: event.reminderRevision, attempts: 0, nextAttemptAt: queuedAt.toISOString(), priority: 'NORMAL' },
-        } })
+        })) })
         return true
       })
       if (claimed) delivery = { ...delivery, emailQueuedAt: queuedAt }

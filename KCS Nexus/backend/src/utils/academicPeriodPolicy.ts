@@ -1,6 +1,8 @@
 import { canonicalAcademicTerm } from "./academicCycle.js";
 
 export type AcademicPeriodAccess = {
+  canManageClosedPeriods?: boolean;
+  reopenedPeriods?: Array<{ academicYear: string; term: string }>;
   calendars?: Array<{
     name: string;
     startDate: string;
@@ -26,11 +28,19 @@ export const quarterTerms = [
   "Semester 2 · Quarter 4",
 ];
 const termName = (term: string) => canonicalAcademicTerm(term) ?? term;
+export function academicPeriodHasReopening(access: AcademicPeriodAccess, year: string, term: string) {
+  const current = termName(term);
+  const quarter = quarterTerms.indexOf(current);
+  const semester = quarter < 0 ? current : quarter < 2 ? 'Semester 1' : 'Semester 2';
+  return (access.reopenedPeriods ?? []).some(item => item.academicYear === year
+    && ['Annual final', current, semester].includes(termName(item.term)));
+}
 export function academicPeriodIsReadOnly(
   access: AcademicPeriodAccess,
   year: string,
   term: string,
 ) {
+  if (access.canManageClosedPeriods || academicPeriodHasReopening(access, year, term)) return false;
   const current = termName(term);
   const quarter = quarterTerms.indexOf(current);
   const semester =
@@ -205,7 +215,8 @@ export function closedGradebookChanged(
 
 export function academicEntryPeriod(access: AcademicPeriodAccess, year: string) {
   const workflow = [quarterTerms[0], quarterTerms[1], 'Semester 1', quarterTerms[2], quarterTerms[3], 'Semester 2', 'Annual final']
-  const pendingClosureTerm = workflow.find(term => !academicPeriodIsReadOnly(access, year, term)) ?? null
+  const globalAccess = { ...access, canManageClosedPeriods: false, reopenedPeriods: [] };
+  const pendingClosureTerm = workflow.find(term => !academicPeriodIsReadOnly(globalAccess, year, term)) ?? null
   const activeEntryTerm = pendingClosureTerm === 'Semester 1' ? quarterTerms[1]
     : pendingClosureTerm === 'Semester 2' ? quarterTerms[3] : pendingClosureTerm
   return { pendingClosureTerm, activeEntryTerm }
@@ -236,6 +247,8 @@ export function futureGradebookChanged(previous: unknown, next: unknown, access:
   }
   return closedGradebookChanged(previous, next, {
     ...access,
+    canManageClosedPeriods: false,
+    reopenedPeriods: [],
     closedPeriods: futureGradebookPeriods(access, year).map(term => ({ academicYear: year, term })),
   });
 }

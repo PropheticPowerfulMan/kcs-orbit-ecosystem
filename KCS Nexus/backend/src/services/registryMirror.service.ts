@@ -32,15 +32,24 @@ export function matchCanonicalMirror(entity:OrbitRegistryEntitySnapshot,users:an
 }
 async function archiveDeletedMirror(identity:OrbitDeletedIdentity,users:any[]){
  const user=matchCanonicalMirror(identity,users,identity.entityType);if(!user||user.id==='configured-superadmin')return false
- if(user.accountBlockedAt&&(!user.studentProfile||user.studentProfile.archive))return false
+ const staleParentLinks=user.role==='PARENT'?await prisma.parentStudentLink.count({where:{parentId:user.id}}):0
+ if(user.accountBlockedAt&&(!user.studentProfile||user.studentProfile.archive)&&!staleParentLinks)return false
  const actor=await prisma.user.findUnique({where:{email:env.SUPERADMIN_EMAIL},select:{id:true}})
  await prisma.$transaction(async tx=>{
   await tx.user.update({where:{id:user.id},data:{accountBlockedAt:user.accountBlockedAt??new Date(),accountBlockedReason:'Identity removed from official Orbit registry'}})
   await tx.refreshToken.deleteMany({where:{userId:user.id}})
+  if(user.role==='PARENT')await tx.parentStudentLink.deleteMany({where:{parentId:user.id}})
   if(user.studentProfile){const p=user.studentProfile;const name=[user.lastName,user.middleName,user.firstName].filter(Boolean).join(' ');if(!p.archive){if(!actor)throw Error('Archive audit authority unavailable');await tx.studentArchive.create({data:{studentId:p.id,userId:user.id,studentNumber:p.studentNumber,orbitUserId:user.orbitUserId,fullName:name,grade:p.grade,section:p.section,reason:'Identity removed from official Orbit registry',effectiveDate:new Date(),archivedById:actor.id,archivedSnapshot:{archiveType:'ORBIT_REGISTRY_REMOVAL',identity:{orbitUserId:user.orbitUserId,fullName:name,studentNumber:p.studentNumber},academicPlacement:{grade:p.grade,section:p.section},preservedRecords:true}}})}await tx.enrollment.deleteMany({where:{studentId:p.id}});await tx.studentProfile.update({where:{id:p.id},data:{status:'archived'}})}
   await tx.auditLog.create({data:{actorId:actor?.id??null,action:'ORBIT_REGISTRY_DELETION_APPLIED',targetType:identity.entityType,targetId:user.id,metadata:{orbitId:identity.id,recordsPreserved:true}}})
  })
  return true
+}
+export async function applyConfirmedRegistryDeletions(identities:Array<OrbitDeletedIdentity&{email?:string|null}>){
+ const ids=identities.map(row=>row.id),aliases=identities.flatMap(row=>(row.externalIds??[]).map(link=>link.externalId)),emails=identities.map(row=>row.email).filter((email):email is string=>Boolean(email))
+ const users=await prisma.user.findMany({where:{OR:[{orbitUserId:{in:ids}},{id:{in:aliases}},{role:'PARENT',email:{in:emails}}]},include:{studentProfile:{include:{archive:{select:{id:true}}}},teacherProfile:true,staffProfile:true}})
+ let archived=0
+ for(const identity of identities)if(await archiveDeletedMirror(identity,users))archived++
+ return {archived}
 }
 let flight:Promise<{updated:number;archived:number;failed:number}>|null=null
 export function reconcileRegistryMirrors(directory?:OrbitSharedDirectory){

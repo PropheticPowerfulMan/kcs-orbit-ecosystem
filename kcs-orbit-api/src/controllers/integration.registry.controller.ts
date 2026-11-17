@@ -58,6 +58,7 @@ const createParentSchema = withCanonicalNameValidation({
   phone: z.string().min(6).optional(),
   physicalAddress: z.string().min(1).optional(),
   mustChangePassword: z.boolean().optional(),
+  additionalEmails: z.array(z.string().trim().email()).max(3).optional(),
   familyContacts: z.array(familyContactSchema).max(20).optional(),
 });
 
@@ -96,7 +97,8 @@ const createFamilySchema = z.object({
     phone: z.string().min(6).optional(),
     physicalAddress: z.string().min(1).optional(),
     mustChangePassword: z.boolean().optional(),
-    familyContacts: z.array(familyContactSchema).max(20).optional(),
+    additionalEmails: z.array(z.string().trim().email()).max(3).optional(),
+  familyContacts: z.array(familyContactSchema).max(20).optional(),
   }),
   students: z.array(createStudentSchema.omit({ organizationId: true, parentOrbitId: true })).min(1),
 });
@@ -119,6 +121,7 @@ const updateParentSchema = z.object({
   photoData: z.string().nullable().optional(),
   photoSource: z.string().nullable().optional(),
   studentIds: z.array(z.string().min(1)).max(100).optional(),
+  additionalEmails: z.array(z.string().trim().email()).max(3).optional(),
   familyContacts: z.array(familyContactSchema).max(20).optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
   message: "At least one field must be provided",
@@ -526,8 +529,9 @@ export async function updateRegistryEntity(req: Request, res: Response) {
     }
 
     const parent = await prisma.$transaction(async (tx) => {
-      const fullName = parentPayload.fullName || parentPayload.firstName || parentPayload.lastName
-        ? buildCanonicalFullName(parentPayload)
+      const currentParent = await tx.parent.findUniqueOrThrow({where:{id:target.orbitId}})
+      const fullName = parentPayload.fullName || parentPayload.firstName || parentPayload.lastName || parentPayload.middleName !== undefined
+        ? buildCanonicalFullName({...currentParent,...parentPayload})
         : undefined;
       const updatedParent = await tx.parent.update({
         where: { id: target.orbitId },
@@ -543,6 +547,7 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           ...(parentPayload.mustChangePassword !== undefined ? { mustChangePassword: parentPayload.mustChangePassword } : {}),
           ...(parentPayload.photoData !== undefined ? { photoData: parentPayload.photoData } : {}),
           ...(parentPayload.photoSource !== undefined ? { photoSource: parentPayload.photoSource } : {}),
+          ...(parentPayload.additionalEmails !== undefined ? { additionalEmails: [...new Set(parentPayload.additionalEmails.map(email => email.toLowerCase()))] } : {}),
           ...(parentPayload.familyContacts !== undefined ? { familyContacts: parentPayload.familyContacts as never } : {}),
         },
       });
@@ -615,7 +620,7 @@ export async function updateRegistryEntity(req: Request, res: Response) {
 
     const teacher = await prisma.$transaction(async (tx) => {
       const fullName = teacherPayload.fullName || teacherPayload.firstName || teacherPayload.lastName || teacherPayload.middleName
-        ? buildCanonicalFullName(teacherPayload)
+        ? buildCanonicalFullName({...currentTeacher,...teacherPayload})
         : undefined;
       const updatedTeacher = await tx.teacher.update({
         where: { id: target.orbitId },
@@ -795,6 +800,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
           phone: payload.parent.phone,
           physicalAddress: payload.parent.physicalAddress ? normalizeText(payload.parent.physicalAddress) : undefined,
           mustChangePassword: payload.parent.mustChangePassword,
+          additionalEmails: [...new Set((payload.parent.additionalEmails ?? []).map(email => email.toLowerCase()))],
           familyContacts: (payload.parent.familyContacts ?? []) as never,
         },
       });
@@ -875,6 +881,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
           phone: payload.phone,
           physicalAddress: payload.physicalAddress ? normalizeText(payload.physicalAddress) : undefined,
           mustChangePassword: payload.mustChangePassword,
+          additionalEmails: [...new Set((payload.additionalEmails ?? []).map(email => email.toLowerCase()))],
           familyContacts: (payload.familyContacts ?? []) as never,
         },
       });

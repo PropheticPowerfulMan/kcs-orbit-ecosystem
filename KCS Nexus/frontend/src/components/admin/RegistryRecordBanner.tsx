@@ -25,6 +25,11 @@ export function useRegistryDialogFocus(open:boolean) {
  useEffect(()=>{
   if(!open)return
   const previous=document.activeElement as HTMLElement|null
+  const updateViewport=()=>{const viewport=window.visualViewport,height=Math.max(180,Math.round(viewport?.height??window.innerHeight));for(const node of document.querySelectorAll<HTMLElement>('[data-entity-dialog]')){node.dataset.registryCompact=String(height<520);node.style.setProperty('--registry-edit-height',height+'px');node.style.setProperty('--registry-edit-top',Math.max(0,Math.round(viewport?.offsetTop??0))+'px')}}
+  updateViewport()
+  const observer=new MutationObserver(updateViewport);observer.observe(document.body,{childList:true})
+  window.addEventListener('resize',updateViewport);window.visualViewport?.addEventListener('resize',updateViewport);window.visualViewport?.addEventListener('scroll',updateViewport)
+
   const frame=requestAnimationFrame(()=>document.querySelectorAll<HTMLElement>('[data-entity-dialog] .registry-dialog-heading button').item(document.querySelectorAll('[data-entity-dialog] .registry-dialog-heading button').length-1)?.focus({preventScroll:true}))
   const trap=(event:KeyboardEvent)=>{
    if(event.key!=='Tab')return
@@ -35,6 +40,6 @@ export function useRegistryDialogFocus(open:boolean) {
    if(event.shiftKey&&(document.activeElement===first||!dialog.contains(document.activeElement))){event.preventDefault();last.focus()}else if(!event.shiftKey&&(document.activeElement===last||!dialog.contains(document.activeElement))){event.preventDefault();first.focus()}
   }
   document.addEventListener('keydown',trap)
-  return()=>{cancelAnimationFrame(frame);document.removeEventListener('keydown',trap);if(previous?.isConnected)previous.focus({preventScroll:true})}
+  return()=>{observer.disconnect();window.removeEventListener('resize',updateViewport);window.visualViewport?.removeEventListener('resize',updateViewport);window.visualViewport?.removeEventListener('scroll',updateViewport);cancelAnimationFrame(frame);document.removeEventListener('keydown',trap);if(previous?.isConnected)previous.focus({preventScroll:true})}
  },[open])
 }

@@ -1,3 +1,4 @@
+import { reportCardFilename } from './reportCardFilename.js'
 import QRCode from 'qrcode'
 import { createHash } from 'node:crypto'
 import { renderReportCardHtml, courseDisplayName } from './officialReportCardHtml.js'
@@ -20,8 +21,10 @@ export async function officialReportCardDocument(input: ReportCardInput) {
   const documentId = `KCS-RC-${issued.toISOString().slice(0, 10).replace(/-/g, '')}-${fingerprint.slice(0, 16)}`
   const verifyUrl = `${process.env.FRONTEND_URL?.replace(/\/$/, '') || 'https://kinshasachristianschool.org'}/verify/report-card?document=${encodeURIComponent(documentId)}&fingerprint=${fingerprint}`
   const qrCode = await QRCode.toDataURL(verifyUrl, { errorCorrectionLevel: 'H', width: 600, margin: 4 })
-  const html = await renderReportCardHtml(input, documentId, fingerprint, qrCode, issued)
-  return { html, documentId, fingerprint }
+  const filename = reportCardFilename(input)
+  const title = filename.replace(/\.pdf$/i,'').replace(/&/g,'&amp;')
+  const html = (await renderReportCardHtml(input, documentId, fingerprint, qrCode, issued)).replace(/<title>[\s\S]*?<\/title>/i, '<title>'+title+'</title>')
+  return { html, documentId, fingerprint, filename }
 }
 export async function officialReportCardPdf(input: ReportCardInput) {
   const document = await officialReportCardDocument(input)

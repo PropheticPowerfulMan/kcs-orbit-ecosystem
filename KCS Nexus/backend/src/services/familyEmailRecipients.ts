@@ -9,6 +9,7 @@ const name=(p:{firstName?:string|null;middleName?:string|null;lastName?:string|n
 export function registeredFamilyEmailTargets(parent:Parent,official?:OrbitSharedDirectory['parents'][number]):FamilyEmailTarget[]{
  const result=new Map<string,FamilyEmailTarget>();const add=(email:unknown,display:string,phone:unknown,relationship:string)=>{const value=typeof email==='string'?email.trim().toLowerCase():'';if(!z.string().email().safeParse(value).success||value.endsWith('.local')||result.has(value))return;result.set(value,{parentId:parent.id,email:value,name:display||name(parent),phone:typeof phone==='string'?phone:null,relationship})}
  add(official?.email??parent.email,official?name(official)||official.fullName:name(parent),official?.phone??parent.phone,'PARENT')
+ for(const email of official?.additionalEmails??[])add(email,official?name(official)||official.fullName:name(parent),official?.phone??parent.phone,'PARENT_ADDITIONAL')
  for(const contact of official?.familyContacts??[])add(contact.email,name(contact),contact.phone,contact.relationship||contact.kind||'FAMILY_CONTACT')
  return [...result.values()]
 }

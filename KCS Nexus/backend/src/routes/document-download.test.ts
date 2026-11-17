@@ -33,3 +33,10 @@ test('limits simultaneous conversion and releases slots after failures',async()=
  release();assert.match((await first).error?.message,/unavailable/)
  const retry=call(handler);release();assert.notEqual((await retry).error?.statusCode,429)
 })
+
+
+test('keeps the descriptive report-card filename with long accented learner names',()=>{
+ const name='RC - Grade 11 - Semester 1 Quarter 1 - 2026-2027 - '+'Lokala Lévana '.repeat(10).trim()
+ assert.equal(pdfSnapshot({html,filename:name+'.pdf'}).filename,name+'.pdf')
+ assert.throws(()=>pdfSnapshot({html,filename:'x'.repeat(241)}))
+})

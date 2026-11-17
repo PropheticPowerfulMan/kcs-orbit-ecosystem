@@ -61,7 +61,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
     // Only trusted, server-generated report HTML is accepted. All personal fields are escaped there.
     const html = response.data.data.html as string
     if (!html.startsWith('<!doctype html>')) throw new Error('Invalid official report document')
-    await showOfficialDocument(printWindow, html, { filename: `KCS-report-card-${card.id}`, language, onError: onBlocked })
+    await showOfficialDocument(printWindow, html, { filename: response.data.data.filename || `KCS-report-card-${card.id}`, language, onError: onBlocked })
   } catch {
     printWindow.close()
     onBlocked(language === 'fr' ? 'Impossible de préparer le bulletin officiel. Réessayez.' : 'Unable to prepare the official report card. Please retry.')

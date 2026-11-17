@@ -37,7 +37,7 @@ export default function MutationFeedback() {
   const closeLabel = isFrench ? 'Fermer' : 'Close'
 
   return createPortal(
-    <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="alertdialog" aria-modal="true" aria-live="assertive" aria-labelledby="mutation-feedback-title">
+    <div className="fixed inset-0 z-[2147483600] flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="alertdialog" aria-modal="true" aria-live="assertive" aria-labelledby="mutation-feedback-title" data-mutation-feedback data-nexus-dialog-preserve onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setFeedback(null)}}}>
       <section className={`w-full max-w-md rounded-3xl border bg-white p-6 text-center shadow-2xl dark:bg-kcs-blue-900 ${feedback.isError ? 'border-red-300 dark:border-red-800' : 'border-emerald-300 dark:border-emerald-800'}`}>
         <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full text-3xl font-black ${feedback.isError ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'}`}>
           {feedback.isError ? '!' : '✓'}

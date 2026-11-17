@@ -88,7 +88,12 @@ def ecosystem_employee_detail_view(request,pk):
         + 'Votre dossier employ' + chr(0x00e9) + ' KCS a ' + chr(0x00e9) + 't' + chr(0x00e9) + ' mis ' + chr(0x00e0) + ' jour par un administrateur.' + chr(10)
         + 'Si vous constatez une information incorrecte, veuillez contacter l' + chr(0x2019) + 'administration.'
     )
-    delivery = deliver_employee_communication(teacher, subject, body, notif_type=Notification.TYPE_MESSAGE, link='/teachers')
+    if request.headers.get('x-kcs-notification-owner') == 'NEXUS':
+        # The trusted Nexus caller persists email/SMS in its durable queue.
+        Notification.objects.create(user=teacher.user, title=subject[:200], body=body, notif_type=Notification.TYPE_MESSAGE, link='/teachers')
+        delivery = []
+    else:
+        delivery = deliver_employee_communication(teacher, subject, body, notif_type=Notification.TYPE_MESSAGE, link='/teachers')
     data = TeacherSerializer(teacher).data
     data['notificationDelivery'] = [item.__dict__ for item in delivery]
     return Response(data)

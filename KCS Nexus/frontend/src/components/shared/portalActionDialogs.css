@@ -13,3 +13,13 @@
 .portal-action-surface :is(button,input):focus-visible{outline:3px solid #2da9c7;outline-offset:3px}
 @media(max-width:600px){.portal-action-overlay{padding:12px}.portal-action-surface{border-radius:20px;max-height:calc(100dvh - 24px)}.portal-action-surface>header{gap:12px;padding:20px}.portal-action-surface>header h2{font-size:18px}.portal-action-icon{width:43px;height:43px;flex-basis:43px;border-radius:13px}.portal-action-content{padding:22px;font-size:13px}.portal-action-surface>footer{padding:16px 20px}.portal-action-surface>footer button{flex:1}}
 @media(prefers-reduced-motion:reduce){.portal-action-surface{animation:none!important}}
+
+
+.portal-action-overlay{top:var(--nexus-dialog-viewport-top,0px);bottom:auto;height:var(--nexus-dialog-viewport-height,100vh);box-sizing:border-box}
+.portal-action-surface{min-height:0;max-height:calc(var(--nexus-dialog-viewport-height,100vh) - 36px);display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
+.portal-action-content{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#3d87a8 transparent;touch-action:pan-y}
+html[data-nexus-dialog-compact=true] .portal-action-surface>header{padding:10px 12px;gap:10px}
+html[data-nexus-dialog-compact=true] .portal-action-surface>header h2{font-size:16px;margin-top:2px}
+html[data-nexus-dialog-compact=true] .portal-action-icon{width:34px;height:34px;flex-basis:34px;border-radius:10px}
+html[data-nexus-dialog-compact=true] .portal-action-content{padding:12px 15px;font-size:12px;line-height:1.5}
+html[data-nexus-dialog-compact=true] .portal-action-surface>footer{padding:8px 12px}
