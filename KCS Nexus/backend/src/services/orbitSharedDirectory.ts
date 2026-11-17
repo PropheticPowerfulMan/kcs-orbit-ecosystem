@@ -31,6 +31,7 @@ export type OrbitDirectoryParent = {
   email?: string | null
   photoData?: string | null
   accessCode?: string | null
+  additionalEmails?: string[]
   familyContacts?: OrbitFamilyContact[]
   mustChangePassword?: boolean
   organizationId?: string | null

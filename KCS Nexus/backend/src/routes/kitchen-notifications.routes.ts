@@ -1,3 +1,4 @@
+import { familyEmailRecipients } from '../services/familyEmailRecipients.js'
 import { timingSafeEqual } from 'node:crypto'
 import { Router } from 'express'
 import { z } from 'zod'
@@ -32,7 +33,7 @@ kitchenNotificationsRouter.post('/deliver', asyncHandler(async (req, res) => {
 
   if (Boolean(input.attachmentName) !== Boolean(input.attachmentBase64)) throw new ApiError(400, 'Incomplete Kitchen attachment')
 
-  const user = await prisma.user.findFirst({ where: { orbitUserId: input.orbitPersonId }, select: { id: true, email: true } })
+  const user = await prisma.user.findFirst({ where: { orbitUserId: input.orbitPersonId }, select: { id: true, email: true, role: true, firstName: true, middleName: true, lastName: true, phone: true } })
   if (!user && !input.recipientEmail) {
     return success(res, { delivered: true, nexusAccount: false, email: 'SKIPPED' }, 'Kitchen notification remains available in KCS Kitchen')
   }
@@ -46,14 +47,17 @@ kitchenNotificationsRouter.post('/deliver', asyncHandler(async (req, res) => {
   let email: 'SENT' | 'SKIPPED' = 'SKIPPED'
   const emailRecipient = input.recipientEmail || user?.email
   if (input.channels.includes('EMAIL') && emailRecipient) {
+    const recipients = !input.recipientEmail && user?.role === 'PARENT' ? ((await familyEmailRecipients([user])).get(user.id) ?? []).map(target => target.email) : [emailRecipient]
+    for (const recipient of recipients) {
     const result = await sendSchoolMail({
-      to: emailRecipient, subject: input.title, text: input.text, branded: true,
+      to: recipient, subject: input.title, text: input.text, branded: true,
       attachments: input.attachmentBase64 && input.attachmentName
         ? [{ filename: input.attachmentName, content: Buffer.from(input.attachmentBase64, 'base64'), contentType: 'application/pdf' }]
         : undefined,
     })
     if (!result.sent) throw new ApiError(502, result.reason)
     email = 'SENT'
+    }
   }
 
   const notification = input.channels.includes('IN_APP') && user

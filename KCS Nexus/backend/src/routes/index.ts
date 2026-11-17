@@ -1,3 +1,4 @@
+import { reportCardReceiptsRouter } from './report-card-receipts.routes.js'
 import { documentDownloadRouter } from './document-download.routes.js'
 import {academicVisibilityResponseGuard} from '../middleware/academicVisibility.js'
 import {academicVisibilityRouter} from './academic-visibility.routes.js'
@@ -41,6 +42,7 @@ import { studentGovernmentRouter } from './student-government.routes.js'
 import { sentinelNotificationsRouter } from './sentinel-notifications.routes.js'
 
 export const router = Router()
+router.use('/report-card-receipts', reportCardReceiptsRouter)
 router.use(academicVisibilityResponseGuard)
 router.use('/academic-visibility',academicVisibilityRouter)
 

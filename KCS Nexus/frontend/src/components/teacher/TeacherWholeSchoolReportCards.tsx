@@ -1,3 +1,4 @@
+import { confirmPortalAction } from '@/utils/portalActionDialogs';
 import { usePublishedAcademicCalendar } from '@/hooks/usePublishedAcademicCalendar';
 import { ACADEMIC_REPORT_PERIODS } from '@/constants/academicPeriods';
 import ReportCardAnalyticsPanel from '@/components/shared/ReportCardAnalyticsPanel';
@@ -59,6 +60,7 @@ type LearnerRecord = {
     principalStatus: string;
     publicationStatus: string;
     hiddenCourseIds?: string[];
+    obsoleteHiddenCourseIds?: string[];
     submissionHistory?: { count:number; firstSubmittedAt:string|null; lastSubmittedAt:string|null; receipts:Array<{id:string;submittedAt:string}> };
   } | null;
 };
@@ -228,7 +230,7 @@ export default function TeacherWholeSchoolReportCards() {
     setNotice('');
     setError('');
   }, [selected?.id, academicYear, term]);
-  const savedVisibilityKey=JSON.stringify(selected?.reportCard?.hiddenCourseIds??[]);
+  const savedVisibilityKey=JSON.stringify((selected?.reportCard?.hiddenCourseIds??[]).filter(id=>selected?.subjects.some(subject=>subject.courseId===id)));
   useEffect(()=>{setHiddenCourseIds(JSON.parse(savedVisibilityKey))},[selected?.id,academicYear,term,savedVisibilityKey]);
 
   const locked = periodReadOnly;
@@ -285,6 +287,21 @@ export default function TeacherWholeSchoolReportCards() {
     } finally {
       setVisibilityBusy(false);
     }
+  };
+  const restoreVisibility = async () => {
+    if(!selected||visibilityBusy)return;
+    if(!await confirmPortalAction(tr('Retirer le masquage des cours pour cet élève ? Les cours existants seront réintégrés et la moyenne recalculée. Les références aux cours supprimés seront nettoyées.','Remove course hiding for this learner? Existing courses will be restored and the average recalculated. References to deleted courses will be removed.')))return;
+    setVisibilityBusy(true);setError('');
+    try{
+      await academicRecordsAPI.restoreTeacherReportVisibility(selected.id,{academicYear,term,confirmed:true});
+      await load();
+      const message=tr('Masquage retiré. Le bulletin de cet élève a été actualisé.','Course hiding removed. This learner’s report card has been updated.');
+      setNotice(message);window.dispatchEvent(new CustomEvent('ecosystem:mutation-success',{detail:{message}}));
+    }catch(reason:any){
+      const raw=reason?.response?.data?.message||'';
+      const message=/CLOSED|read-only/.test(raw)?tr('Cette période ou ce bulletin est protégé. Le SuperAdmin doit autoriser sa correction.','This period or report card is protected. The SuperAdmin must authorize its correction.'):tr('Le masquage n’a pas pu être retiré. Actualisez et réessayez.','Course hiding could not be removed. Refresh and try again.');
+      setError(message);window.dispatchEvent(new CustomEvent('ecosystem:mutation-error',{detail:{message}}));
+    }finally{setVisibilityBusy(false)}
   };
   const reportSaveRef = useRef(false);
   const updateReport = async (submit: boolean) => {
@@ -678,12 +695,13 @@ export default function TeacherWholeSchoolReportCards() {
                     <h4 className="font-bold text-kcs-blue-950 dark:text-white">Subject contributions from all teachers</h4>
                     <p className="text-xs text-gray-500">Hide or restore one or several courses for one or several learners. Every operation asks for its exact scope.</p>
                   </div>
-                  {selected.isHomeroomStudent && (
+                  {selected.isHomeroomStudent && <div className="flex flex-wrap gap-2">
+                    {(hiddenCourseIds.length>0||(selected.reportCard?.obsoleteHiddenCourseIds?.length??0)>0)&&<button type="button" disabled={visibilityBusy||(locked&&hiddenCourseIds.length>0)} onClick={()=>void restoreVisibility()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-800 dark:border-emerald-500 dark:bg-emerald-950 dark:text-emerald-200 disabled:opacity-40"><Eye size={15}/>{tr('Retirer le masquage','Remove course hiding')}</button>}
                     <button type="button" disabled={locked} onClick={() => openVisibility('HIDE', [selected.id], [])} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-xs font-black text-white hover:bg-kcs-blue-800 disabled:opacity-40">
                       <EyeOff size={15} />
-                      Manage visibility
+                      {tr('Gérer la visibilité','Manage visibility')}
                     </button>
-                  )}
+                  </div>}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[820px] text-sm">

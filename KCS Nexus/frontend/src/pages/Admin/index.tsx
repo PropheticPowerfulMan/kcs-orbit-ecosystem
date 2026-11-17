@@ -141,6 +141,7 @@ type AdminParentRecord = {
   displayId?: string
   name: string
   email: string
+  additionalEmails?: string[]
   phone: string
   physicalAddress: string
   students: AdminStudentRecord[]
@@ -161,6 +162,7 @@ type SharedDirectoryParent = {
   middleName?: string | null
   lastName?: string | null
   email?: string | null
+  additionalEmails?: string[]
   phone?: string | null
   physicalAddress?: string | null
   photoData?: string | null
@@ -215,6 +217,7 @@ type AdminParentEditForm = {
   middleName: string
   lastName: string
   email: string
+  additionalEmails?: string[]
   phone: string
   physicalAddress: string
   photoData: string
@@ -371,6 +374,7 @@ const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParen
   photoData: parent?.photoData ?? '',
   // Editing must expose the same three contact categories as family creation,
   // including for older families whose canonical contact array is still empty.
+  additionalEmails: Array.from({ length: 3 }, (_, index) => parent?.additionalEmails?.[index] ?? ''),
   familyContacts: ensureFamilyContactDrafts(parent?.familyContacts),
 })
 
@@ -920,6 +924,7 @@ const buildAdminParentRecordsFromDirectory = (
       status: linkedStudents.length === 0 ? 'Sans enfant rattache' : needsAction ? 'Suivi requis' : 'Actif',
       identifierType,
       photoData: parent.photoData ?? null,
+      additionalEmails: parent.additionalEmails ?? [],
       familyContacts: parent.familyContacts ?? [],
     }
   }).sort((left, right) => left.name.localeCompare(right.name))
@@ -1763,6 +1768,22 @@ const AdminSectionView = ({
     return apiRoster
   }
 
+  const commitParentDirectory = (entity: SharedDirectoryParent | null, deletedId?: string) => {
+    ++rosterRequestRef.current
+    const current = sharedDirectoryRef.current ?? sharedDirectory ?? { source: 'orbit' as const, parents: [] }
+    const parents = (current.parents ?? []).filter(parent => parent.id !== (entity?.id ?? deletedId))
+    if (entity) parents.push({ ...(current.parents ?? []).find(parent => parent.id === entity.id), ...entity })
+    const next = { ...current, parents }
+    sharedDirectoryRef.current = next
+    setSharedDirectory(next)
+    return next
+  }
+  const refreshRegistryAfterCommit = () => {
+    void refreshOfficialRoster(true).catch(() => {
+      // The confirmed mutation is already visible. A later focus refresh retries the directory.
+    })
+  }
+
   useEffect(() => {
     if (!shouldLoadRoster) {
       setStudentNotice('')
@@ -2030,19 +2051,12 @@ const AdminSectionView = ({
           ? { photoData: studentEditForm.photoData ?? '' }
           : {}),
       })
-      let updatedStudent: AdminStudentRecord | null = null
-      try {
-        const roster = await refreshOfficialRoster(true)
-        updatedStudent = roster.find((student) => student.id === editingStudent.id) ?? null
-      } catch (refreshError) {
-        setEditingStudent(null)
-        const successMessage = response.data?.message || `${normalizedName} a été mis à jour avec succès.`
-        setStudentNotice(`${successMessage} Le rafraîchissement de l’écran a échoué ; utilisez Actualiser sans soumettre de nouveau le formulaire. ${extractStudentApiMessage(refreshError, '')}`.trim())
-        return
-      }
-      if (!updatedStudent || normalizeSchoolLevel(updatedStudent.grade) !== normalizeSchoolLevel(studentEditForm.grade) || (updatedStudent.section || '').trim().toLowerCase() !== studentEditForm.section.trim().toLowerCase()) {
-        throw new Error(language === 'fr' ? 'Le registre ne confirme pas encore la classe et la section demandées. Actualisez pour vérifier avant de recommencer.' : 'The registry has not confirmed the requested class and section. Refresh to verify before retrying.')
-      }
+      const canonical = response.data?.data?.canonicalEntity
+      const profile = response.data?.data
+      const updatedStudent: AdminStudentRecord = profile?.user && profile?.grade ? apiProfileToRosterRecord(profile) : { ...editingStudent, name: normalizedName, email: canonical?.email ?? studentEditForm.email.trim(), studentNumber: canonical?.studentNumber ?? studentEditForm.studentNumber.trim(), grade: studentEditForm.grade, section: studentEditForm.section, status: canonical?.status ?? studentEditForm.status, dateOfBirth: studentEditForm.dateOfBirth || null, photoData: studentEditForm.photoData ?? editingStudent.photoData }
+      ++rosterRequestRef.current
+      setOfficialRoster(current => { const next=current.map(student=>student.id===editingStudent.id?updatedStudent:student);saveRoster(next);return next })
+      refreshRegistryAfterCommit()
       if (updatedStudent) {
         setSelectedStudent(updatedStudent)
         if (viewingStudent?.id === updatedStudent.id) {
@@ -2059,8 +2073,8 @@ const AdminSectionView = ({
         details: [
           ['Résultat', successMessage],
           ['Dashboard', delivery?.dashboard ? 'Message ajouté aux tableaux de bord concernés' : 'Notification interne en attente'],
-          ['E-mail', delivery?.email?.sent ? 'E-mail envoyé' : `Non envoyé (${delivery?.email?.reason || 'configuration indisponible'})`],
-          ['SMS', delivery?.sms?.sent ? 'SMS envoyé' : `Non envoyé (${delivery?.sms?.reason || 'configuration indisponible'})`],
+          ['E-mail', delivery?.email?.queued ? 'E-mail placé dans la file d’envoi' : delivery?.email?.sent ? 'E-mail envoyé' : `Non envoyé (${delivery?.email?.reason || 'configuration indisponible'})`],
+          ['SMS', delivery?.sms?.queued ? 'SMS placé dans la file d’envoi' : delivery?.sms?.sent ? 'SMS envoyé' : `Non envoyé (${delivery?.sms?.reason || 'configuration indisponible'})`],
         ],
       })
     } catch (error) {
@@ -2084,7 +2098,10 @@ const AdminSectionView = ({
     if (!reason || reason.trim().length < 10) return setStudentNotice('Un motif officiel d’au moins 10 caractères est obligatoire.')
     try {
       const response = await studentsAPI.delete(student.id, { confirmation: 'ARCHIVER', reason: reason.trim() })
-      await refreshOfficialRoster(true)
+      rosterRequestRef.current += 1
+      setOfficialRoster(rows => { const next = rows.filter(row => row.id !== student.id); saveRoster(next); return next })
+      setSelectedStudent(null)
+      refreshRegistryAfterCommit()
       setStudentNotice(response.data?.message || `${student.name} a été retiré des registres actifs et archivé.`)
     } catch (error) {
       setStudentNotice(extractStudentApiMessage(error, `Impossible de supprimer ${student.name} pour le moment.`))
@@ -2133,6 +2150,11 @@ const AdminSectionView = ({
     }
     if (readyNewStudents.length > 0 && !parentEditForm.email.trim()) {
       setParentNotice('L’e-mail du parent est requis pour créer et transmettre les accès du nouvel enfant.')
+      return
+    }
+    const additionalEmails = [...new Set((parentEditForm.additionalEmails ?? []).map(email => email.trim().toLowerCase()).filter(Boolean))].filter(email => email !== parentEditForm.email.trim().toLowerCase())
+    if (additionalEmails.some(email => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email))) {
+      setParentNotice(tr('Vérifiez les adresses e-mail supplémentaires. Aucune modification n’a été envoyée.', 'Check the additional email addresses. No change was submitted.'))
       return
     }
     const preparedFamilyContacts = prepareFamilyContactsForSave(parentEditForm.familyContacts)
@@ -2187,7 +2209,7 @@ const AdminSectionView = ({
 
     let directoryAtSave: SharedDirectoryPayload
     try {
-      const directoryResponse = await registryAPI.getDirectory(true, true)
+      const directoryResponse = await registryAPI.getDirectory(true, true, true)
       directoryAtSave = directoryResponse?.data?.data as SharedDirectoryPayload
       if (!directoryAtSave || !Array.isArray(directoryAtSave.parents)) throw new Error('Réponse du registre officiel incomplète.')
     } catch (error) {
@@ -2265,15 +2287,18 @@ const AdminSectionView = ({
         // Include children selected from the existing official registry. This
         // creates an additional parent link; it never recreates the learner.
         studentIds: Array.from(new Set([...freshStudentIds, ...retainedIds, ...createdStudentIds])),
+        additionalEmails,
         familyContacts: preparedFamilyContacts.contacts,
         ...(parentEditForm.photoData !== (editingParent.photoData ?? '') ? { photoData: parentEditForm.photoData } : {}),
       }, editingParent.identifierType)
       parentCommitted = true
 
-      const roster = await refreshOfficialRoster(true)
-      const refreshedParents = buildAdminParentRecordsFromDirectory(sharedDirectoryRef.current ?? sharedDirectory, roster)
+      const canonical = response.data?.data?.canonicalEntity ?? response.data?.data?.entity
+      const nextDirectory = commitParentDirectory({ ...freshParent, ...canonical, id: editingParent.id, additionalEmails, familyContacts: preparedFamilyContacts.contacts, firstName: parentEditForm.firstName.trim(), middleName: parentEditForm.middleName.trim() || null, lastName: parentEditForm.lastName.trim(), email: parentEditForm.email.trim(), phone: parentEditForm.phone.trim() })
+      const refreshedParents = buildAdminParentRecordsFromDirectory(nextDirectory, officialRoster)
       const updatedParent = refreshedParents.find((parent) => parent.id === editingParent.id || parent.displayId === editingParent.id) ?? null
       setEditingParent(null)
+      refreshRegistryAfterCommit()
       if (updatedParent) setSelectedParent(updatedParent)
       setParentNotice(response.data?.message || `${normalizedName} a été mis à jour avec succès.`)
     } catch (error) {
@@ -2315,7 +2340,8 @@ const AdminSectionView = ({
 
     try {
       const response = await registryAPI.deleteEntity('parent', parent.id, parent.identifierType)
-      await refreshOfficialRoster(true)
+      commitParentDirectory(null, parent.id)
+      refreshRegistryAfterCommit()
       setSelectedParent((current) => current?.id === parent.id ? null : current)
       setEditingParent((current) => current?.id === parent.id ? null : current)
       setParentNotice(response.data?.message || `${parent.name} a ete supprime du registre parent.`)
@@ -2403,6 +2429,12 @@ const AdminSectionView = ({
     setShowCreateStudent((value) => !value)
   }
 
+  const deleteRejectedAdmission = async (application: AdminAdmissionRequest) => {
+    if (application.status !== 'REJECTED' || application.provisionedAt) return
+    if (!await confirmPortalAction(tr(`Supprimer définitivement la candidature refusée ${application.applicationNumber} ?`, `Permanently delete rejected application ${application.applicationNumber}?`))) return
+    try { await admissionsAPI.deleteRejected(application.id); setAdmissionRequests(items => { const next=items.filter(item=>item.id!==application.id);saveAdmissions(next);return next });setAdmissionNotice(tr('Candidature refusée supprimée. Les comptes officiels sont conservés.','Rejected application deleted. Official accounts are preserved.')) }
+    catch(error){setAdmissionNotice(extractStudentApiMessage(error,tr('Suppression impossible.','Unable to delete.')))}
+  }
   const updateAdmissionStatus = async (application: AdminAdmissionRequest, status: AdminAdmissionRequest['status']) => {
     try {
       await admissionsAPI.updateStatus(application.id, status)
@@ -2770,6 +2802,11 @@ const AdminSectionView = ({
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">{tr('Adresse physique','Home address')}<input value={parentEditForm.physicalAddress} onChange={(event) => setParentEditForm((current) => ({ ...current, physicalAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Adresse complète du parent','Guardian home address')} /></label>
                   </div>
                 </section>
+                <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-950/40">
+                  <p className="text-xs font-bold text-kcs-blue-900 dark:text-sky-100">{tr('Adresses e-mail supplémentaires du parent', 'Additional parent email addresses')}</p>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{tr('Facultatif : ces adresses reçoivent aussi les bulletins, certificats, relevés et communications. Elles ne changent pas l’identifiant de connexion.', 'Optional: these addresses also receive report cards, certificates, transcripts and communications. They do not change the sign-in identity.')}</p>
+                  <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map(index => <label key={index} className="registry-field min-w-0"><span>{tr('E-mail supplémentaire', 'Additional email')} {index + 1}</span><input type="email" autoComplete="email" value={parentEditForm.additionalEmails?.[index] ?? ''} onChange={event => setParentEditForm(current => ({ ...current, additionalEmails: Array.from({ length: 3 }, (_, slot) => slot === index ? event.target.value : current.additionalEmails?.[slot] ?? '') }))} placeholder="name@example.com" /></label>)}</div>
+                </div>
                 <FamilyContactsEditor contacts={parentEditForm.familyContacts} onChange={(familyContacts) => setParentEditForm((current) => ({ ...current, familyContacts }))} />
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3427,7 +3464,7 @@ const AdminSectionView = ({
                 <button className={adminOutlineButton} onClick={() => updateAdmissionStatus(item, 'UNDER_REVIEW')}>Review</button>
                 <button className={adminOutlineButton} onClick={() => updateAdmissionStatus(item, 'INTERVIEW_SCHEDULED')}>Interview</button>
                 <button className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700" disabled={admissionApproving === item.id || Boolean(item.provisionedAt)} onClick={() => void approveAdmission(item)}>{item.provisionedAt ? 'Family created' : admissionApproving === item.id ? 'Creating family...' : 'Approve + create ' + item.children.length + ' child account(s)'}</button>
-                <button className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700" onClick={() => updateAdmissionStatus(item, 'REJECTED')}>Refuse</button>
+                <button className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700" onClick={() => updateAdmissionStatus(item, 'REJECTED')}>Refuse</button>{item.status==='REJECTED'&&!item.provisionedAt&&<button type="button" onClick={()=>void deleteRejectedAdmission(item)} className="inline-flex items-center gap-2 rounded-xl border border-red-300 bg-red-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-800 dark:border-red-400"><Trash2 size={16}/>{tr('Supprimer la candidature refusée','Delete rejected application')}</button>}
               </div>
             </div>
           ))}

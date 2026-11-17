@@ -80,10 +80,47 @@ academicCalendarRouter.get('/', asyncHandler(async (_req, res) => {
   res.json(data)
 }))
 
-academicCalendarRouter.get('/period-access', asyncHandler(async (_req, res) => {
+academicCalendarRouter.get('/period-access', asyncHandler(async (req: AuthenticatedRequest, res) => {
   res.setHeader('Cache-Control', 'private, no-store')
-  return success(res, await academicPeriodAccess(), 'Academic period access loaded')
+  return success(res, await academicPeriodAccess(prisma, req.user!.sub), 'Academic period access loaded')
 }))
+
+academicCalendarRouter.get('/reopenings', requireSuperAdmin(), asyncHandler(async (_req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  const [teachers, events] = await Promise.all([
+    prisma.teacherProfile.findMany({ where: { user: { accountBlockedAt: null } }, select: { userId: true, employeeNumber: true, user: { select: { firstName: true, middleName: true, lastName: true } } }, orderBy: { user: { lastName: 'asc' } } }),
+    prisma.auditLog.findMany({ where: { targetType: 'AcademicPeriodReopening' }, select: { id: true, action: true, metadata: true, createdAt: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+  ]);
+  const latest = new Map<string, typeof events[number]>();
+  for (const e of events) { const m = e.metadata as any; latest.set(m.academicYear+'::'+m.term+'::'+m.teacherUserId, e); }
+  return success(res, { teachers, grants: [...latest.values()].filter(e => e.action === 'ACADEMIC_PERIOD_REOPENED') });
+}));
+academicCalendarRouter.post('/reopen-period', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const tr = (fr: string, en: string) => req.get('x-ui-language') === 'en' ? en : fr;
+  const input = z.object({
+    academicYear: z.string().regex(/^\d{4}-\d{4}$/),
+    term: z.enum(['Semester 1 · Quarter 1','Semester 1 · Quarter 2','Semester 2 · Quarter 3','Semester 2 · Quarter 4','Semester 1','Semester 2','Annual final']),
+    teacherUserIds: z.array(z.string().min(1)).max(500).default([]), allTeachers: z.boolean().default(false),
+    enabled: z.boolean(), confirmed: z.literal(true), reason: z.string().trim().min(3).max(500),
+  }).parse(req.body);
+  if (!input.allTeachers && !input.teacherUserIds.length) throw new ApiError(400, tr('Choisissez au moins un enseignant.', 'Select at least one teacher.'));
+  const teacherIds = input.allTeachers ? ['*'] : [...new Set(input.teacherUserIds)];
+  if (!input.allTeachers && await prisma.teacherProfile.count({where: {userId: {in: teacherIds}}}) !== teacherIds.length) throw new ApiError(400, tr('La sélection contient un enseignant inconnu.', 'The selection contains an unknown teacher.'));
+  const actorId = await databaseActorId(req.user!.sub);
+  const result = await prisma.$transaction(async tx => {
+    await lockAcademicYears(tx, [input.academicYear], true);
+    const access = await academicPeriodAccess(tx);
+    if (!(access.calendars ?? []).some(c => c.name === input.academicYear)) throw new ApiError(409, tr('Année scolaire non publiée.', 'This school year is not published.'));
+    if (input.enabled && !academicPeriodIsReadOnly(access, input.academicYear, input.term)) throw new ApiError(409, tr('Cette période est déjà ouverte.', 'This period is already open.'));
+    await tx.auditLog.createMany({ data: teacherIds.map(teacherUserId => ({
+      actorId, action: input.enabled ? 'ACADEMIC_PERIOD_REOPENED' : 'ACADEMIC_PERIOD_REOPENING_REVOKED',
+      targetType: 'AcademicPeriodReopening', targetId: input.academicYear+'::'+input.term+'::'+teacherUserId,
+      metadata: { academicYear: input.academicYear, term: input.term, teacherUserId, reason: input.reason },
+    })) });
+    return { academicYear: input.academicYear, term: input.term, affectedTeachers: teacherIds, enabled: input.enabled };
+  });
+  return success(res, result, tr('Dérogation enregistrée. La clôture générale reste inchangée.', 'Permission saved. The general closure remains unchanged.'));
+}));
 
 academicCalendarRouter.post('/close-period', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const tr = (fr: string, en: string) => req.get('x-ui-language') === 'en' ? en : fr

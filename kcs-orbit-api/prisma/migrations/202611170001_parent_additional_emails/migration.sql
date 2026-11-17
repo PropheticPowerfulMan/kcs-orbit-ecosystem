@@ -1,0 +1,1 @@
+ALTER TABLE "Parent" ADD COLUMN "additionalEmails" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

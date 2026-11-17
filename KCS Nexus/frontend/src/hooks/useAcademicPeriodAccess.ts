@@ -3,6 +3,8 @@ import { academicCalendarAPI } from "@/services/api";
 import { useAuthStore } from "@/store/authStore";
 
 type Access = {
+  canManageClosedPeriods?: boolean;
+  reopenedPeriods?: Array<{ academicYear: string; term: string }>;
   activeAcademicYear: string | null;
   activeEntryTerm?: string | null;
   closedPeriods: Array<{
@@ -39,6 +41,8 @@ export function isAcademicPeriodReadOnly(
       ? "Semester 1"
       : "Semester 2"
     : normalized;
+  if (access.canManageClosedPeriods || (access.reopenedPeriods ?? []).some(period =>
+    period.academicYear === year && ["Annual final", normalized, semester].includes(period.term.replace(/Trimester/gi, "Quarter")))) return false;
   return access.closedPeriods.some(
     (period) =>
       period.academicYear === year &&

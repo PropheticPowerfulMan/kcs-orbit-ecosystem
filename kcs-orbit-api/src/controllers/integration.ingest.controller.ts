@@ -865,7 +865,7 @@ export async function ingestSavanexParent(req: Request, res: Response) {
 
   const { organizationId, externalId, occurredAt, payload } = contract;
   const fullName = buildCanonicalFullName(payload);
-  const { firstName, middleName, lastName, phone, email, physicalAddress, mustChangePassword, photoData, photoSource, familyContacts } = payload;
+  const { firstName, middleName, lastName, phone, email, physicalAddress, mustChangePassword, photoData, photoSource, familyContacts, additionalEmails } = payload;
   const metadata = rawBody.metadata;
   const sourceEventKey = buildSourceEventKey({ entityType: "parent", externalId, occurredAt });
 
@@ -905,10 +905,10 @@ export async function ingestSavanexParent(req: Request, res: Response) {
   const parent = targetParentId
     ? await prisma.parent.update({
       where: { id: targetParentId },
-      data: { fullName, firstName, middleName, lastName, phone, email, physicalAddress, mustChangePassword: mustChangePassword ?? false, photoData, photoSource, familyContacts: (familyContacts ?? []) as never, organizationId }
+      data: { fullName, firstName, middleName, lastName, phone, email, physicalAddress, mustChangePassword: mustChangePassword ?? false, photoData, photoSource, ...(familyContacts !== undefined ? { familyContacts: familyContacts as never } : {}), ...(additionalEmails !== undefined ? { additionalEmails: [...new Set((additionalEmails as string[]).map(email => email.trim().toLowerCase()))] } : {}), organizationId }
     })
     : await prisma.parent.create({
-      data: { fullName, firstName, middleName, lastName, phone, email, physicalAddress, mustChangePassword: mustChangePassword ?? false, photoData, photoSource, familyContacts: (familyContacts ?? []) as never, organizationId }
+      data: { fullName, firstName, middleName, lastName, phone, email, physicalAddress, mustChangePassword: mustChangePassword ?? false, photoData, photoSource, ...(familyContacts !== undefined ? { familyContacts: familyContacts as never } : {}), ...(additionalEmails !== undefined ? { additionalEmails: [...new Set((additionalEmails as string[]).map(email => email.trim().toLowerCase()))] } : {}), organizationId }
     });
 
   await upsertExternalLink({

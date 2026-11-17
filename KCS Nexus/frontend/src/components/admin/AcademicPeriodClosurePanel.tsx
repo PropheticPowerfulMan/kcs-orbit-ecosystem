@@ -1,3 +1,4 @@
+import AcademicPeriodReopeningPanel from './AcademicPeriodReopeningPanel'
 import { ACADEMIC_REPORT_PERIODS, academicPeriodLabel } from '@/constants/academicPeriods'
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -88,7 +89,7 @@ export default function AcademicPeriodClosurePanel({
       )}
       <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {terms.map((term) => {
-          const readOnly = isAcademicPeriodReadOnly(access, year, term);
+          const readOnly = isAcademicPeriodReadOnly(access ? { ...access, canManageClosedPeriods: false, reopenedPeriods: [] } : null, year, term);
           return (
             <article
               key={term}
@@ -125,6 +126,7 @@ export default function AcademicPeriodClosurePanel({
           );
         })}
       </div>
+      {userId === "configured-superadmin" && <AcademicPeriodReopeningPanel academicYear={year} />}
       {selected &&
         createPortal(
           <div

@@ -226,6 +226,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         mustChangePassword: true,
         photoData: true,
         photoSource: true,
+        additionalEmails: true,
         familyContacts: true,
         organizationId: true,
         students: {
@@ -359,6 +360,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         mustChangePassword: parent.mustChangePassword,
         photoData: parent.photoData,
         photoSource: parent.photoSource,
+        additionalEmails: parent.additionalEmails ?? [],
         familyContacts: Array.isArray(parent.familyContacts) ? parent.familyContacts : [],
         organizationId: parent.organizationId,
         studentIds: parent.students.map((student) => student.id),

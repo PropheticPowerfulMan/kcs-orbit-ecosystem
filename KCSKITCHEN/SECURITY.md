@@ -2,7 +2,8 @@
 
 ## Threat boundaries
 
-- Credentials are forwarded over the private staging network to Nexus and are never stored by Kitchen.
+- Consumer credentials are verified by Nexus. Designated Kitchen managers use a separate Kitchen-only email and salted scrypt password hash after their first verified institutional sign-in; changes never write Nexus or Orbit credentials.
+- Kitchen manager credential versions revoke local and legacy manager sessions. Only the verified institutional SuperAdmin can explicitly reset a manager's Kitchen-only access; that capability does not create a local SuperAdmin password or grant general Kitchen administration.
 - Kitchen sessions use an independent short-lived signing key.
 - QR codes contain only an opaque Orbit reference and expiry, protected by HMAC.
 - CORS is restricted to the staging Kitchen origin.

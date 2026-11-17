@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-registry-news-annual-20261116-v37'
+const CACHE_NAME = 'kcs-nexus-entity-family-mail-period-20261117-v38'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {

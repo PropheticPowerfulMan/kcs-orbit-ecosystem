@@ -119,3 +119,22 @@ test('annual summary protection preserves quarter entry and existing annual reco
  const removed=structuredClone(before);removed.advancedGradebookByCycle['course::'+year].assignments.pop();
  assert.equal(futureGradebookChanged(before,removed,open),true);
 });
+
+test('a teacher reopening is limited to its year and exact quarter, without advancing the global calendar', () => {
+ const access = {...closed,reopenedPeriods:[{academicYear:year,term:q1}]}
+ assert.equal(academicPeriodIsReadOnly(access,year,q1),false)
+ assert.equal(academicEntryPeriod(access,year).activeEntryTerm,q2)
+ assert.equal(futureGradebookPeriods(access,year).includes(q2),false)
+ assert.equal(academicPeriodIsReadOnly({...access,closedPeriods:[{academicYear:year,term:'Annual final'}]},year,q2),true)
+ assert.equal(academicPeriodIsReadOnly({...access,closedPeriods:[{academicYear:'2025-2026',term:q1}]},'2025-2026',q1),true)
+ const before=state(),after=structuredClone(before);after.advancedGradebookByCycle['course::'+year].scores['task:old:learner']='99'
+ assert.equal(closedGradebookChanged(before,after,access),false)
+ assert.equal(closedGradebookChanged(before,after,closed),true)
+ after.advancedGradebookByCycle['course::'+year].assignments.push({id:'future',term:'Semester 2 · Quarter 3',maxPoints:100})
+ assert.equal(futureGradebookChanged(before,after,access),true)
+})
+test('SuperAdmin can edit closed records but future assessment and annual-summary guards remain separate', () => {
+ const before=state(),after=structuredClone(before);after.advancedGradebookByCycle['course::'+year].scores['task:old:learner']='99'
+ assert.equal(closedGradebookChanged(before,after,{...closed,canManageClosedPeriods:true}),false)
+ assert.equal(academicPeriodIsReadOnly({...closed,canManageClosedPeriods:true},year,q1),false)
+})
