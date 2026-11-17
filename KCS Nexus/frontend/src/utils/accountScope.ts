@@ -4,3 +4,5 @@ export const portalHome=(user:Pick<User,'permissions'|'role'>)=>isMediaAccount(u
 
 export const canManageWebsite=(user:Pick<User,'id'|'permissions'>|null|undefined)=>user?.id==='configured-superadmin'||isMediaAccount(user)
 export const websiteManagementHome=(user:Pick<User,'permissions'>|null|undefined)=>isMediaAccount(user)?'/portal/media/site':'/admin/site'
+
+export const canUseStaffWorkspace=(user:Pick<User,'role'|'permissions'>|null|undefined)=>Boolean(user&&(user.role==='staff'||user.role==='admin'||user.permissions?.includes('nexus:staff-workspace')))

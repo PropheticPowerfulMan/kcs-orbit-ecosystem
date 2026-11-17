@@ -1,3 +1,4 @@
+import {hasStaffWorkspaceAccess,mergeStaffWorkspacePermission} from '../utils/staffWorkspace.js'
 import { getOrbitSharedDirectory } from '../services/orbitSharedDirectory.js'
 import {isMediaAccount} from '../utils/mediaAccount.js'
 import { assertAccountAccess, inactiveStudentStatus } from '../services/accountAccess.service.js'
@@ -26,18 +27,20 @@ const buildSafeUserWithAccess = async (user: PrismaUser, includeAvatar = true) =
   const profiles = await prisma.user.findUnique({
     where: { id: user.id },
     select: {
+      role:true,
+      permissions:true,
       teacherProfile: { select: { id: true } },
       staffProfile: { select: { id: true } },
     },
   })
   const accessRoles = new Set<string>([user.role.toLowerCase()])
   if (profiles?.teacherProfile) accessRoles.add('teacher')
-  if (profiles?.staffProfile) accessRoles.add('staff')
+  if (hasStaffWorkspaceAccess(profiles)) accessRoles.add('staff')
   return {
     ...buildSafeUser(user, includeAvatar),
     staffFunction: user.staffFunction,
     isSuperAdministrator: user.email.toLowerCase() === env.SUPERADMIN_EMAIL.toLowerCase(),
-    permissions: user.permissions,
+    permissions: profiles?.role==='STAFF'?[...new Set([...user.permissions,'nexus:staff-workspace'])]:user.permissions,
     accessRoles: [...accessRoles],
   }
 }
@@ -596,7 +599,7 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
         } : {}),
         accessCode: externalUser.accessCode,
         role: preserveCanonicalIdentity ? user.role : externalUser.role,
-        permissions: preserveCanonicalIdentity ? user.permissions : (externalUser.permissions ?? []),
+        permissions: preserveCanonicalIdentity ? user.permissions : mergeStaffWorkspacePermission(user.permissions,externalUser.permissions ?? []),
         staffFunction: preserveCanonicalIdentity ? user.staffFunction : (externalUser.staffFunction ?? null),
         passwordHash,
       },
@@ -611,7 +614,7 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
       firstName: externalUser.firstName,
       middleName: externalUser.middleName,
       lastName: externalUser.lastName,
-      permissions: externalUser.permissions ?? [],
+      permissions: mergeStaffWorkspacePermission([],externalUser.permissions ?? []),
       staffFunction: externalUser.staffFunction ?? null,
       passwordHash,
     },

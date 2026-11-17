@@ -1,4 +1,4 @@
-import {isMediaAccount} from '@/utils/accountScope'
+import {isMediaAccount,canUseStaffWorkspace} from '@/utils/accountScope'
 import {loadPersonalAvatar} from '@/utils/personalAvatarCache'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
@@ -353,8 +353,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Espace enseignant' : 'Teacher workspace'}</span>}
           </Link>
         )}
-        {accessRoles.includes('staff') && activeRole !== 'staff' && (
-          <Link to="/portal/staff" className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`} title={!isMobile && sidebarCollapsed ? (currentLanguage === 'fr' ? 'Espace administratif' : 'Staff workspace') : undefined}>
+        {canUseStaffWorkspace(user) && (user.role === 'admin' || accessRoles.includes('staff')) && activeRole !== 'staff' && activeRole !== 'admin' && (
+          <Link to={user.role === 'admin' ? '/admin' : '/portal/staff'} className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`} title={!isMobile && sidebarCollapsed ? (currentLanguage === 'fr' ? 'Espace administratif' : 'Staff workspace') : undefined}>
             <Shield size={18} />
             {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Espace administratif' : 'Staff workspace'}</span>}
           </Link>

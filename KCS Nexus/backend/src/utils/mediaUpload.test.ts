@@ -20,6 +20,6 @@ test('rejects forbidden executable extensions and sanitizes names', () => {
   assert.match(safeMediaFilename('../../evil name.png'), /^\d+-evil-name\.png$/)
 })
 
-test('defines a bounded in-memory upload limit', () => {
+test('keeps the image upload limit bounded', () => {
   assert.equal(MAX_MEDIA_UPLOAD_BYTES, 10 * 1024 * 1024)
 })

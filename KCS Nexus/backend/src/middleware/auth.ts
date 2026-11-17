@@ -1,3 +1,4 @@
+import {hasStaffWorkspaceAccess} from '../utils/staffWorkspace.js'
 import {isMediaAccount,mediaRequestAllowed} from '../utils/mediaAccount.js'
 import type { NextFunction, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
@@ -8,6 +9,7 @@ import { ApiError } from '../utils/api.js'
 
 type AuthPayload = {
   mediaOnly?:boolean
+  staffWorkspaceAllowed?:boolean
   sub: string
   role: 'admin' | 'staff' | 'teacher' | 'student' | 'parent'
 }
@@ -28,7 +30,7 @@ export const authenticate = async (req: AuthenticatedRequest, _res: Response, ne
     const account=await assertAccountAccess(payload.sub)
     const mediaOnly=isMediaAccount(account)
     if(mediaOnly&&!mediaRequestAllowed(req.method,req.originalUrl,payload.sub))return next(new ApiError(403,'This Media account can only manage the school website and its own settings. / Ce compte Media est limité au site web de l’école et à ses propres paramètres.'))
-    req.user = {...payload,mediaOnly,...(mediaOnly?{role:'staff' as const}:{})}
+    req.user = {...payload,mediaOnly,staffWorkspaceAllowed:hasStaffWorkspaceAccess(account),...(mediaOnly?{role:'staff' as const}:{})}
     next()
   } catch(error:any) {
     if(error?.status===503||error?.status===403)return next(new ApiError(error.status,error.message))
@@ -42,7 +44,7 @@ export const requireRoles = (...roles: AuthPayload['role'][]) => {
       return next(new ApiError(403, 'Insufficient permissions'))
     }
 
-    if (req.user.role === 'admin' || roles.includes(req.user.role)) {
+    if (req.user.role === 'admin' || (roles.includes(req.user.role) && (req.user.role !== 'staff' || req.user.staffWorkspaceAllowed === true))) {
       return next()
     }
 
@@ -52,9 +54,9 @@ export const requireRoles = (...roles: AuthPayload['role'][]) => {
       if (needsTeacherAccess || needsStaffAccess) {
         const profile = await prisma.user.findUnique({
           where: { id: req.user.sub },
-          select: { teacherProfile: { select: { id: true } }, staffProfile: { select: { id: true } } },
+          select: { role:true, permissions:true, teacherProfile: { select: { id: true } } },
         })
-        if ((needsTeacherAccess && profile?.teacherProfile) || (needsStaffAccess && profile?.staffProfile)) {
+        if ((needsTeacherAccess && profile?.teacherProfile) || (needsStaffAccess && hasStaffWorkspaceAccess(profile))) {
           return next()
         }
       }
