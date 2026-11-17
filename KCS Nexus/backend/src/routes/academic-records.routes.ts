@@ -554,10 +554,13 @@ academicRecordsRouter.post('/report-cards/teacher-visibility/restore/:studentId'
   const current=await lockedReportCard(tx,existing.id)
   const correction=academicCorrections(current.academicCorrections),previous=correction.hiddenCourseIds??[]
   if(!previous.length)return{removed:0,resultChanged:false}
-  const official=new Set(context.enrollments.map(e=>e.courseId)),resultChanged=previous.some(id=>official.has(id))
+  const official=new Set(context.enrollments.map(e=>e.courseId))
+  const existingHidden=await tx.course.findMany({where:{id:{in:previous}},select:{id:true}})
+  const resultChanged=existingHidden.length>0
   if(resultChanged){
    const access=await academicPeriodAccess(tx,req.user!.sub)
    assertAcademicPeriodOpen(access,payload.academicYear,payload.term)
+   if(existingHidden.some(course=>!official.has(course.id)))throw new ApiError(409,'A hidden course is outside the current enrollment. Review enrollment before restoring its result.')
    if(['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus)&&!academicPeriodHasReopening(access,payload.academicYear,payload.term))throw new ApiError(409,'This report card is approved or published and is read-only')
   }
   await tx.reportCard.update({where:{id:current.id},data:{academicCorrections:{...correction,hiddenCourseIds:[]},...(resultChanged?{average:weightedCourseAverage(context.grades),publicationStatus:'DRAFT',principalStatus:'DRAFT',approvedById:null,approvedAt:null,portalPostedAt:null,emailedAt:null}:{})}})
