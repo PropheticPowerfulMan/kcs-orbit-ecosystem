@@ -1,3 +1,4 @@
+import { startAcademicAutoClosureWorker } from './services/academicAutoClosure.service.js'
 import {startRegistryMirrorReconciliation} from './services/registryMirror.service.js'
 import {ensureUploadStorage} from './utils/uploadStorage.js'
 import {startSentinelStaffAttendanceSync} from './services/sentinelStaffAttendance.service.js'
@@ -19,6 +20,7 @@ const start = async () => {
     startOutboundMailQueue()
     startOutboundSmsQueue()
     startEventReminderWorker()
+    startAcademicAutoClosureWorker()
     startSentinelStaffAttendanceSync()
     startRegistryMirrorReconciliation()
   } catch (error) {

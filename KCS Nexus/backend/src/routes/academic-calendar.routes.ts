@@ -1,9 +1,10 @@
+import { closeAcademicPeriod } from '../services/academicPeriodClosure.service.js'
 import {attendanceCalendarKey,nonSchoolSettings} from '../services/attendanceCalendar.service.js'
 import {DRC_HOLIDAYS} from '../utils/schoolDayPolicy.js'
 import { Prisma } from '@prisma/client'
 import { createHash, createHmac } from 'node:crypto'
 import { academicPeriodAccess, lockAcademicYears } from '../services/academicPeriodAccess.service.js'
-import { academicPeriodIsReadOnly, quarterTerms } from '../utils/academicPeriodPolicy.js'
+import { academicPeriodIsReadOnly } from '../utils/academicPeriodPolicy.js'
 import { academicCalendars, invalidateAcademicCalendarCache } from '../services/reportAttendance.service.js'
 import { databaseActorId } from '../utils/databaseActor.js'
 import { success } from '../utils/api.js'
@@ -130,40 +131,7 @@ academicCalendarRouter.post('/close-period', requireSuperAdmin(), asyncHandler(a
   const calendar = calendars.find(item => item.name === input.academicYear)
   if (!calendar) throw new ApiError(409, tr('Publiez cette année dans le calendrier scolaire central avant de la clôturer.','Publish this academic year in the central school calendar before closing it'))
   const actorId = await databaseActorId(req.user!.sub)
-  const id = 'academic-period-closed-' + createHash('sha256').update(input.academicYear + '::' + input.term).digest('hex')
-  const result = await prisma.$transaction(async tx => {
-    await lockAcademicYears(tx, [input.academicYear], true)
-    const previous = await tx.auditLog.findUnique({ where: { id } })
-    if (previous) return { alreadyClosed: true, closedAt: previous.createdAt }
-    const access = await academicPeriodAccess(tx)
-    const quarterIndex = quarterTerms.indexOf(input.term)
-    const required = quarterIndex > 0 ? quarterTerms.slice(0, quarterIndex)
-      : input.term === 'Semester 1' ? quarterTerms.slice(0, 2)
-      : input.term === 'Semester 2' ? quarterTerms : input.term === 'Annual final' ? quarterTerms : []
-    if (required.some(term => !academicPeriodIsReadOnly(access, input.academicYear, term))) throw new ApiError(409, tr('Clôturez d’abord les quarters précédents après finalisation de leurs notes et bulletins.','Close the preceding quarters after their grades are finalized before closing this period'))
-    const period = calendar.periods?.find(item => quarterIndex >= 0 ? item.type === 'QUARTER' && item.sequence === quarterIndex + 1 : item.type === 'SEMESTER' && input.term === 'Semester ' + item.sequence)
-    if (new Date(period?.startDate ?? calendar.startDate) > new Date()) throw new ApiError(409, tr('Une période scolaire future ne peut pas être clôturée avant son début.','A future academic period cannot be closed before it starts'))
-    const workspaces = await tx.teacherWorkspace.findMany({ select: { id: true, state: true }, orderBy: { id: 'asc' } })
-    let frozenCourseWeights = 0
-    for (const workspace of workspaces) {
-      const state = workspace.state as Record<string, any>
-      const frozen = { ...(state.gradebookClosedCategoryWeightsByCycle || {}) }
-      const snapshots = new Map<string, any>(Object.entries(state.advancedGradebookByCycle || {}).filter(([key]) => key.endsWith('::' + input.academicYear)))
-      if (input.academicYear === '2026-2027') for (const [courseId, snapshot] of Object.entries(state.advancedGradebookByCourse || {})) {
-        if (!snapshots.has(courseId + '::' + input.academicYear)) snapshots.set(courseId + '::' + input.academicYear, snapshot)
-      }
-      for (const [cycle, weights] of Object.entries(state.gradebookCategoryWeightsByCycle || {})) {
-        if (cycle.endsWith('::' + input.academicYear) && !snapshots.has(cycle)) snapshots.set(cycle, weights)
-      }
-      for (const [cycle, snapshot] of snapshots) {
-        frozen[cycle + '::' + input.term] = { categories: state.gradebookCategoryWeightsByCycle?.[cycle]?.categories ?? snapshot.categories ?? [], closedAt: new Date().toISOString() }
-        frozenCourseWeights++
-      }
-      if (snapshots.size) await tx.teacherWorkspace.update({ where: { id: workspace.id }, data: { state: { ...state, gradebookClosedCategoryWeightsByCycle: frozen } as Prisma.InputJsonValue, revision: { increment: 1 } } })
-    }
-    const audit = await tx.auditLog.create({ data: { id, actorId, action: 'ACADEMIC_PERIOD_CLOSED', targetType: 'AcademicPeriodClosure', targetId: input.academicYear + '::' + input.term, metadata: { academicYear: input.academicYear, term: input.term, frozenCourseWeights, closureMode: 'EXPLICIT_SUPERADMIN_AFTER_GRADE_FINALIZATION' } } })
-    return { alreadyClosed: false, closedAt: audit.createdAt, frozenCourseWeights }
-  }, { maxWait: 10000, timeout: 60000 })
+  const result = await closeAcademicPeriod({ ...input, calendar, calendars, actorId, language: req.get('x-ui-language') === 'en' ? 'en' : 'fr' })
   return success(res, result, tr('La période est clôturée et ses dossiers académiques sont en lecture seule.','The academic period is closed and its academic records are read-only'))
 }))
 

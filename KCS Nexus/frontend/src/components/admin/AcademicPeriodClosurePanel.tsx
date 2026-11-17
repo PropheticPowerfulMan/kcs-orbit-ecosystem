@@ -74,8 +74,8 @@ export default function AcademicPeriodClosurePanel({
       </div>
       <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
         {tr(
-          "Le SuperAdmin confirme la clôture de chaque quarter, semestre et année après finalisation des notes. Les dates du calendrier ne clôturent aucune période. Les données clôturées restent consultables en lecture seule.",
-          "The SuperAdmin confirms closure of each quarter, semester and year after grades are finalized. Calendar dates never close a period. Closed records remain available read-only.",
+          "Le SuperAdmin peut clôturer chaque quarter, semestre ou année manuellement. Sinon, la clôture est automatique après 7 jours calendaires complets suivant sa fin officielle, selon l’heure de Kinshasa. Les données restent consultables. Les dérogations accordées aux enseignants restent valables jusqu’à leur révocation.",
+          "The SuperAdmin can close each quarter, semester or year manually. Otherwise, it closes automatically after 7 full calendar days following its official end, using Kinshasa time. Records remain available. Teacher correction permissions remain valid until revoked.",
         )}
       </p>
       <label className="mt-4 block max-w-sm text-xs font-bold text-kcs-blue-950 dark:text-white">{tr('Année à examiner ou clôturer', 'Year to review or close')}<select className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-kcs-blue-950 dark:border-amber-700 dark:bg-kcs-blue-950 dark:text-white" value={year} disabled={busy} onChange={event => { setYear(event.target.value); setSelected(''); setConfirmation('');setAcknowledged(false) }}>{years.map(value => <option key={value}>{value}</option>)}</select></label>

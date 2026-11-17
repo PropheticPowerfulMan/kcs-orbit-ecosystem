@@ -8,15 +8,16 @@ import {
   futureGradebookPeriods,
   type AcademicPeriodAccess,
 } from "../utils/academicPeriodPolicy.js";
-import { academicCalendars } from "./reportAttendance.service.js";
+import { academicCalendars, type Calendar } from "./reportAttendance.service.js";
 
 type Database = Prisma.TransactionClient | typeof prisma;
 export async function academicPeriodAccess(
   db: Database = prisma,
   actorId?: string,
+  verifiedCalendars?: Calendar[],
 ): Promise<AcademicPeriodAccess & { activeEntryTerm: string | null; pendingClosureTerm: string | null; closureMode: string }> {
   const [calendars, closures, grants] = await Promise.all([
-    academicCalendars(),
+    verifiedCalendars ?? academicCalendars(),
     db.auditLog.findMany({
       where: {
         action: "ACADEMIC_PERIOD_CLOSED",
@@ -51,7 +52,7 @@ export async function academicPeriodAccess(
       closedAt: row.createdAt.toISOString(),
     })),
   };
-  return { ...access, ...academicEntryPeriod({ ...access, canManageClosedPeriods: false, reopenedPeriods: [] }, access.activeAcademicYear || ''), closureMode: 'EXPLICIT_SUPERADMIN' as const };
+  return { ...access, ...academicEntryPeriod({ ...access, canManageClosedPeriods: false, reopenedPeriods: [] }, access.activeAcademicYear || ''), closureMode: 'MANUAL_OR_AUTOMATIC_AFTER_7_DAYS' as const };
 }
 export async function lockAcademicYears(
   db: Prisma.TransactionClient,
