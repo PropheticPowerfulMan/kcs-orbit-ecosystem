@@ -1,3 +1,4 @@
+import {startMediaUploadCleanup} from './services/mediaUpload.service.js'
 import { startAcademicAutoClosureWorker } from './services/academicAutoClosure.service.js'
 import {startRegistryMirrorReconciliation} from './services/registryMirror.service.js'
 import {ensureUploadStorage} from './utils/uploadStorage.js'
@@ -21,6 +22,7 @@ const start = async () => {
     startOutboundSmsQueue()
     startEventReminderWorker()
     startAcademicAutoClosureWorker()
+    startMediaUploadCleanup()
     startSentinelStaffAttendanceSync()
     startRegistryMirrorReconciliation()
   } catch (error) {

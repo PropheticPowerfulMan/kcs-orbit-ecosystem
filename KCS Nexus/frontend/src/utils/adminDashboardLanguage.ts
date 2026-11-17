@@ -1,5 +1,6 @@
 import { globalFrenchText } from '@/i18n/globalText'
-const french: Record<string,string> = { ...globalFrenchText, ...{
+const french: Record<string,string> = {
+ "MEDIA_FILE_UPLOADED":"Fichier média téléversé", ...globalFrenchText, ...{
  "Official Registry": "Registre officiel",
  "students controlled by Super Admin": "élèves suivis par la Superadministration",
  "School Classes": "Classes de l’école",
@@ -165,6 +166,7 @@ const french: Record<string,string> = { ...globalFrenchText, ...{
  "LOGOUT": "Déconnexion"
 } }
 const english: Record<string,string> = {
+ "MEDIA_FILE_UPLOADED":"Media file uploaded",
  "healthy": "Healthy",
  "unavailable": "Unavailable",
  "attention": "Needs attention",

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-signin-media-site-20261117-v40'
+const CACHE_NAME = 'kcs-nexus-video-signin-20261117-v41'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {

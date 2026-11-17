@@ -1,6 +1,8 @@
 import path from 'node:path'
 
 export const MAX_MEDIA_UPLOAD_BYTES = 10 * 1024 * 1024
+export const MAX_VIDEO_UPLOAD_BYTES = 500 * 1024 * 1024
+export const mediaUploadLimit = (mime:string) => mime.startsWith('video/') ? MAX_VIDEO_UPLOAD_BYTES : MAX_MEDIA_UPLOAD_BYTES
 
 type MediaRule = { mime: string; signatures: readonly (readonly number[])[] }
 
@@ -13,6 +15,8 @@ const allowedMedia: ReadonlyMap<string, MediaRule> = new Map([
   ['.mp4', { mime: 'video/mp4', signatures: [[0x66, 0x74, 0x79, 0x70]] }],
   ['.webm', { mime: 'video/webm', signatures: [[0x1a, 0x45, 0xdf, 0xa3]] }],
 ] as const)
+
+export function supportedMediaType(name:string,mime:string){return allowedMedia.get(path.extname(name).toLowerCase())?.mime===mime}
 
 function hasSignature(buffer: Buffer, signature: readonly number[], offset = 0) {
   return signature.every((byte, index) => buffer[index + offset] === byte)

@@ -1,3 +1,8 @@
+import {databaseActorId} from '../utils/databaseActor.js'
+import {Prisma} from '@prisma/client'
+import {z} from 'zod'
+import {STAFF_WORKSPACE_PERMISSION,hasStaffWorkspaceAccess} from '../utils/staffWorkspace.js'
+import {requireSuperAdmin} from '../middleware/auth.js'
 import { Router } from 'express'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
@@ -43,6 +48,27 @@ adminRouter.get('/staff-overview', authenticate, requireRoles('admin', 'staff'),
     generatedAt: new Date().toISOString(),
   }, 'Administrator overview loaded')
 }))
+
+// Workspace access is a nominative capability; an employee profile alone grants no administrative rights.
+adminRouter.get('/staff-workspace-access',authenticate,requireSuperAdmin(),asyncHandler(async(_req,res)=>{
+ const users=await prisma.user.findMany({where:{role:{in:['TEACHER','STAFF']},accountBlockedAt:null},select:{id:true,firstName:true,middleName:true,lastName:true,email:true,role:true,permissions:true},orderBy:[{lastName:'asc'},{firstName:'asc'}]})
+ return success(res,users.filter(user=>!user.permissions.includes('nexus:media-only')).map(user=>({id:user.id,name:[user.lastName,user.middleName,user.firstName].filter(Boolean).join(' '),email:user.email,role:user.role,enabled:hasStaffWorkspaceAccess(user),included:user.role==='STAFF'})))
+}))
+adminRouter.put('/staff-workspace-access/:userId',authenticate,requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const {enabled}=z.object({enabled:z.boolean()}).strict().parse(req.body),id=String(req.params.userId),actorId=await databaseActorId(req.user!.sub)
+ const data=await prisma.$transaction(async tx=>{
+  await tx.$queryRaw(Prisma.sql`SELECT id FROM "User" WHERE id = ${id} FOR UPDATE`)
+  const target=await tx.user.findUnique({where:{id}})
+  if(!target||!['TEACHER','STAFF'].includes(target.role)||target.permissions.includes('nexus:media-only')||target.accountBlockedAt)throw new ApiError(404,'Eligible employee account not found.')
+  if(target.role==='STAFF')throw new ApiError(409,'This workspace is included in the primary Staff role.')
+  const permissions=target.permissions.filter(value=>value!==STAFF_WORKSPACE_PERMISSION);if(enabled)permissions.push(STAFF_WORKSPACE_PERMISSION)
+  await tx.user.update({where:{id},data:{permissions}})
+  await tx.auditLog.create({data:{actorId,action:enabled?'STAFF_WORKSPACE_GRANTED':'STAFF_WORKSPACE_REVOKED',targetType:'User',targetId:id,metadata:{enabled,previouslyEnabled:hasStaffWorkspaceAccess(target),roleUnchanged:target.role}}})
+  return{id,enabled}
+ })
+ return success(res,data)
+}))
+
 adminRouter.use(authenticate, requireRoles('admin'))
 
 adminRouter.get('/overview', asyncHandler(async (_req, res) => {

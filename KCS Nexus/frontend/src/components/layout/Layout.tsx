@@ -19,13 +19,12 @@ const Layout = () => {
   const isPortalRoute = (location.pathname === '/portal' || location.pathname.startsWith('/portal/')) ||
                         (location.pathname === '/admin' || location.pathname.startsWith('/admin/'))
 
-  // Sign-in owns its compact navigation so the form remains immediately visible on mobile.
-  if (isPortalRoute || location.pathname === '/login') {
+  if (isPortalRoute) {
     return <Outlet />
   }
 
   const publicPage = location.pathname.replace(/^\//,'').split('/')[0] || 'home'
-  const redesigned = ['home','about','academics','admissions','news','gallery','contact','school-handbook','privacy','terms','sitemap'].includes(publicPage)
+  const redesigned = ['home','about','academics','admissions','news','gallery','contact','school-handbook','privacy','terms','sitemap','login'].includes(publicPage)
 
   return (
     <div data-public-page={publicPage} className={`public-site-shell${redesigned?' kcs-public-redesign':''} min-h-screen flex flex-col dark:bg-kcs-blue-950`}>

@@ -436,14 +436,14 @@ export const admissionsAPI = {
 
 // --- Media API ---
 export const mediaAPI = {
-  replace: (id:string,data:FormData) => api.post(`/media/${encodeURIComponent(id)}/file`,data,{headers:{'Content-Type':'multipart/form-data'}}),
+  replace: async(id:string,data:FormData) => {await api.get('/media/uploads/access');return api.post(`/media/uploads/${encodeURIComponent(id)}/file`,data,{headers:{'Content-Type':'multipart/form-data'},timeout:3600000})},
   update: (id:string,data:object) => api.put(`/media/${encodeURIComponent(id)}`,data),
   getAll: (params?: object) => api.get('/media', { params }),
   getCategories: () => api.get('/media/categories'),
-  upload: (formData: FormData) =>
-    api.post('/media/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+  upload: async(formData: FormData,onProgress?:(percent:number)=>void) => {
+    await api.get('/media/uploads/access')
+    return api.post('/media/uploads/file',formData,{headers:{'Content-Type':'multipart/form-data'},timeout:3600000,onUploadProgress:event=>{if(event.total)onProgress?.(Math.min(99,Math.round(100*event.loaded/event.total)))}})
+  },
   delete: (id: string) => api.delete(`/media/${id}`),
 }
 

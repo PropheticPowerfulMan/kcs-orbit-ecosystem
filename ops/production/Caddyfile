@@ -50,6 +50,9 @@
     reverse_proxy lessonplan_web:80
   }
   handle {
+    # Only Nexus pages embed the approved video players; other apps retain their policy.
+    header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; media-src 'self' blob: https:; frame-src 'self' https://www.google.com https://maps.google.com https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com"
+    header Referrer-Policy "strict-origin-when-cross-origin"
     reverse_proxy nexus_web:80
   }
 }

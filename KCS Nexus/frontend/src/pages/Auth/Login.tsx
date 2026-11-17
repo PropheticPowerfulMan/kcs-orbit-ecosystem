@@ -4,7 +4,7 @@ import {Link,useNavigate} from 'react-router-dom'
 import {useForm} from 'react-hook-form'
 import {zodResolver} from '@hookform/resolvers/zod'
 import {z} from 'zod'
-import {ArrowLeft,ArrowRight,BookOpen,Eye,EyeOff,Globe2,GraduationCap,LockKeyhole,Mail,Moon,ShieldCheck,Sun,Users,Loader2} from 'lucide-react'
+import {ArrowRight,BookOpen,Eye,EyeOff,GraduationCap,LockKeyhole,Mail,ShieldCheck,Users,Loader2} from 'lucide-react'
 import {authAPI} from '@/services/api'
 import {useAuthStore} from '@/store/authStore'
 import {useUIStore} from '@/store/uiStore'
@@ -13,7 +13,7 @@ import './signIn.css'
 type LoginFormValues={email:string;password:string;twoFactorCode?:string}
 export default function LoginPage(){
  const navigate=useNavigate(),{login,user,isAuthenticated,setLoading,isLoading}=useAuthStore()
- const{language,setLanguage,theme,toggleTheme}=useUIStore(),tr=(fr:string,en:string)=>language==='fr'?fr:en
+ const{language}=useUIStore(),tr=(fr:string,en:string)=>language==='fr'?fr:en
  const[showPassword,setShowPassword]=useState(false),[errorMessage,setErrorMessage]=useState(''),[requiresTwoFactor,setRequiresTwoFactor]=useState(false)
  const[recoveryOpen,setRecoveryOpen]=useState(false),[recoveryEmail,setRecoveryEmail]=useState(''),[recoveryChannel,setRecoveryChannel]=useState<'email'|'sms'>('email')
  const[resetToken,setResetToken]=useState(''),[newPassword,setNewPassword]=useState(''),[recoveryMessage,setRecoveryMessage]=useState(''),[recoveryError,setRecoveryError]=useState('')
@@ -49,11 +49,7 @@ export default function LoginPage(){
   try{await authAPI.resetPassword(resetToken.trim(),newPassword);setRecoveryMessage(tr('Mot de passe réinitialisé. Vous pouvez maintenant vous connecter.','Password reset. You can now sign in.'));setResetToken('');setNewPassword('');window.history.replaceState({},document.title,window.location.pathname)}catch(error:any){setRecoveryError(error?.response?.data?.message||tr('Lien invalide ou expiré.','Invalid or expired link.'))}finally{setLoading(false)}
  }
  return <div className="nexus-signin" data-signin-page>
-  <nav className="signin-topbar" aria-label={tr('Navigation de connexion','Sign-in navigation')}>
-   <Link to="/" className="signin-brand"><img src="/images/kcs.jpg" alt="KCS" width="44" height="44"/><span><strong>KCS Nexus <span>AI</span></strong><small>Kinshasa Christian School</small></span></Link>
-   <div className="signin-tools"><button type="button" onClick={()=>setLanguage(language==='fr'?'en':'fr')} aria-label={tr('Passer en anglais','Switch to French')}><Globe2 size={17}/><span>{language==='fr'?'EN':'FR'}</span></button><button type="button" onClick={toggleTheme} aria-label={tr(theme==='dark'?'Activer le mode clair':'Activer le mode sombre',theme==='dark'?'Switch to light mode':'Switch to dark mode')}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><Link to="/" className="signin-home"><ArrowLeft size={16}/><span>{tr('Le site KCS','KCS website')}</span></Link></div>
-  </nav>
-  <main className="signin-stage"><div className="signin-layout">
+  <div className="signin-stage"><div className="signin-layout">
    <aside className="signin-story" aria-label={tr('Bienvenue à KCS','Welcome to KCS')}>
     <img className="signin-story-photo" src="/images/kcs/high-school.jpg" alt="" width="900" height="1100" fetchPriority="low"/>
     <div className="signin-story-shade"/><div className="signin-story-content"><span className="signin-eyebrow"><span/>KCS ORBIT ECOSYSTEM</span><div className="signin-story-title"><span className="signin-story-line"/><h1>{tr('Une école.','One school.')}<br/><em>{tr('Toutes vos possibilités.','Every possibility.')}</em></h1><p>{tr('Apprendre, accompagner, partager. Votre communauté scolaire se retrouve ici.','Learn, support, connect. Your school community comes together here.')}</p></div><div className="signin-community">{[[GraduationCap,tr('Élèves','Students')],[Users,tr('Familles','Families')],[BookOpen,tr('Équipe KCS','KCS team')]].map(([Icon,label]:any)=><span key={label}><Icon size={18}/>{label}</span>)}</div><p className="signin-story-footer">KINSHASA CHRISTIAN SCHOOL <span>KINSHASA · DRC</span></p></div>
@@ -73,6 +69,6 @@ export default function LoginPage(){
     {recoveryOpen&&<section id="signin-recovery" className="signin-recovery" aria-labelledby="signin-recovery-title"><h3 id="signin-recovery-title">{tr('Récupération sécurisée','Secure account recovery')}</h3>{!resetToken?<><div className="signin-recovery-channels" role="group" aria-label={tr('Canal de récupération','Recovery channel')}>{(['email','sms']as const).map(channel=><button type="button" key={channel} aria-pressed={recoveryChannel===channel} onClick={()=>setRecoveryChannel(channel)}>{channel==='sms'?'SMS':tr('E-mail','Email')}</button>)}</div><label htmlFor="signin-recovery-email">{tr('Adresse e-mail du compte','Account email address')}</label><input id="signin-recovery-email" type="email" value={recoveryEmail} onChange={e=>setRecoveryEmail(e.target.value)} autoComplete="off"/><button type="button" className="signin-recovery-action" disabled={isLoading} onClick={()=>void requestRecovery()}>{tr('Recevoir les instructions','Send recovery instructions')}</button></>:<><label htmlFor="signin-new-password">{tr('Nouveau mot de passe','New password')}</label><input id="signin-new-password" type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} autoComplete="new-password" minLength={12}/><p>{tr('12 caractères minimum, avec majuscule, minuscule, chiffre et symbole.','At least 12 characters, including uppercase, lowercase, a number and a symbol.')}</p><button type="button" className="signin-recovery-action" disabled={isLoading||newPassword.length<12} onClick={()=>void completeRecovery()}>{tr('Réinitialiser le mot de passe','Reset password')}</button></>}{recoveryMessage&&<p className="signin-recovery-success" role="status">{recoveryMessage}</p>}{recoveryError&&<p className="signin-field-error" role="alert">{recoveryError}</p>}</section>}
     <p className="signin-privacy"><ShieldCheck size={15}/>{tr('Vos identifiants personnels, votre espace KCS.','Your personal credentials. Your KCS workspace.')}</p><div className="signin-help">{tr('Besoin d’un coup de main ?','Need a hand?')} <Link to="/contact">{tr('Contacter l’école','Contact the school')}<ArrowRight size={13}/></Link></div>
    </div></section>
-  </div></main><footer className="signin-footer"><span>© {new Date().getFullYear()} Kinshasa Christian School</span><span>KCS Orbit · {tr('Unis pour apprendre.','Connected to learn.')}</span></footer>
+  </div></div>
  </div>
 }
