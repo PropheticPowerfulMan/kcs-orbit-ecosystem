@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     kcs_nexus_timeout_seconds: int = 5
     savanex_timeout_seconds: int = 5
 
+    smtp_host: str = ""
+    smtp_port: int = 465
+    smtp_secure: bool = True
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    password_recovery_url: str = "https://edusync.kinshasachristianschool.org"
+
     external_ai_enabled: bool = False
     external_ai_provider: str = "openai_compatible"
     external_ai_base_url: str = ""

@@ -11,3 +11,5 @@ __all__ = [
 	"WorkflowItem",
 	"ActivityLog",
 ]
+
+from app.models.password_reset import PasswordResetToken

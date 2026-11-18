@@ -1,3 +1,4 @@
+import SubjectEnrollmentWorkspace from '@/components/teacher/SubjectEnrollmentWorkspace'
 import DashboardPanels from '@/components/shared/DashboardPanels'
 import {exportTeacherDirectory} from '@/utils/teacherDirectoryDocument'
 import {exportClassActivityReport,exportLearnerFollowup} from '@/utils/classActivityDocuments'
@@ -1627,6 +1628,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   ].map((tab) => (
                     <button
                       key={tab.id}
+                      data-course-tab={tab.id}
                       onClick={() => setCourseTab(tab.id as 'setup' | 'enrollment')}
                       className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${courseTab === tab.id ? 'bg-white text-kcs-blue-800 shadow-sm dark:bg-kcs-blue-950 dark:text-white' : 'text-gray-500 hover:text-kcs-blue-700 dark:text-gray-300'}`}
                     >
@@ -1771,58 +1773,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
             )}
 
-            {courseTab === 'enrollment' && (
-              <div className="grid gap-4 p-5 lg:grid-cols-2">
-                <div className="lg:col-span-2 rounded-xl border border-dashed border-kcs-blue-200 bg-white p-4 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-950/40 dark:text-gray-300">
-                  <p className="font-bold text-kcs-blue-900 dark:text-white">Choose the subject roster to manage</p>
-                  <p className="mt-1">{filteredCourses.length} {tr('cours dans la période sélectionnée.','courses in the selected period.')} Select a subject, then open its roster manager to enroll or remove students.</p>
-                </div>
+            {courseTab === 'enrollment' && <SubjectEnrollmentWorkspace courses={filteredCourses} learners={enrollmentStudentCatalog} selectedId={selectedEnrollmentCourse?.id} onSelect={setSelectedEnrollmentCourseId} onManage={openCourseEnrollment} onEdit={id=>{editCourse(id);setCourseTab('setup')}} onDelete={deleteCourse}/>}
 
-                {selectedEnrollmentCourse && (
-                  <div className="lg:col-span-2 rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/30">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-xs font-semibold uppercase text-kcs-blue-500">Selected subject enrollment</p>
-                        <h4 className="font-bold text-kcs-blue-900 dark:text-white">{selectedEnrollmentCourse.name}</h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-300">{selectedEnrollmentCourse.gradeLevels.join(', ') || tr('Groupe multi-classes', 'Multi-class group')} - {selectedEnrollmentCourse.studentIds.length} enrolled - {enrollmentStudentCatalog.length - selectedEnrollmentCourse.studentIds.length} available</p>
-                      </div>
-                      <button onClick={() => openCourseEnrollment(selectedEnrollmentCourse.id)} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-kcs-blue-800 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300">
-                        Manage selected roster
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {filteredCourses.map((subject) => (
-                  <div role="button" tabIndex={0} onClick={() => setSelectedEnrollmentCourseId(subject.id)} key={subject.id} className={`cursor-pointer rounded-xl border p-4 ${selectedEnrollmentCourse?.id === subject.id ? 'border-kcs-blue-300 bg-white shadow-sm dark:border-kcs-blue-600 dark:bg-kcs-blue-900/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase text-kcs-blue-500">{subject.gradeLevels.join(', ')}</p>
-                        <h4 className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{subject.name}</h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{subject.abbreviation} - {subject.creditHours} credit hour(s) - {subject.room}</p>
-                      </div>
-                      <span className="badge-blue text-xs">{subject.studentIds.length} enrolled</span>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button type="button" onClick={(event) => { event.stopPropagation(); editCourse(subject.id); setCourseTab('setup') }} className="rounded-full bg-kcs-gold-100 px-3 py-1 text-xs font-bold text-kcs-blue-800">Modify subject</button>
-                      <button type="button" onClick={(event) => { event.stopPropagation(); deleteCourse(subject.id); setCourseTab('setup') }} className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">Delete subject</button>
-                      <button type="button" onClick={(event) => { event.stopPropagation(); openCourseEnrollment(subject.id) }} className="rounded-full bg-kcs-blue-700 px-3 py-1 text-xs font-bold text-white hover:bg-kcs-blue-800 dark:bg-kcs-gold-400 dark:text-kcs-blue-950">Manage roster</button>
-                      {enrollmentStudentCatalog.map((student) => {
-                        const enrolled = subject.studentIds.includes(student.id)
-                        return (
-                          <button
-                            key={student.id}
-                            onClick={() => void toggleCourseEnrollment(subject.id, student)}
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${enrolled ? 'bg-kcs-blue-700 text-white' : 'bg-white text-gray-700 hover:bg-kcs-blue-50 hover:text-kcs-blue-700 dark:bg-kcs-blue-950/50 dark:text-gray-300'}`}
-                          >
-                            {enrolled ? '✓' : '+'} {student.name}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}

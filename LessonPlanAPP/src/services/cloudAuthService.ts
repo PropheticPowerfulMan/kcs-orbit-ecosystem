@@ -212,29 +212,15 @@ export const cloudAuthService = {
     const normalizedIdentifier = identifier.trim();
     let session: SupabaseSession | null = null;
     let federationError: Error | null = null;
-    if (configuredFederatedAuthUrl) {
-      try {
-        const response = await fetch(configuredFederatedAuthUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ identifier: normalizedIdentifier, password })
-        });
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(payload?.error || "Institutional authentication failed.");
-        session = payload as SupabaseSession;
-      } catch (error) {
-        federationError = error instanceof Error ? error : new Error("Institutional authentication failed.");
-      }
+    if (normalizedIdentifier.includes("@")) {
+      try { session = await request<SupabaseSession>(authUrl("token?grant_type=password"), {method:"POST",body:JSON.stringify({email:normalizedIdentifier.toLowerCase(),password})}); }
+      catch { /* The server can distinguish an unprovisioned identity from an existing local account. */ }
     }
-    if (!session && normalizedIdentifier.includes("@")) {
-      try {
-        session = await request<SupabaseSession>(authUrl("token?grant_type=password"), {
-          method: "POST",
-          body: JSON.stringify({ email: normalizedIdentifier.toLowerCase(), password })
-        });
-      } catch (legacyError) {
-        throw federationError || legacyError;
-      }
+    if (!session && configuredFederatedAuthUrl) {
+      const response=await fetch(configuredFederatedAuthUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({identifier:normalizedIdentifier,password})});
+      const payload=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(payload?.error||"Incorrect Lesson Plan credentials.");
+      session=payload as SupabaseSession;
     }
     if (!session) throw federationError || new Error("Enter a valid KCS email or institutional access code.");
     writeSession(session);

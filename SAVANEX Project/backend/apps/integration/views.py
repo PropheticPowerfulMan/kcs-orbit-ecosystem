@@ -250,41 +250,8 @@ def change_ecosystem_identity_password_view(request, entity_type, identifier):
     if not provided_key or provided_key not in trusted_keys:
         return Response({'detail': 'Unauthorized ecosystem password change request.'}, status=401)
 
-    current_password = str(request.data.get('currentPassword') or '')
-    new_password = str(request.data.get('newPassword') or '')
-    query = Q(username__iexact=identifier) | Q(kcs_card_id__iexact=identifier) | Q(access_code__iexact=identifier) | Q(email__iexact=identifier)
-    allowed_roles = {
-        'parent': {User.ROLE_PARENT},
-        'student': {User.ROLE_STUDENT},
-        'teacher': {User.ROLE_TEACHER, User.ROLE_EMPLOYEE},
-        'employee': {User.ROLE_TEACHER, User.ROLE_EMPLOYEE},
-    }.get(entity_type)
-    if not allowed_roles:
-        return Response({'detail': 'Unsupported entity type.'}, status=400)
+    return Response({'detail': 'Cross-application password changes are disabled. Change the password in the application concerned.'}, status=410)
 
-    user = User.objects.filter(role__in=allowed_roles, is_active=True).filter(query).first()
-    if not user:
-        return Response({'detail': 'Compte SAVANEX introuvable pour cette entite.'}, status=404)
-    if not user.check_password(current_password):
-        return Response({'detail': 'Mot de passe actuel incorrect.'}, status=400)
-    if current_password == new_password:
-        return Response({'detail': 'Le nouveau mot de passe doit être différent du mot de passe actuel.'}, status=400)
-    try:
-        validate_ecosystem_password(new_password, user=user)
-    except ValidationError as error:
-        return Response({'detail': ' '.join(error.messages)}, status=400)
-
-    user.set_password(new_password)
-    user.must_change_password = False
-    user.password_generated_by_system = False
-    user.save(update_fields=['password', 'must_change_password', 'password_generated_by_system', 'updated_at'])
-    if user.role == User.ROLE_PARENT:
-        sync_parent(user)
-    elif user.role == User.ROLE_STUDENT and hasattr(user, 'student_profile'):
-        sync_student(user.student_profile)
-    elif user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(user, 'teacher_profile'):
-        sync_teacher(user.teacher_profile)
-    return Response({'detail': 'Mot de passe modifie dans l ecosystem.', 'accessCode': user.access_code})
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

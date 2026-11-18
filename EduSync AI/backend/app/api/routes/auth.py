@@ -1,3 +1,7 @@
+from datetime import datetime
+from app.models.password_reset import PasswordResetToken
+from pydantic import BaseModel
+from app.services.password_recovery import request_local_recovery, reset_local_password, validate_new_password
 import json
 import random
 import string
@@ -101,26 +105,6 @@ def is_shared_orbit_identity(identifier: str) -> bool:
             if (normalized_email and email == normalized_email) or (normalized_code and access_code == normalized_code):
                 return True
     return False
-
-def change_shared_identity_password(user: User, current_password: str, new_password: str) -> None:
-    if not savanex_auth_is_enabled() or not settings.kcs_orbit_api_key:
-        raise HTTPException(status_code=503, detail="Shared password authority is unavailable")
-    identifier = user.access_code or user.email
-    entity_type = "teacher" if user.role in {Role.TEACHER, Role.STAFF} else user.role.value
-    url = f"{settings.savanex_api_url.rstrip('/')}/api/integration/entities/{entity_type}/{parse.quote(identifier, safe='')}/change-password/"
-    body = json.dumps({"currentPassword": current_password, "newPassword": new_password}).encode("utf-8")
-    req = request.Request(url, data=body, headers={"Content-Type": "application/json", "x-api-key": settings.kcs_orbit_api_key}, method="POST")
-    try:
-        with request.urlopen(req, timeout=settings.savanex_timeout_seconds):
-            return
-    except error.HTTPError as exc:
-        try:
-            detail = json.loads(exc.read().decode("utf-8")).get("detail")
-        except Exception:
-            detail = None
-        raise HTTPException(status_code=exc.code, detail=detail or "Shared password change failed") from exc
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail="Shared password authority is unavailable") from exc
 
 def authenticate_with_edupay(identifier: str, password: str) -> dict | None:
     if not edupay_auth_is_enabled():
@@ -236,12 +220,13 @@ def upsert_external_user(db: Session, external_user: dict, password: str) -> Use
 
     password_hash = get_password_hash(password)
     if user:
+        if not verify_password(password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="Use the password of this EduSync account")
         user.full_name = external_user["full_name"]
         user.email = email
         user.access_code = access_code
         user.role = external_user["role"]
         user.department = external_user["department"]
-        user.hashed_password = password_hash
     else:
         user = User(
             full_name=external_user["full_name"],
@@ -271,39 +256,19 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     )
 
 
-def forward_password_recovery(email: str, channel: str = "email") -> None:
-    targets: list[tuple[str, dict, dict]] = []
-    if settings.savanex_api_url.strip():
-        targets.append((
-            f"{settings.savanex_api_url.rstrip('/')}/api/auth/forgot-password/",
-            {"email": email, "channel": channel},
-            {},
-        ))
-    if settings.edupay_api_url.strip():
-        targets.append((
-            f"{settings.edupay_api_url.rstrip('/')}/api/auth/forgot-password",
-            {"identifier": email, "channel": channel},
-            {},
-        ))
-
-    for url, payload, headers in targets:
-        body = json.dumps(payload).encode("utf-8")
-        req = request.Request(url, data=body, headers={"Content-Type": "application/json", **headers}, method="POST")
-        try:
-            with request.urlopen(req, timeout=max(settings.savanex_timeout_seconds, settings.edupay_timeout_seconds)):
-                pass
-        except Exception:
-            # The public response stays generic and never reveals whether an account exists upstream.
-            continue
-
-
 @router.post("/forgot-password")
-def forgot_password(payload: ForgotPasswordRequest):
-    channel = payload.channel.strip().lower()
-    if channel not in {"email", "sms"}:
-        channel = "email"
-    forward_password_recovery(str(payload.email).strip().lower(), channel)
-    return {"message": "If this account exists, a new temporary password has been sent through the selected channel."}
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    request_local_recovery(db, str(payload.email).strip().lower())
+    return {"message":"If this account exists, an EduSync-only recovery link has been sent by email."}
+
+class LocalResetRequest(BaseModel):
+    token: str
+    new_password: str
+
+@router.post("/reset-password")
+def reset_password(payload: LocalResetRequest, db: Session = Depends(get_db)):
+    reset_local_password(db,payload.token,payload.new_password)
+    return {"message":"EduSync password reset. Other applications are unchanged."}
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
@@ -315,14 +280,15 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         or_(func.lower(User.email) == normalized_email, User.access_code == normalized_access_code)
     ).first()
 
-    is_federated_user = bool(user) and is_shared_orbit_identity(identifier)
-
-    if user and not is_federated_user and verify_password(payload.password, user.hashed_password):
+    if user and verify_password(payload.password, user.hashed_password):
         ensure_ecosystem_access([user.email,user.access_code])
         token = create_access_token(subject=str(user.id))
         db.add(ActivityLog(actor_id=user.id, event_type="user_login", department=user.department))
         db.commit()
         return TokenResponse(access_token=token)
+
+    if user:
+        raise HTTPException(status_code=401, detail="Invalid EduSync credentials")
 
     external_user = authenticate_with_nexus(identifier, payload.password)
     if external_user is None:
@@ -351,16 +317,13 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if len(payload.new_password) < 8:
-        raise HTTPException(status_code=422, detail="The new password must contain at least 8 characters")
+    validate_new_password(payload.new_password)
     if payload.current_password == payload.new_password:
         raise HTTPException(status_code=400, detail="The new password must be different")
-    identifier = current_user.access_code or current_user.email
-    if is_shared_orbit_identity(identifier):
-        change_shared_identity_password(current_user, payload.current_password, payload.new_password)
-    elif not verify_password(payload.current_password, current_user.hashed_password):
+    if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     current_user.hashed_password = get_password_hash(payload.new_password)
+    db.query(PasswordResetToken).filter(PasswordResetToken.user_id==current_user.id,PasswordResetToken.used_at.is_(None)).update({"used_at":datetime.utcnow()})
     db.add(ActivityLog(actor_id=current_user.id, event_type="password_changed", department=current_user.department))
     db.commit()
     return {"message": "Password changed successfully"}

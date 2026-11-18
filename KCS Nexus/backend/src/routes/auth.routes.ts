@@ -1,3 +1,4 @@
+import {registerApplicationPasswordRoutes} from '../services/applicationPasswords.js'
 import {hasStaffWorkspaceAccess,hasPrincipalWorkspaceAccess,mergeStaffWorkspacePermission} from '../utils/staffWorkspace.js'
 import { getOrbitSharedDirectory } from '../services/orbitSharedDirectory.js'
 import {isMediaAccount} from '../utils/mediaAccount.js'
@@ -540,23 +541,6 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
     return user
   }
 }
-async function changeFederatedPassword(user: { role: string; accessCode: string | null; email: string }, currentPassword: string, newPassword: string) {
-  if (!env.SAVANEX_API_URL || !env.SAVANEX_AUTH_API_KEY) throw new ApiError(503, 'SAVANEX password authority is unavailable.')
-  const entityType = user.role === 'PARENT'
-    ? 'parent'
-    : user.role === 'STUDENT'
-      ? 'student'
-      : user.role === 'TEACHER' ? 'teacher' : 'employee'
-  const identifier = user.accessCode || user.email
-  const response = await fetch(`${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${entityType}/${encodeURIComponent(identifier)}/change-password/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': env.SAVANEX_AUTH_API_KEY },
-    body: JSON.stringify({ currentPassword, newPassword }),
-    signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
-  })
-  const payload = await response.json().catch(() => ({} as { detail?: string })) as { detail?: string }
-  if (!response.ok) throw new ApiError(response.status, payload.detail || 'The ecosystem password could not be changed.')
-}
 async function upsertExternalUser(externalUser: ExternalUserProfile | null, password: string) {
   if (!externalUser) {
     return null
@@ -583,6 +567,7 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
   const user = accessCodeUser || emailUser
 
   if (user) {
+    if (user.passwordHash && !(await bcrypt.compare(password,user.passwordHash))) throw new ApiError(401,'Use the password of this Nexus account. Other application passwords cannot replace it.')
     // Orbit remains the identity authority after an account has been linked.
     // A secondary login provider must not reorder canonical identity fields
     // or demote/promote the primary Nexus role. A teacher may also hold an
@@ -602,7 +587,7 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
         role: preserveCanonicalIdentity ? user.role : externalUser.role,
         permissions: preserveCanonicalIdentity ? user.permissions : mergeStaffWorkspacePermission(user.permissions,externalUser.permissions ?? []),
         staffFunction: preserveCanonicalIdentity ? user.staffFunction : (externalUser.staffFunction ?? null),
-        passwordHash,
+        ...(!user.passwordHash?{passwordHash}:{}),
       },
     })
   }
@@ -627,7 +612,7 @@ async function findLocalUserByIdentifier(identifier: string) {
   const query = () => prisma.user.findFirst({
     where: {
       OR: [
-        { email: normalizedIdentifier },
+        { email: {equals:normalizedIdentifier,mode:'insensitive'} },
         { accessCode: identifier.toUpperCase() },
       ],
     },
@@ -708,7 +693,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   if(isMediaAccount(user)&&req.header('x-kcs-client')&&!['NEXUS','KCS_NEXUS','NEXUS_WEB'].includes(String(req.header('x-kcs-client')).toUpperCase()))throw new ApiError(403,'This account is reserved for the Nexus website media dashboard.')
   if (user) { await assertAccountAccess(user.id); await ensureAccountNotLocked(user) }
   const isFederatedUser = Boolean(user?.permissions?.some((permission) => permission.startsWith('ecosystem:')))
-  if (user?.passwordHash && !isFederatedUser) {
+  if (user?.passwordHash) {
     const isValid = await bcrypt.compare(payload.password, user.passwordHash)
     if (isValid) {
       if (user.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
@@ -732,7 +717,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
         },
       })
 
-      return success(res, { user: await buildSafeUserWithAccess(user, false), token, refreshToken }, 'Login successful')
+      return success(res, { user: await buildSafeUserWithAccess(effectiveUser, false), token, refreshToken }, 'Login successful')
     }
     await recordFailedLogin(user)
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
@@ -771,7 +756,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     },
   })
 
-  return success(res, { user: await buildSafeUserWithAccess(effectiveUser, false), token, refreshToken }, 'Connexion rÃ©ussie')
+  return success(res, { user: await buildSafeUserWithAccess(effectiveUser, false), token, refreshToken }, 'Connexion réussie')
 }))
 
 authRouter.post('/google', asyncHandler(async (req, res) => {
@@ -818,30 +803,6 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
   return success(res, { token, user: await buildSafeUserWithAccess(synchronizedUser, false) }, 'Token refreshed')
 }))
 
-async function forwardPasswordRecovery(email: string, channel: 'email' | 'sms', sources: string[] = []) {
-  const requests: Promise<unknown>[] = []
-  const useSavanex = sources.length === 0 || sources.includes('savanex')
-  const useEduPay = sources.length === 0 || sources.includes('edupay')
-
-  if (useSavanex && env.SAVANEX_API_URL) {
-    requests.push(fetch(`${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/auth/forgot-password/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, channel }),
-      signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
-    }).catch(() => null))
-  }
-  if (useEduPay && env.EDUPAY_API_URL) {
-    requests.push(fetch(`${env.EDUPAY_API_URL.replace(/\/$/, '')}/api/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier: email, channel }),
-      signal: AbortSignal.timeout(env.EDUPAY_TIMEOUT_SECONDS * 1000),
-    }).catch(() => null))
-  }
-
-  await Promise.allSettled(requests)
-}
 authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
   const schema = z.object({ email: z.string().email(), channel: z.enum(['email', 'sms']).default('email') })
   const { email, channel } = schema.parse(req.body)
@@ -851,9 +812,9 @@ authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
     .filter((permission) => permission.startsWith('ecosystem:'))
     .map((permission) => permission.slice('ecosystem:'.length)) ?? []
 
-  await forwardPasswordRecovery(normalizedEmail, channel, recoverySources)
+  // Recovery belongs to Nexus only; never forward it to another application.
 
-  if (user?.passwordHash && recoverySources.length === 0 && !isConfiguredSuperAdminUser(user.id)) {
+  if (user?.passwordHash && !isConfiguredSuperAdminUser(user.id)) {
     const rawToken = crypto.randomBytes(RESET_TOKEN_BYTES).toString('base64url')
     const tokenHash = hashResetToken(rawToken)
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60_000)
@@ -976,18 +937,13 @@ authRouter.put('/change-password', authenticate, asyncHandler(async (req: Authen
   const identityIssues = assertPasswordDoesNotContainIdentity(newPassword, user)
   if (identityIssues.length) throw new ApiError(400, identityIssues.join(' '))
   if (currentPassword === newPassword) throw new ApiError(400, 'The new password must be different from the current password')
-  const isFederated = user.permissions.some((permission) => permission.startsWith('ecosystem:'))
-  if (isFederated) {
-    await changeFederatedPassword(user, currentPassword, newPassword)
-  } else {
-    const valid = await bcrypt.compare(currentPassword, user.passwordHash)
-    if (!valid) throw new ApiError(400, 'Current password is incorrect')
-  }
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash)
+  if (!valid) throw new ApiError(400, 'Current Nexus password is incorrect')
 
   const passwordHash = await bcrypt.hash(newPassword, 10)
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash, failedLoginAttempts: 0, loginLockedUntil: null, passwordChangedAt: new Date() } })
   await prisma.refreshToken.deleteMany({ where: { userId: user.id } })
-  return success(res, null, isMediaAccount(user)?'Media account password changed':'Password changed across the ecosystem')
+  return success(res, null, isMediaAccount(user)?'Media account password changed':'Nexus password changed. Other applications are unchanged.')
 }))
 authRouter.put('/access-code', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (isConfiguredSuperAdminUser(req.user!.sub)) {
@@ -1163,3 +1119,15 @@ authRouter.post('/2fa/verify', authenticate, asyncHandler(async (req: Authentica
   const updated = await prisma.user.update({ where: { id: user.id }, data: { twoFactorEnabled: true, twoFactorVerifiedAt: new Date() } })
   return success(res, { verified: true, enabled: updated.twoFactorEnabled }, 'Two-factor authentication enabled successfully')
 }))
+
+
+registerApplicationPasswordRoutes(authRouter,{
+ resolveInitial:async(identifier,password)=>{
+  const local=await findLocalUserByIdentifier(identifier)
+  if(local?.passwordHash)return local
+  const external=await authenticateWithSharedProviders(identifier,password,local?.permissions??[],'KCS_NEXUS')
+  return upsertExternalUser(external,password)
+ },
+ safeUser:async user=>user.email.toLowerCase()===configuredSuperAdmin.email.toLowerCase()?buildConfiguredSuperAdminUser(user):buildSafeUserWithAccess(user,false),
+ checkAccess:async user=>{if(user.email.toLowerCase()!==configuredSuperAdmin.email.toLowerCase())await assertAccountAccess(user.id)}
+})

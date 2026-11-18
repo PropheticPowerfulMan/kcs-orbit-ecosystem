@@ -336,6 +336,7 @@ model User {
   authoredNews                   NewsPost[]               @relation("NewsAuthor")
   contactMessages                ContactMessage[]
   refreshTokens                  RefreshToken[]
+  applicationCredentials         ApplicationCredential[]
   passwordResetTokens            PasswordResetToken[]
   forumPosts                     ParentForumPost[]        @relation("ForumPostAuthor")
   forumComments                  ParentForumComment[]     @relation("ForumCommentAuthor")
@@ -1675,4 +1676,31 @@ model StudentGovernmentChoice {
 
   @@unique([voteId, positionId])
   @@index([candidateId])
+}
+
+
+model ApplicationCredential {
+  id String @id @default(cuid())
+  application String
+  userId String
+  passwordHash String
+  version Int @default(1)
+  failedLoginAttempts Int @default(0)
+  loginLockedUntil DateTime?
+  createdAt DateTime @default(now())
+  changedAt DateTime?
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  resetTokens ApplicationPasswordResetToken[]
+  @@unique([application,userId])
+}
+model ApplicationPasswordResetToken {
+  id String @id @default(cuid())
+  tokenHash String @unique
+  credentialId String
+  credentialVersion Int
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  credential ApplicationCredential @relation(fields:[credentialId],references:[id],onDelete:Cascade)
+  @@index([credentialId,expiresAt])
 }

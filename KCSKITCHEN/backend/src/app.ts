@@ -157,6 +157,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const payload = z.object({
     identifier: z.string().trim().min(2).max(180),
     password: z.string().min(1).max(200),
+    twoFactorCode:z.string().max(6).optional(),
     accessMode: z.enum(['CUSTOMER', 'CASHIER', 'STAFF', 'ADMIN']).optional()
   }).parse(req.body)
 
@@ -196,15 +197,15 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     return res.json({token:signSession(identity),user:identity})
   }
 
-  const response = await fetch(new URL('/api/auth/login', env.NEXUS_API_URL), {
+  const response = await fetch(new URL(requestedMode === 'CUSTOMER'?'/api/auth/application/login':'/api/auth/login', env.NEXUS_API_URL), {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-kcs-client': 'KCS_KITCHEN' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(requestedMode === "CUSTOMER"?{...payload,application:"KCS_KITCHEN"}:payload),
     signal: AbortSignal.timeout(12_000)
   })
   const body = await response.json().catch(() => null) as any
   if (!response.ok || !body?.data?.user) {
-    return res.status(response.status === 403 ? 403 : 401).json({ message: body?.message || 'Institutional authentication failed' })
+    return res.status([403,428,429].includes(response.status)?response.status:401).json({ message: body?.message || 'Institutional authentication failed' })
   }
 
   const nexusUser = body.data.user

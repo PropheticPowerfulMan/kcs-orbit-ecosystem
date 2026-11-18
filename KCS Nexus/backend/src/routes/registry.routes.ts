@@ -696,7 +696,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     .filter((value): value is string => Boolean(value))
   let user = await prisma.user.findFirst({
     where: {
-      role: entityType === 'parent' ? 'PARENT' : entityType === 'student' ? 'STUDENT' : 'TEACHER',
+      role: entityType === 'parent' ? 'PARENT' : entityType === 'student' ? 'STUDENT' : {in:['TEACHER','STAFF','ADMIN']},
       OR: accountKeys.flatMap((key) => [
         { id: key },
         { email: { equals: key, mode: 'insensitive' as const } },
@@ -713,74 +713,20 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     user = profile?.user ?? null
   }
 
-  const linkedSavanexExternalId = entity.externalIds?.find((link: any) => String(link.appSlug).toUpperCase() === 'SAVANEX')?.externalId
-  const savanexExternalId = entityType === 'student'
-    ? (entity.studentNumber || identifier)
-    : entityType === 'teacher'
-      ? (linkedSavanexExternalId || entity.employeeId || entity.email || entity.displayId || identifier)
-      : (linkedSavanexExternalId || entity.email || entity.displayId || identifier)
-  if (env.SAVANEX_API_URL && env.SAVANEX_AUTH_API_KEY) {
-    const upstreamType = entityType === 'teacher' ? 'employee' : entityType
-    const resetUrl = `${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${upstreamType}/${encodeURIComponent(savanexExternalId)}/reset-access/`
-    const resetResponse = await fetch(resetUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': env.SAVANEX_AUTH_API_KEY },
-      body: JSON.stringify({
-        fullName: entity.fullName,
-        firstName: entity.firstName,
-        middleName: entity.middleName,
-        lastName: entity.lastName,
-        email: entity.email,
-        phone: entity.phone,
-        studentNumber: entity.studentNumber || identifier,
-      }),
-      signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
-    })
-    const resetData = await resetResponse.json().catch(() => ({})) as Record<string, unknown>
-    if (resetResponse.ok) {
-      if (user) {
-        if (typeof resetData.temporaryPassword !== 'string' || !resetData.temporaryPassword) {
-          throw new ApiError(502, 'The institutional reset succeeded but Nexus could not synchronize the new credential. Retry the reset before using it.')
-        }
-        const accessCode = typeof resetData.accessCode === 'string' && resetData.accessCode.trim() ? resetData.accessCode.trim().toUpperCase() : user.accessCode
-        const owner = await prisma.user.findUnique({ where: { accessCode }, select: { id: true } })
-        if (owner && owner.id !== user.id) throw new ApiError(409, 'The institutional access code belongs to another Nexus account. Reconcile the identity before resetting it again.')
-        const passwordHash = await bcrypt.hash(resetData.temporaryPassword, 10)
-        await prisma.$transaction([
-          prisma.user.update({ where: { id: user.id }, data: { passwordHash, accessCode, failedLoginAttempts: 0, loginLockedUntil: null, lastFailedLoginAt: null } }),
-          prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
-          prisma.auditLog.create({ data: { actorId: user.id, action: 'auth.institutional_reset_synchronized', targetType: 'User', targetId: user.id, metadata: { provider: 'SAVANEX', entityType, sessionsRevoked: true } } }),
-        ])
-      }
-      const upstreamDelivery = Array.isArray(resetData.delivery) ? resetData.delivery as Array<Record<string, unknown>> : []
-      const emailDelivery = upstreamDelivery.find((item) => item.channel === 'email')
-      const emailSent = emailDelivery?.status === 'sent'
-      await prisma.correspondenceLog.create({ data: {
-        channel: 'EMAIL', status: emailSent ? 'SENT' : 'FAILED', subject: 'Nouveaux identifiants temporaires KCS',
-        body: 'Réinitialisation des accès institutionnels demandée depuis KCS Nexus.',
-        recipientName: entity.fullName, recipientEmail: entity.email, sentAt: emailSent ? new Date() : null,
-        failureReason: emailSent ? null : String(emailDelivery?.detail || emailDelivery?.status || 'UPSTREAM_EMAIL_NOT_CONFIRMED'),
-        metadata: { kind: 'RESET_ACCESS', entityType, provider: 'SAVANEX', identifier },
-      } })
-      return success(res, resetData, emailSent ? 'Acces temporaire regenere et courriel confirme par le serveur SMTP' : 'Acces temporaire regenere, mais le courriel n a pas ete confirme')
-    }
-    if (resetResponse.status !== 404) {
-      throw new ApiError(resetResponse.status, String(resetData.detail || 'La réinitialisation SAVANEX a échoué.'))
-    }
+  // Reset only the Nexus account. The official identity remains shared; its other passwords do not.
+  if(!user){
+    if(!entity.email)throw new ApiError(409,'Ajoutez une adresse e-mail officielle avant de créer les accès Nexus. / Add an official email before provisioning Nexus access.')
+    const email=entity.email.trim().toLowerCase(),accessCode=String(entity.accessCode||entity.displayId||generateAccessCode(entityType)).toUpperCase()
+    if(await prisma.user.findFirst({where:{OR:[{email},{accessCode}]},select:{id:true}}))throw new ApiError(409,'This identity conflicts with an existing Nexus account. No password was changed.')
+    user=await prisma.user.create({data:{email,accessCode,firstName:entity.firstName||entity.fullName||'KCS',middleName:entity.middleName||null,lastName:entity.lastName||'',role:entityType==='student'?'STUDENT':entityType==='parent'?'PARENT':'TEACHER',orbitUserId:entity.id,orbitOrganizationId:env.KCS_ORBIT_ORGANIZATION_ID,phone:entity.phone||null}})
   }
-
-  if (!user) throw new ApiError(404, 'Compte de connexion introuvable dans KCS Nexus.')
 
   const temporaryPassword = generateTemporaryPassword()
   await prisma.$transaction([
-    prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(temporaryPassword, 10), failedLoginAttempts: 0, loginLockedUntil: null, lastFailedLoginAt: null } }),
+    prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(temporaryPassword, 10), failedLoginAttempts: 0, loginLockedUntil: null, lastFailedLoginAt: null, passwordChangedAt:new Date() } }),
     prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
   ])
 
-  if (entity?.id && orbitRegistryIsEnabled()) {
-    await updateRegistryEntityInOrbit(entityType, entity.id, env.KCS_ORBIT_ORGANIZATION_ID!, { mustChangePassword: true }, 'orbitId')
-    invalidateOrbitSharedDirectory()
-  }
   const subject = 'Nouveaux identifiants temporaires KCS Nexus'
   const message = `Bonjour ${entity.fullName || user.firstName},\n\nVotre mot de passe a été réinitialisé par le superadministrateur.\nIdentifiant: ${user.email}\nCode d'accès: ${user.accessCode || 'non défini'}\nMot de passe temporaire: ${temporaryPassword}\n\nChangez ce mot de passe lors de votre prochaine connexion.`
   const [emailDelivery, smsDelivery] = await Promise.all([
@@ -795,6 +741,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     data: { userId: user.id, title: subject, message, type: 'MESSAGE', link: entityType === 'parent' ? '/parent/messages' : entityType === 'student' ? '/student/messages' : '/teacher/messages' },
   })
   return success(res, {
+    credentialScope:'KCS_NEXUS',
     username: user.email,
     accessCode: user.accessCode,
     temporaryPassword,

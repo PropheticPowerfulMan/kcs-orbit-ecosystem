@@ -215,25 +215,6 @@ async function authenticateWithSharedIdentity(identifier: string, password: stri
   return null;
 }
 
-async function changeSharedIdentityPassword(user: { role: StaffRole; accessCode: string; email: string }, currentPassword: string, newPassword: string) {
-  if (!env.SAVANEX_API_URL || !env.KCS_ORBIT_API_KEY) {
-    throw new Error("L'autorité de mot de passe de l'écosystème est indisponible.");
-  }
-  const entityType = user.role === "PARENT" ? "parent" : "employee";
-  const identifier = user.accessCode || user.email;
-  const response = await fetch(`${env.SAVANEX_API_URL.replace(/\/$/, "")}/api/integration/entities/${entityType}/${encodeURIComponent(identifier)}/change-password/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": env.KCS_ORBIT_API_KEY },
-    body: JSON.stringify({ currentPassword, newPassword }),
-    signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000)
-  });
-  const payload = await response.json().catch(() => ({} as { detail?: string }));
-  if (!response.ok) {
-    const error = new Error(payload.detail || "Le mot de passe de l'écosystème n'a pas pu être modifié.") as Error & { status?: number };
-    error.status = response.status;
-    throw error;
-  }
-}
 async function resolveEduPaySchoolId() {
   const school = await prisma.school.findFirst({
     orderBy: { createdAt: "asc" },
@@ -309,6 +290,9 @@ async function ensureExternalParentUser(options: {
     }
   });
 
+  if (candidateUser && !(await bcrypt.compare(options.password,candidateUser.passwordHash))) {
+    const error = new Error("Use the password of this EduPay account.") as Error & {status?:number}; error.status=401; throw error;
+  }
   const user = candidateUser
     ? await prisma.user.update({
       where: { id: candidateUser.id },
@@ -316,9 +300,8 @@ async function ensureExternalParentUser(options: {
         fullName: options.fullName,
         email: options.email,
         accessCode: options.accessCode,
-        passwordHash,
-        mustChangePassword: options.mustChangePassword,
-        role: "PARENT",
+        mustChangePassword: candidateUser.mustChangePassword,
+        role: candidateUser.role,
         schoolId
       }
     })
@@ -431,6 +414,9 @@ async function ensureExternalEmployeeUser(options: {
     }
   });
 
+  if (candidateUser && !(await bcrypt.compare(options.password,candidateUser.passwordHash))) {
+    const error = new Error("Use the password of this EduPay account.") as Error & {status?:number}; error.status=401; throw error;
+  }
   const user = candidateUser
     ? await prisma.user.update({
       where: { id: candidateUser.id },
@@ -438,9 +424,8 @@ async function ensureExternalEmployeeUser(options: {
         fullName: options.fullName || sharedEmployee.fullName,
         email,
         accessCode,
-        passwordHash,
-        mustChangePassword: options.mustChangePassword || Boolean(sharedEmployee.mustChangePassword),
-        role: "EMPLOYEE",
+        mustChangePassword: candidateUser.mustChangePassword,
+        role: candidateUser.role,
         schoolId
       }
     })
@@ -555,47 +540,13 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
     const user = await prisma.user.findFirst({
       where: {
         OR: [
-          { email: normalizedIdentifier },
+          { email: {equals:normalizedIdentifier,mode:"insensitive"} },
           { accessCode: normalizedAccessCode }
         ]
       }
     });
 
-    // Federated parents and employees must be verified by the shared authority
-    // before any cached EduPay hash. This prevents an old password from being
-    // accepted after it has already been changed in Nexus, SAVANEX or EduSync.
-    if (user && ["PARENT", "EMPLOYEE"].includes(user.role) && savanexAuthIsEnabled()) {
-      const externalUser = await authenticateWithSharedIdentity(identifier, payload.password);
-      if (!externalUser) return res.status(401).json({ message: "Identifiants invalides" });
-      if (externalUser.role === "parent") {
-        const resolved = await ensureExternalParentUser({
-          identifier, password: payload.password, fullName: externalUser.fullName,
-          email: externalUser.email, accessCode: externalUser.accessCode,
-          mustChangePassword: externalUser.mustChangePassword
-        });
-        await verifyInstitutionalAccess([resolved.user.id,resolved.user.email,resolved.user.accessCode]);
-        const token = buildToken({ id: resolved.user.id, role: resolved.user.role, schoolId: resolved.user.schoolId });
-        return res.json({ token, role: resolved.user.role, fullName: resolved.user.fullName, parentId: resolved.parent.id,
-          photoUrl: resolved.parent.photoUrl, accessCode: resolved.user.accessCode, mustChangePassword: resolved.user.mustChangePassword });
-      }
-      if (["teacher", "employee"].includes(externalUser.role)) {
-        const resolved = await ensureExternalEmployeeUser({
-          identifier, password: payload.password, fullName: externalUser.fullName,
-          email: externalUser.email, accessCode: externalUser.accessCode,
-          mustChangePassword: externalUser.mustChangePassword,
-          employeeId: externalUser.employeeId, phone: externalUser.phone
-        });
-        await verifyInstitutionalAccess([resolved.user.id,resolved.user.email,resolved.user.accessCode]);
-        const token = buildToken({ id: resolved.user.id, role: resolved.user.role, schoolId: resolved.user.schoolId });
-        return res.json({ token, role: resolved.user.role, fullName: resolved.user.fullName,
-          salaryProfileId: resolved.salaryProfile.id, employeeCode: resolved.salaryProfile.employeeCode,
-          accessCode: resolved.user.accessCode, mustChangePassword: resolved.user.mustChangePassword });
-      }
-      return res.status(401).json({ message: "Identifiants invalides" });
-    }
-    // EduPay owns the password of accounts it creates. A parent or employee
-    // present in Orbit must therefore be allowed to use that local password.
-    // The previous condition was inverted and skipped valid mirrored users.
+    // Existing EduPay credentials are authoritative for EduPay, independently of other apps.
     if (user) {
       const ok = await bcrypt.compare(payload.password, user.passwordHash);
       if (ok) {
@@ -612,6 +563,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
           mustChangePassword: user.mustChangePassword
         });
       }
+      return res.status(401).json({ message: "Identifiants EduPay invalides" });
     }
 
     const localAuthOnly = req.header('x-kcs-local-auth-only') === 'true';
@@ -829,17 +781,8 @@ authRouter.post("/change-password", authGuard, async (req: AuthenticatedRequest,
   const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
   if (!user) return res.status(404).json({ message: "Utilisateur introuvable" });
 
-  try {
-    if (["PARENT", "EMPLOYEE"].includes(user.role)) {
-      await changeSharedIdentityPassword(user, payload.currentPassword, payload.newPassword);
-    } else {
-      const ok = await bcrypt.compare(payload.currentPassword, user.passwordHash);
-      if (!ok) return res.status(400).json({ message: "Mot de passe actuel incorrect" });
-    }
-  } catch (error) {
-    const sharedError = error as Error & { status?: number };
-    return res.status(sharedError.status || 503).json({ message: sharedError.message });
-  }
+  const valid = await bcrypt.compare(payload.currentPassword,user.passwordHash);
+  if (!valid) return res.status(400).json({message:"Mot de passe EduPay actuel incorrect"});
 
   const passwordHash = await bcrypt.hash(payload.newPassword, 10);
   await prisma.user.update({

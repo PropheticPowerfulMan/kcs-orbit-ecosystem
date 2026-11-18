@@ -346,13 +346,14 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [showPassword, setShowPassword] = useState(false)
   const [accessMode, setAccessMode] = useState<'CUSTOMER' | 'CASHIER' | 'ADMIN'>('CUSTOMER')
   const [credentials, setCredentials] = useState({ identifier: '', password: '' })
+  const [twoFactorCode,setTwoFactorCode]=useState('')
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError('')
     try {
       const result = await api<{ token: string; user: User }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ identifier: credentials.identifier.trim(), password: credentials.password, accessMode })
+        body: JSON.stringify({ identifier: credentials.identifier.trim(), password: credentials.password, accessMode, twoFactorCode:twoFactorCode||undefined })
       })
       const isKitchenStaff = result.user.role === 'CASHIER'
       const isKitchenAdministrator = result.user.role === 'KITCHEN_ADMIN'
@@ -404,7 +405,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
           onChange={event => setCredentials(current => ({ ...current, password: event.target.value }))}
           required
         /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? (lang === 'fr' ? 'Masquer le mot de passe' : 'Hide password') : (lang === 'fr' ? 'Afficher le mot de passe' : 'Show password')}>{showPassword ? <EyeOff /> : <Eye />}</button></span></label>
-        {error && <div className="form-error">{error}</div>}
+        <details><summary>{lang==='fr'?'Code d’authentification (si activé)':'Authentication code (if enabled)'}</summary><input aria-label={lang==='fr'?'Code d’authentification':'Authentication code'} value={twoFactorCode} onChange={e=>setTwoFactorCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" maxLength={6}/></details>{accessMode==='CUSTOMER'&&<a href="https://kinshasachristianschool.org/application-access?app=KCS_KITCHEN" target="_blank" rel="noopener">{lang==='fr'?'Mot de passe Kitchen · Modifier ou récupérer':'Kitchen password · Change or recover'}</a>}{error && <div className="form-error">{error}</div>}
         <button className="primary large" disabled={loading}>{loading ? '…' : t.enter}</button>
       </form>
       <small>🔒 {t.identityProof}</small>
@@ -590,7 +591,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
       <div className="sidebar-footer">
         <button onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}><Languages /> {lang.toUpperCase()}</button>
         <button onClick={() => setDark(!dark)}>{dark ? <Sun /> : <Moon />} {dark ? t.lightMode : t.darkMode}</button>
-        <button className="danger-text" onClick={onLogout}><LogOut /> {t.logout}</button>
+        {['TEACHER','STAFF','STUDENT'].includes(user.role)&&<a href="https://kinshasachristianschool.org/application-access?app=KCS_KITCHEN" target="_blank" rel="noopener"><ShieldCheck/> {lang==='fr'?'Mot de passe Kitchen':'Kitchen password'}</a>}<button className="danger-text" onClick={onLogout}><LogOut /> {t.logout}</button>
       </div>
     </aside>
     <CurrencyDisplayProvider userKey={user.userId}>

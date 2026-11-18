@@ -17,7 +17,7 @@ import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  ArrowUpRight, BookOpen, Brain,
+  ArrowUpRight, BookOpen, Brain, Eye, Pencil, KeyRound,
   AlertTriangle, BarChart3, CalendarDays, CheckCircle2, Clock3, Download, FileSpreadsheet, FileText, GraduationCap, Mail, Megaphone, MessageSquare, Phone, Radio, RefreshCw, Search, Shield, Trash2, UserPlus, Users, Video, X
 } from 'lucide-react'
 import {
@@ -2661,9 +2661,9 @@ const AdminSectionView = ({
                     <td data-label={tr('Registre','Registry')} className="px-5 py-4"><span className="rounded-full bg-kcs-blue-50 px-2.5 py-1 text-xs font-bold uppercase text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">{parent.syncSource}</span></td>
                     <td data-label={tr('Actions','Actions')} className="px-5 py-4 text-right">
                       <div className="flex justify-end gap-2">
-                        <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setSelectedParent(parent)}>{tr('Voir','View')}</button>
-                        <button type="button" className="rounded-lg border border-amber-200 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20" onClick={() => openEditParent(parent)}>{tr('Modifier','Edit')}</button>
-                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('parent', parent)}>{tr('Reset accès','Reset access')}</button>
+                        <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setSelectedParent(parent)}><span className="inline-flex items-center gap-1.5"><Eye size={14}/>{tr('Voir','View')}</span></button>
+                        <button type="button" className="rounded-lg border border-amber-200 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20" onClick={() => openEditParent(parent)} aria-label={tr('Modifier ','Edit ')+parent.name} title={tr('Modifier le dossier','Edit profile')}><Pencil size={15}/></button>
+                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('parent', parent)} aria-label={tr('Réinitialiser les accès de ','Reset access for ')+parent.name} title={tr('Réinitialiser les accès','Reset access')}><KeyRound size={15}/></button>
                         <button type="button" className="rounded-lg border border-red-100 px-3 py-2 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => deleteParentRecord(parent)} aria-label={`Delete ${parent.name}`}><Trash2 size={15} /></button>
                       </div>
                     </td>
@@ -3044,9 +3044,9 @@ const AdminSectionView = ({
                         <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => {
                           setSelectedStudent(student)
                           setViewingStudent(student)
-                        }}>{tr('Voir','View')}</button>
-                        <button type="button" className={`rounded-lg px-3 py-2 text-xs font-bold ${student.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(student)}>{tr('Modifier','Edit')}</button>
-                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('student', student)}>{tr('Reset accès','Reset access')}</button>
+                        }}><span className="inline-flex items-center gap-1.5"><Eye size={14}/>{tr('Voir','View')}</span></button>
+                        <button type="button" className={`rounded-lg px-3 py-2 text-xs font-bold ${student.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(student)} aria-label={tr('Modifier ','Edit ')+student.name} title={tr('Modifier le dossier','Edit profile')}><Pencil size={15}/></button>
+                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('student', student)} aria-label={tr('Réinitialiser les accès de ','Reset access for ')+student.name} title={tr('Réinitialiser les accès','Reset access')}><KeyRound size={15}/></button>
                         <button type="button" className="rounded-lg border border-red-100 px-3 py-2 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => deleteOfficialStudent(student)} aria-label={`Delete ${student.name}`}><Trash2 size={15} /></button>
                       </div>
                     </td>
