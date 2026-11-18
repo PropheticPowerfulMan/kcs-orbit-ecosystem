@@ -1,3 +1,4 @@
+import {assertApplicationToken} from '../services/applicationPasswords.js'
 import {hasStaffWorkspaceAccess,requestedWorkspaceRole} from '../utils/staffWorkspace.js'
 import {isMediaAccount,mediaRequestAllowed} from '../utils/mediaAccount.js'
 import type { NextFunction, Request, Response } from 'express'
@@ -27,6 +28,11 @@ export const authenticate = async (req: AuthenticatedRequest, _res: Response, ne
   try {
     const token = header.replace('Bearer ', '')
     const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload
+    if ((payload as any).application) {
+      const path=new URL(req.originalUrl,'http://nexus.internal').pathname
+      if(req.method!=='POST'||path!=='/api/academy/launch'||(payload as any).application!=='KCS_ACADEMY')throw new ApiError(403,'This application session cannot access Nexus.')
+      await assertApplicationToken(token,'KCS_ACADEMY')
+    }
     const account=await assertAccountAccess(payload.sub)
     const mediaOnly=isMediaAccount(account)
     if(mediaOnly&&!mediaRequestAllowed(req.method,req.originalUrl,payload.sub))return next(new ApiError(403,'This Media account can only manage the school website and its own settings. / Ce compte Media est limité au site web de l’école et à ses propres paramètres.'))

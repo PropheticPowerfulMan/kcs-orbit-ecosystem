@@ -128,6 +128,7 @@ const ensureSupabaseProfile = async (nexusUser) => {
     const { data, error } = await admin.auth.admin.createUser({
       email,
       email_confirm: true,
+      app_metadata: {kcs_nexus_identity:{id:nexusUser.id,accessCode:nexusUser.accessCode}},
       user_metadata: { name: profileNameFor(nexusUser), role, source: "kcs-orbit" }
     });
     if (error || !data.user) throw error || new Error("Unable to provision the lesson-plan identity.");
@@ -157,6 +158,7 @@ const ensureSupabaseProfile = async (nexusUser) => {
     if (error) throw error;
     profile = data;
   }
+  if(authUser.app_metadata?.kcs_nexus_identity?.id!==nexusUser.id){const {error}=await admin.auth.admin.updateUserById(authUser.id,{app_metadata:{...authUser.app_metadata,kcs_nexus_identity:{id:nexusUser.id,accessCode:nexusUser.accessCode}}});if(error)throw error}
   return { email, profile };
 };
 
@@ -178,6 +180,18 @@ const ecosystemLogin = async (body) => {
     error.status = 400;
     throw error;
   }
+  if(!identifier.includes("@")){
+    const admin=requireSupabaseAdmin();
+    let local=null;
+    for(let page=1;page<=10;page++){const {data,error}=await admin.auth.admin.listUsers({page,perPage:1000});if(error)throw error;local=data.users.find(u=>String(u.app_metadata?.kcs_nexus_identity?.accessCode||"").toUpperCase()===identifier.toUpperCase());if(local||data.users.length<1000)break}
+    if(local){const {data,error}=await supabasePublic.auth.signInWithPassword({email:local.email,password});if(error||!data.session){const denied=new Error("Incorrect Lesson Plan password.");denied.status=401;throw denied}return data.session}
+  }
+  if(identifier.includes("@")){
+    const {data}=await supabasePublic.auth.signInWithPassword({email:identifier.toLowerCase(),password});
+    if(data.session)return data.session;
+    const existing=await findAuthUserByEmail(identifier.toLowerCase());
+    if(existing){const denied=new Error("Incorrect Lesson Plan password.");denied.status=401;throw denied}
+  }
   const nexusResponse = await fetch(new URL("/api/auth/login", process.env.NEXUS_API_URL), {
     method: "POST",
     headers: { "content-type": "application/json", "x-kcs-client": "KCS_LESSON_PLAN" },
@@ -190,8 +204,21 @@ const ecosystemLogin = async (body) => {
     error.status = nexusResponse.status === 403 ? 403 : 401;
     throw error;
   }
-  const { email } = await ensureSupabaseProfile(nexusBody.data.user);
-  return createSupabaseSession(email);
+  const email=String(nexusBody.data.user.email||"").trim().toLowerCase();
+  const existing=await findAuthUserByEmail(email);
+  if(existing){
+    const {data,error}=await supabasePublic.auth.signInWithPassword({email,password});
+    if(error||!data.session){const denied=new Error("Use your current Lesson Plan password. Other application passwords are not accepted.");denied.status=401;throw denied}
+    return data.session;
+  }
+  await ensureSupabaseProfile(nexusBody.data.user);
+  const created=await findAuthUserByEmail(email);
+  if(!created)throw new Error("Lesson Plan account was not provisioned.");
+  const {error}=await requireSupabaseAdmin().auth.admin.updateUserById(created.id,{password});
+  if(error)throw error;
+  const {data,error:loginError}=await supabasePublic.auth.signInWithPassword({email,password});
+  if(loginError||!data.session)throw loginError||new Error("Lesson Plan sign-in failed.");
+  return data.session;
 };
 
 const ecosystemSso = async (body) => {

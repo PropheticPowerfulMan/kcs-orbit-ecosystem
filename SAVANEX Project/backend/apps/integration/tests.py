@@ -168,7 +168,7 @@ class EcosystemIdentifierAuthenticationTests(TestCase):
         reset_credentials.assert_called_once_with(parent, defer_side_effects=False)
 
     @patch('apps.integration.views.sync_parent')
-    def test_ecosystem_password_change_updates_authority_and_orbit(self, sync_parent):
+    def test_ecosystem_password_change_cannot_replace_local_credentials(self, sync_parent):
         parent = User.objects.create_user(
             username='password-parent',
             email='password.parent@example.com',
@@ -184,13 +184,13 @@ class EcosystemIdentifierAuthenticationTests(TestCase):
             format='json',
             HTTP_X_API_KEY='nexus-test-key',
         )
-        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.status_code, 410, response.data)
         parent.refresh_from_db()
-        self.assertFalse(parent.check_password('OldPassword123!'))
-        self.assertTrue(parent.check_password('Lynx!Quartz7Violet#92'))
-        self.assertFalse(parent.must_change_password)
-        self.assertFalse(parent.password_generated_by_system)
-        sync_parent.assert_called_once_with(parent)
+        self.assertTrue(parent.check_password('OldPassword123!'))
+        self.assertFalse(parent.check_password('Lynx!Quartz7Violet#92'))
+        self.assertTrue(parent.must_change_password)
+        self.assertTrue(parent.password_generated_by_system)
+        sync_parent.assert_not_called()
 
 @override_settings(KCS_NEXUS_AUTH_KEY='nexus-test-key')
 class EcosystemEmployeeIntegrationTests(TestCase):

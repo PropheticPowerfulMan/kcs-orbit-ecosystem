@@ -106,3 +106,8 @@
 }
 
 @media screen{.kcs-public-redesign[data-public-page=school-handbook] .school-handbook--public>.handbook-hero{margin-top:0!important}}
+
+/* Reveal the server-confirmed hero photograph only after its published override is applied.
+   Text stays readable while a neutral surface prevents the original photograph flashing on reload. */
+.public-site-shell[data-site-visual-pending="true"] .public-site-main [style*="background-image"]{background-image:none!important;background-color:#123d53}
+.public-site-shell[data-site-visual-pending="true"] .public-site-main img,.public-site-shell img[data-site-media-pending="true"]{visibility:hidden}

@@ -38,6 +38,7 @@ const NewsPage = lazyWithRecovery(() => import('@/pages/News'))
 const AdmissionsPage = lazyWithRecovery(() => import('@/pages/Admissions'))
 const GalleryPage = lazyWithRecovery(() => import('@/pages/Gallery'))
 const ContactPage = lazyWithRecovery(() => import('@/pages/Contact'))
+const ApplicationAccessPage = lazyWithRecovery(() => import('@/pages/ApplicationAccess'))
 const LoginPage = lazyWithRecovery(() => import('@/pages/Auth/Login'))
 const StudentPortal = lazyWithRecovery(() => import('@/pages/StudentPortal'))
 const AITutorPage = lazyWithRecovery(() => import('@/pages/StudentPortal/AITutor'))
@@ -230,6 +231,7 @@ const App = () => {
             <Route path="/terms" element={<AboutPage />} />
             <Route path="/sitemap" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/application-access" element={<ApplicationAccessPage />} />
             <Route path="/verify/parent-meeting" element={<ParentMeetingVerification />} />
             <Route path="/verify/transcript" element={<TranscriptVerificationPage />} />
             <Route path="/verify/report-card-analytics" element={<TranscriptVerificationPage />} />

@@ -18,12 +18,14 @@ const authAttempts = new Map<string, { count: number; resetAt: number }>()
 
 const authRateLimit = (windowMs: number, maxFailures: number) => {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const rateLimitedPaths = new Set(['/login', '/register', '/forgot-password', '/reset-password'])
+    const rateLimitedPaths = new Set(['/login', '/register', '/forgot-password', '/reset-password','/application/login','/application/change-password','/application/forgot-password','/application/reset-password'])
     if (!rateLimitedPaths.has(req.path)) return next()
 
     const now = Date.now()
     const identifier = String(req.body?.email || req.body?.identifier || '').trim().toLowerCase()
-    const key = `${req.ip}:${req.path}:${identifier}`
+    const application=req.path.startsWith('/application/')&&['KCS_SENTINEL','KCS_ACADEMY','KCS_KITCHEN'].includes(req.body?.application)?req.body.application:'KCS_NEXUS'
+    const key = [req.ip,application,req.path,identifier].join(':')
+    const recoveryBudget=req.path.endsWith('/forgot-password')
     const current = authAttempts.get(key)
     if (current && current.resetAt > now && current.count >= maxFailures) {
       const retryAfter = Math.max(1, Math.ceil((current.resetAt - now) / 1000))
@@ -34,11 +36,11 @@ const authRateLimit = (windowMs: number, maxFailures: number) => {
     if (current?.resetAt && current.resetAt <= now) authAttempts.delete(key)
 
     res.once('finish', () => {
-      if (res.statusCode >= 200 && res.statusCode < 300) {
+      if (res.statusCode >= 200 && res.statusCode < 300 && !recoveryBudget) {
         authAttempts.delete(key)
         return
       }
-      if (![400, 401, 403, 428].includes(res.statusCode)) return
+      if (![400, 401, 403, 428].includes(res.statusCode) && !(recoveryBudget&&res.statusCode===200)) return
       const previous = authAttempts.get(key)
       const active = previous && previous.resetAt > Date.now() ? previous : { count: 0, resetAt: Date.now() + windowMs }
       authAttempts.set(key, { count: active.count + 1, resetAt: active.resetAt })

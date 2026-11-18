@@ -342,23 +342,22 @@ const GalleryPage = () => {
                 .filter((item) => item.type === 'video' && Boolean(item.videoUrl))
                 .map((item) => (
                   <motion.button
-                    data-site-exclude key={item.id}
+                    data-site-exclude data-gallery-video-card key={item.id}
                     variants={fadeUp}
                     onClick={() => setSelectedItem(item)}
                     className="group overflow-hidden rounded-3xl bg-white dark:bg-kcs-blue-900/50 border border-gray-100 dark:border-kcs-blue-800 text-left hover:shadow-kcs transition-all"
                   >
-                    <div className="relative h-64 overflow-hidden">
+                    <div className="relative aspect-video overflow-hidden">
                       <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-kcs-blue-950/90 via-kcs-blue-950/20 to-transparent" />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <span className="w-16 h-16 rounded-full bg-kcs-gold-500 text-kcs-blue-950 flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform">
                           <Play size={24} fill="currentColor" />
                         </span>
                       </div>
-                      <div className="absolute bottom-0 left-0 right-0 p-5">
-                        <p className="text-white text-xl font-bold font-display mb-1">{item.title}</p>
-                        <p className="text-white/75 text-sm">{item.subtitle}</p>
-                      </div>
+                    </div>
+                    <div data-video-caption className="space-y-2 p-5">
+                      <p className="break-words text-lg font-bold font-display text-kcs-blue-950 dark:text-white">{item.title}</p>
+                      <p className="line-clamp-3 text-sm leading-relaxed text-slate-600 dark:text-slate-200">{item.subtitle}</p>
                     </div>
                   </motion.button>
                 ))}
