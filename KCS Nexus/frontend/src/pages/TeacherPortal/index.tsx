@@ -1,3 +1,4 @@
+import TeachingAttendanceWorkspace from '@/components/teachingAttendance/TeachingAttendanceWorkspace'
 import SubjectEnrollmentWorkspace from '@/components/teacher/SubjectEnrollmentWorkspace'
 import DashboardPanels from '@/components/shared/DashboardPanels'
 import {exportTeacherDirectory} from '@/utils/teacherDirectoryDocument'
@@ -262,6 +263,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const sectionTitles: Record<string, { title: string; subtitle: string; icon: React.ElementType }> = {
     courses: { title: 'My Courses', subtitle: 'Assigned classes, rooms, schedules, and teaching load.', icon: BookOpen },
     students: { title: 'Students', subtitle: 'Academic profile, risk level, strengths, and support needs for each learner.', icon: Users },
+    'course-attendance': { title: tr('Présences par cours','Course attendance'), subtitle: tr('Pointages des séances et régularité de vos élèves.','Session check-ins and learner course regularity.'), icon: ClipboardCheck },
     attendance: { title: tr('Présence', 'Attendance'), subtitle: tr('Registre journalier, tendances de la classe et indicateurs de suivi.', 'Daily attendance records, class trends, and follow-up signals.'), icon: ClipboardCheck },
     assignments: { title: 'Assignments', subtitle: 'Homework status, priorities, missing work, and LMS resources.', icon: FileText },
     grades: { title: 'Gradebook', subtitle: 'Assignments, final grades, averages, medians, legend, and grading scale.', icon: TrendingUp },
@@ -463,7 +465,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   })
 
   useEffect(() => {
-    if (!user?.id || ['attendance', 'assignments', 'report-card', 'messages'].includes(segment)) return
+    if (!user?.id || ['attendance', 'course-attendance', 'assignments', 'report-card', 'messages'].includes(segment)) return
     if (workspaceLoadedUserRef.current === user.id) return
     const requestToken = ++workspaceRequestTokenRef.current
     let active = true
@@ -523,7 +525,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }
 
   useEffect(() => {
-    if (['attendance', 'assignments', 'report-card', 'messages'].includes(segment)) {
+    if (['attendance', 'course-attendance', 'assignments', 'report-card', 'messages'].includes(segment)) {
       setRegistryStatus('ready')
       return
     }
@@ -1533,6 +1535,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     document.addEventListener('keydown', saveWithKeyboard)
     return () => document.removeEventListener('keydown', saveWithKeyboard)
   }, [segment])
+
+  if (segment === 'course-attendance') return <TeachingAttendanceWorkspace />
 
   if (segment === 'attendance') return <TeacherClassAttendance />
 

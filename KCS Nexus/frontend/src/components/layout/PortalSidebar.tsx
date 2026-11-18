@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, BookOpen, FileText, Calendar, Brain,
   Users, Settings, Bell, ChevronLeft, ChevronRight,
-  GraduationCap, BarChart3, MessageSquare, LogOut,
+  Clock3, GraduationCap, BarChart3, MessageSquare, LogOut,
   Shield, Home, UserCheck, UserPlus, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Ban, Archive, Moon, Sun, Globe, BookOpenCheck, GripHorizontal, SlidersHorizontal
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
@@ -67,6 +67,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/portal/teacher/courses', label: t('portalNav.myCourses'), icon: BookOpen },
         { to: '/portal/teacher/students', label: t('portalNav.students'), icon: Users },
         { to: '/portal/teacher/attendance', label: t('portalNav.attendance'), icon: ClipboardCheck },
+        { to: '/portal/teacher/course-attendance', label: language === 'fr' ? 'Présences par cours' : 'Course attendance', icon: Clock3 },
         { to: '/portal/teacher/assignments', label: t('portalNav.assignments'), icon: FileText },
         { to: '/portal/teacher/grades', label: t('portalNav.gradebook'), icon: BarChart3 },
         { to: '/portal/teacher/report-card', label: t('portalNav.reportCards'), icon: GraduationCap },
@@ -256,6 +257,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     { to: '/admin/incident-reports', label: t('portalNav.incidentReport'), icon: ClipboardList },
     { to: '/admin/electives', label: t('portalNav.electives'), icon: BookOpenCheck },
     { to: '/admin/main-teachers', label: t('portalNav.mainTeacherAssignment'), icon: UserCheck },
+    { to: '/admin/teaching-attendance', label: language === 'fr' ? 'Présences aux cours' : 'Teaching attendance', icon: Clock3 },
     { to: '/admin/students', label: t('portalNav.students'), icon: LibraryBig },
     { to: '/admin/parents', label: t('portalNav.parents'), icon: Users },
     { to: '/admin/admissions', label: t('portalNav.admissions'), icon: ClipboardList },
