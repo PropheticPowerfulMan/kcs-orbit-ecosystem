@@ -16,7 +16,7 @@ type Session = Prisma.TeachingSessionGetPayload<{ include: { students: true } }>
 export const teachingCourseInclude = {
   teacher: { include: { user: { select: { id: true, firstName: true, middleName: true, lastName: true } } } },
   schedules: true,
-  enrollments: { where: { student: { status: { in: ['active','ACTIVE'] } } }, include: { student: { include: { user: { select: { firstName: true, middleName: true, lastName: true } } } } } },
+  enrollments: { where: { student: { status: { in: ['active','ACTIVE'] } } }, select: { createdAt: true, student: { select: { id: true, studentNumber: true, grade: true, section: true, user: { select: { firstName: true, middleName: true, lastName: true } } } } } },
 } satisfies Prisma.CourseInclude
 export type TeachingCourse = Prisma.CourseGetPayload<{ include: typeof teachingCourseInclude }>
 const fullName = (user: { firstName: string; middleName?: string | null; lastName: string }) => [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')
