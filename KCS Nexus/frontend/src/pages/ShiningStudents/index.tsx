@@ -1,3 +1,5 @@
+import {useLocation} from 'react-router-dom'
+import {workspaceRole} from '@/utils/accountScope'
 import './shiningShowcase.css'
 import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
@@ -35,8 +37,9 @@ export default function ShiningStudentsPage() {
   const user = useAuthStore((state) => state.user)
   const language = useUIStore((state) => state.language)
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
-  const admin = user?.role === 'admin'
-  const ordinaryAdministrator = user?.role === 'admin' && user?.id !== 'configured-superadmin'
+  const activeRole=workspaceRole(user,useLocation().pathname)
+  const admin = activeRole === 'admin'
+  const ordinaryAdministrator = (activeRole === 'admin'||activeRole === 'staff') && user?.id !== 'configured-superadmin'
   const [items, setItems] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(true)
   const [actionId, setActionId] = useState('')

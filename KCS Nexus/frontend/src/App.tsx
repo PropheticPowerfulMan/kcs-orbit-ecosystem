@@ -199,6 +199,10 @@ const App = () => {
       <RouteErrorBoundary routeKey={location.pathname}>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
+          {['/portal/staff/incident-reports','/admin/incident-reports'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={path.startsWith('/admin')?['admin']:['staff']}><IncidentReportsPage/></ProtectedRoute>}/>)}
+          {['/portal/staff/shining-students','/admin/shining-students'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={path.startsWith('/admin')?['admin']:['staff']}><ShiningStudentsPage/></ProtectedRoute>}/>)}
+          {['/portal/teacher/electives','/admin/electives'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={path.startsWith('/admin')?['admin']:['teacher']}><ElectivesPage/></ProtectedRoute>}/>)}
+          <Route path="/portal/teacher/course-syllabi" element={<ProtectedRoute allowedRoles={['teacher']}><CourseSyllabiPage/></ProtectedRoute>}/>
           <Route path="/shining-students" element={<ProtectedRoute allowedRoles={['admin','staff','student','parent']}><ShiningStudentsPage /></ProtectedRoute>} />
           <Route path="/course-syllabi" element={<ProtectedRoute allowedRoles={['admin','staff','teacher','student']}><CourseSyllabiPage /></ProtectedRoute>} />
           <Route path="/electives" element={<ProtectedRoute allowedRoles={['admin','teacher','student']}><ElectivesPage /></ProtectedRoute>} />

@@ -1,4 +1,4 @@
-import {hasStaffWorkspaceAccess} from '../utils/staffWorkspace.js'
+import {hasStaffWorkspaceAccess,requestedWorkspaceRole} from '../utils/staffWorkspace.js'
 import {isMediaAccount,mediaRequestAllowed} from '../utils/mediaAccount.js'
 import type { NextFunction, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
@@ -30,9 +30,23 @@ export const authenticate = async (req: AuthenticatedRequest, _res: Response, ne
     const account=await assertAccountAccess(payload.sub)
     const mediaOnly=isMediaAccount(account)
     if(mediaOnly&&!mediaRequestAllowed(req.method,req.originalUrl,payload.sub))return next(new ApiError(403,'This Media account can only manage the school website and its own settings. / Ce compte Media est limité au site web de l’école et à ses propres paramètres.'))
-    req.user = {...payload,mediaOnly,staffWorkspaceAllowed:hasStaffWorkspaceAccess(account),...(mediaOnly?{role:'staff' as const}:{})}
+    // Context is per request and verified against current database grants, never trusted from the client.
+    const requested = req.get('X-Nexus-Workspace')
+    let effectiveRole = mediaOnly ? 'staff' as const : payload.role
+    if (requested && !mediaOnly) {
+      const trustedAccount = payload.sub === 'configured-superadmin' ? {role:'ADMIN'} : account
+      const teaching = requested === 'teacher' && trustedAccount?.role !== 'TEACHER'
+        ? Boolean(await prisma.teacherProfile.findUnique({where:{userId:payload.sub},select:{id:true}})) : false
+      const resolved = requestedWorkspaceRole(trustedAccount, requested, teaching)
+      if (!resolved) throw new ApiError(403, 'This workspace is not authorized for your account. / Cet espace n’est pas autorisé pour votre compte.')
+      effectiveRole = resolved
+    }
+    _res.vary('Authorization')
+    _res.vary('X-Nexus-Workspace')
+    req.user = {...payload,role:effectiveRole,mediaOnly,staffWorkspaceAllowed:payload.sub==='configured-superadmin'||hasStaffWorkspaceAccess(account)}
     next()
   } catch(error:any) {
+    if(error instanceof ApiError)return next(error)
     if(error?.status===503||error?.status===403)return next(new ApiError(error.status,error.message))
     next(new ApiError(401, 'Invalid or expired token'))
   }

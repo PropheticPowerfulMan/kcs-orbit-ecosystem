@@ -1,7 +1,8 @@
+import {inactiveStudentStatus} from '../services/accountAccess.service.js'
 import {databaseActorId} from '../utils/databaseActor.js'
 import {Prisma} from '@prisma/client'
 import {z} from 'zod'
-import {STAFF_WORKSPACE_PERMISSION,hasStaffWorkspaceAccess} from '../utils/staffWorkspace.js'
+import {STAFF_WORKSPACE_PERMISSION,PRINCIPAL_WORKSPACE_PERMISSION,hasStaffWorkspaceAccess,hasPrincipalWorkspaceAccess} from '../utils/staffWorkspace.js'
 import {requireSuperAdmin} from '../middleware/auth.js'
 import { Router } from 'express'
 import { prisma } from '../config/prisma.js'
@@ -51,20 +52,21 @@ adminRouter.get('/staff-overview', authenticate, requireRoles('admin', 'staff'),
 
 // Workspace access is a nominative capability; an employee profile alone grants no administrative rights.
 adminRouter.get('/staff-workspace-access',authenticate,requireSuperAdmin(),asyncHandler(async(_req,res)=>{
- const users=await prisma.user.findMany({where:{role:{in:['TEACHER','STAFF']},accountBlockedAt:null},select:{id:true,firstName:true,middleName:true,lastName:true,email:true,role:true,permissions:true},orderBy:[{lastName:'asc'},{firstName:'asc'}]})
- return success(res,users.filter(user=>!user.permissions.includes('nexus:media-only')).map(user=>({id:user.id,name:[user.lastName,user.middleName,user.firstName].filter(Boolean).join(' '),email:user.email,role:user.role,enabled:hasStaffWorkspaceAccess(user),included:user.role==='STAFF'})))
+ const users=await prisma.user.findMany({where:{accountBlockedAt:null},select:{id:true,firstName:true,middleName:true,lastName:true,email:true,role:true,permissions:true,studentProfile:{select:{status:true,archive:{select:{id:true}}}}},orderBy:[{lastName:'asc'},{firstName:'asc'}]})
+ return success(res,users.filter(user=>!user.permissions.includes('nexus:media-only')&&!inactiveStudentStatus(user.studentProfile?.status)&&!user.studentProfile?.archive).map(user=>({id:user.id,name:[user.lastName,user.middleName,user.firstName].filter(Boolean).join(' '),email:user.email,role:user.role,enabled:hasStaffWorkspaceAccess(user),included:user.role==='STAFF'||user.role==='ADMIN',workspace:hasPrincipalWorkspaceAccess(user)?'principal':'staff'})))
 }))
 adminRouter.put('/staff-workspace-access/:userId',authenticate,requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
- const {enabled}=z.object({enabled:z.boolean()}).strict().parse(req.body),id=String(req.params.userId),actorId=await databaseActorId(req.user!.sub)
+ const {enabled,workspace}=z.object({enabled:z.boolean(),workspace:z.enum(['staff','principal']).default('staff')}).strict().parse(req.body),id=String(req.params.userId),actorId=await databaseActorId(req.user!.sub)
  const data=await prisma.$transaction(async tx=>{
   await tx.$queryRaw(Prisma.sql`SELECT id FROM "User" WHERE id = ${id} FOR UPDATE`)
-  const target=await tx.user.findUnique({where:{id}})
-  if(!target||!['TEACHER','STAFF'].includes(target.role)||target.permissions.includes('nexus:media-only')||target.accountBlockedAt)throw new ApiError(404,'Eligible employee account not found.')
-  if(target.role==='STAFF')throw new ApiError(409,'This workspace is included in the primary Staff role.')
-  const permissions=target.permissions.filter(value=>value!==STAFF_WORKSPACE_PERMISSION);if(enabled)permissions.push(STAFF_WORKSPACE_PERMISSION)
+  const target=await tx.user.findUnique({where:{id},include:{studentProfile:{select:{status:true,archive:{select:{id:true}}}}}})
+  if(!target||target.permissions.includes('nexus:media-only')||target.accountBlockedAt||inactiveStudentStatus(target.studentProfile?.status)||target.studentProfile?.archive)throw new ApiError(404,'Eligible active account not found.')
+  if(target.role==='ADMIN')throw new ApiError(409,'Principal access is included in this primary Administrator role.')
+  if(target.role==='STAFF'&&!enabled&&!target.permissions.includes(PRINCIPAL_WORKSPACE_PERMISSION))throw new ApiError(409,'This workspace is included in the primary Staff role.')
+  const permissions=target.permissions.filter(value=>![STAFF_WORKSPACE_PERMISSION,PRINCIPAL_WORKSPACE_PERMISSION].includes(value));if(enabled)permissions.push(workspace==='principal'?PRINCIPAL_WORKSPACE_PERMISSION:STAFF_WORKSPACE_PERMISSION)
   await tx.user.update({where:{id},data:{permissions}})
-  await tx.auditLog.create({data:{actorId,action:enabled?'STAFF_WORKSPACE_GRANTED':'STAFF_WORKSPACE_REVOKED',targetType:'User',targetId:id,metadata:{enabled,previouslyEnabled:hasStaffWorkspaceAccess(target),roleUnchanged:target.role}}})
-  return{id,enabled}
+  await tx.auditLog.create({data:{actorId,action:enabled?(workspace==='principal'?'PRINCIPAL_WORKSPACE_GRANTED':'STAFF_WORKSPACE_GRANTED'):(hasPrincipalWorkspaceAccess(target)?'PRINCIPAL_WORKSPACE_REVOKED':'STAFF_WORKSPACE_REVOKED'),targetType:'User',targetId:id,metadata:{enabled,workspace,previousWorkspace:hasPrincipalWorkspaceAccess(target)?'principal':'staff',previouslyEnabled:hasStaffWorkspaceAccess(target),roleUnchanged:target.role}}})
+  return{id,enabled:enabled||target.role==='STAFF',workspace:enabled?workspace:'staff'}
  })
  return success(res,data)
 }))

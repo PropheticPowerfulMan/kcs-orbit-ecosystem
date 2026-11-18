@@ -1,4 +1,4 @@
-import {isMediaAccount,canUseStaffWorkspace} from '@/utils/accountScope'
+import {isMediaAccount,canUseStaffWorkspace,canUsePrincipalWorkspace,workspaceRole} from '@/utils/accountScope'
 import {loadPersonalAvatar} from '@/utils/personalAvatarCache'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
@@ -30,10 +30,10 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
   const base: NavItem[] = [
     { to: dashboardPath, label: t("portalNav.dashboard"), icon: LayoutDashboard },
     { to: `${dashboardPath}/handbook`, label: language === 'fr' ? 'Manuel de l’école' : 'School Handbook', icon: BookOpen },
-    ...(["teacher", "admin"].includes(role) ? [] : [{ to: "/incident-reports", label: t("portalNav.incidentReport"), icon: ClipboardList }]),
+    ...(["teacher", "admin"].includes(role) ? [] : [{ to: role === "staff" ? "/portal/staff/incident-reports" : "/incident-reports", label: t("portalNav.incidentReport"), icon: ClipboardList }]),
     ...(["student", "parent", "admin"].includes(role) ? [{ to: "/shining-students", label: "Shining Student", icon: GraduationCap }] : []),
-    ...(["student", "teacher"].includes(role) ? [{ to: "/electives", label: t("portalNav.electives"), icon: BookOpenCheck }] : []),
-    ...(["student", "teacher"].includes(role) ? [{ to: "/course-syllabi", label: "Syllabus", icon: FileText }] : []),
+    ...(["student", "teacher"].includes(role) ? [{ to: role === "teacher" ? "/portal/teacher/electives" : "/electives", label: t("portalNav.electives"), icon: BookOpenCheck }] : []),
+    ...(["student", "teacher"].includes(role) ? [{ to: role === "teacher" ? "/portal/teacher/course-syllabi" : "/course-syllabi", label: "Syllabus", icon: FileText }] : []),
   ]
   switch (role) {
     case 'student':
@@ -77,7 +77,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
     case 'staff':
       return [
         ...base,
-        { to: '/shining-students', label: 'Shining Student', icon: GraduationCap },
+        { to: '/portal/staff/shining-students', label: 'Shining Student', icon: GraduationCap },
         { to: '/portal/staff/records', label: t('portalNav.records'), icon: LibraryBig },
         { to: '/portal/staff/admissions', label: t('portalNav.admissions'), icon: ClipboardList },
         { to: '/portal/staff/attendance', label: t('portalNav.staffAttendance'), icon: ClipboardCheck },
@@ -240,11 +240,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   if (!user) return null
   const schoolLogoSrc = getAssetUrl('images/kcs.jpg')
   const accessRoles = user.accessRoles?.length ? user.accessRoles : [user.role]
-  const activeRole: UserRole = location.pathname.startsWith('/portal/teacher') && accessRoles.includes('teacher')
-    ? 'teacher'
-    : location.pathname.startsWith('/portal/staff') && accessRoles.includes('staff')
-      ? 'staff'
-      : user.role
+  const activeRole = workspaceRole(user,location.pathname)!
+  const principalWorkspace = canUsePrincipalWorkspace(user)
 
   const mediaAccount=isMediaAccount(user)
   const navItems: NavItem[] = mediaAccount?[
@@ -255,9 +252,9 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   ]:activeRole === 'admin' && user.id !== 'configured-superadmin' ? [
     { to: '/admin', label: t('portalNav.dashboard'), icon: LayoutDashboard },
     { to: '/admin/handbook', label: language === 'fr' ? 'Manuel de l’école' : 'School Handbook', icon: BookOpen },
-    { to: '/shining-students', label: 'Shining Student', icon: GraduationCap },
-    { to: '/incident-reports', label: t('portalNav.incidentReport'), icon: ClipboardList },
-    { to: '/electives', label: t('portalNav.electives'), icon: BookOpenCheck },
+    { to: '/admin/shining-students', label: 'Shining Student', icon: GraduationCap },
+    { to: '/admin/incident-reports', label: t('portalNav.incidentReport'), icon: ClipboardList },
+    { to: '/admin/electives', label: t('portalNav.electives'), icon: BookOpenCheck },
     { to: '/admin/main-teachers', label: t('portalNav.mainTeacherAssignment'), icon: UserCheck },
     { to: '/admin/students', label: t('portalNav.students'), icon: LibraryBig },
     { to: '/admin/parents', label: t('portalNav.parents'), icon: Users },
@@ -353,10 +350,15 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Espace enseignant' : 'Teacher workspace'}</span>}
           </Link>
         )}
-        {canUseStaffWorkspace(user) && (user.role === 'admin' || accessRoles.includes('staff')) && activeRole !== 'staff' && activeRole !== 'admin' && (
-          <Link to={user.role === 'admin' ? '/admin' : '/portal/staff'} className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`} title={!isMobile && sidebarCollapsed ? (currentLanguage === 'fr' ? 'Espace administratif' : 'Staff workspace') : undefined}>
+        {!accessRoles.includes('teacher') && activeRole !== user.role && !['admin','staff'].includes(user.role) && (
+          <Link to={'/portal/'+user.role} className={isMobile ? 'nexus-mobile-action' : 'sidebar-link w-full'}>
+            <UserCheck size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Mon espace habituel':'My usual workspace'}</span>}
+          </Link>
+        )}
+        {canUseStaffWorkspace(user) && activeRole !== 'staff' && activeRole !== 'admin' && (
+          <Link to={principalWorkspace ? '/admin' : '/portal/staff'} className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`} title={!isMobile && sidebarCollapsed ? (principalWorkspace ? (currentLanguage === 'fr' ? 'Espace Principal' : 'Principal workspace') : (currentLanguage === 'fr' ? 'Espace Staff' : 'Staff workspace')) : undefined}>
             <Shield size={18} />
-            {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Espace administratif' : 'Staff workspace'}</span>}
+            {(isMobile || !sidebarCollapsed) && <span>{principalWorkspace ? (currentLanguage === 'fr' ? 'Espace Principal' : 'Principal workspace') : (currentLanguage === 'fr' ? 'Espace Staff' : 'Staff workspace')}</span>}
           </Link>
         )}
         {(accessRoles.includes('teacher') || user.role === 'admin') && (
