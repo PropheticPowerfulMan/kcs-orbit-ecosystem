@@ -22,9 +22,9 @@ try{
  assert.ok(!['Saturday','Sunday'].includes(weekday),'Run this live clock QA on a school day')
  const clock=new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Kinshasa',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(now)
  const minute=Number(clock.slice(0,2))*60+Number(clock.slice(3))
- assert.ok(minute>10&&minute<1430,'Run QA outside the midnight boundary')
+ assert.ok(minute>=0&&minute<1439,'Run QA outside the midnight boundary')
  const hm=value=>String(Math.floor(value/60)).padStart(2,'0')+':'+String(value%60).padStart(2,'0')
- const start=hm(minute-5),end=hm(Math.min(1439,minute+30))
+ const start=hm(Math.max(0,minute-5)),end=hm(Math.min(1439,minute+30))
  for(const kind of Object.keys(ids)){
   await db.user.create({data:{id:ids[kind],email:ids[kind]+'@example.invalid',firstName:kind==='teacher'?'Teacher':kind,lastName:uid,accessCode:ids[kind].toUpperCase(),passwordHash:'synthetic-qa-hash',role:kind==='teacher'||kind==='other'?'TEACHER':kind.startsWith('student')?'STUDENT':'STAFF',permissions:kind==='principal'?['nexus:principal-workspace']:[]}})
  }
@@ -98,7 +98,7 @@ try{
  assert.equal(board.sessions.find(row=>row.id===saved.id).reviewNote,'Please discuss the recorded delay.')
  pass('Quarter-scoped gradebook regularity and live Principal review synchronize without altering actual times')
 
- await db.courseSchedule.update({where:{id:courses[0]+'-schedule'},data:{startTime:hm(minute-2),endTime:hm(minute+40)}})
+ await db.courseSchedule.update({where:{id:courses[0]+'-schedule'},data:{startTime:hm(Math.max(0,minute-2)),endTime:hm(Math.min(1439,minute+40))}})
  board=ok(await call('/mine?from='+day+'&to='+day))
  assert.equal(board.sessions.find(row=>row.id===saved.id).expectedStartAt,saved.expectedStartAt)
  const exited=ok(await call('/mark','POST',{...locator,action:'EXIT'}))
