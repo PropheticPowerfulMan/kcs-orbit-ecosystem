@@ -1194,8 +1194,18 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
 
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
-    const target = directory.students.find((entry) => entry.id === studentId || entry.id === student?.user.orbitUserId || entry.externalIds?.some(link => link.externalId === studentId))
+    let target = directory.students.find((entry) => entry.id === studentId || entry.externalIds?.some(link => link.externalId === studentId))
+    if (!target) {
+      const localProfile = await prisma.studentProfile.findUnique({
+        where: { id: studentId },
+        select: { user: { select: { orbitUserId: true } } },
+      })
+      if (localProfile?.user.orbitUserId) {
+        target = directory.students.find((entry) => entry.id === localProfile.user.orbitUserId)
+      }
+    }
     if (!target) throw new ApiError(404, 'Student not found')
+    const orbitStudentId = target.id
 
     const currentClass = splitClassName(target.className)
     const orbitPayload: OrbitRegistryEntitySnapshot = {
@@ -1218,7 +1228,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
       identifier: studentId,
       patch: orbitPayload,
     })
-    const updated = await updateRegistryEntityInOrbit(studentId, env.KCS_ORBIT_ORGANIZATION_ID!, orbitPayload)
+    const updated = await updateRegistryEntityInOrbit(orbitStudentId, env.KCS_ORBIT_ORGANIZATION_ID!, orbitPayload)
     invalidateOrbitSharedDirectory()
 
     let updatedEntity: OrbitRegistryEntitySnapshot
@@ -1228,7 +1238,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
       if (responseEntity) updatedEntity = { ...target, ...orbitPayload, ...responseEntity }
       else {
         const refreshed = await getSharedDirectoryFromOrbit(true)
-        const canonical = refreshed.students.find((student) => student.id === studentId)
+        const canonical = refreshed.students.find((student) => student.id === orbitStudentId)
         if (!canonical) throw new ApiError(502, 'Orbit confirmed the student update but returned no canonical entity for Nexus synchronization.')
         updatedEntity = canonical
       }
@@ -1246,7 +1256,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
       let rollbackFailure: unknown = null
       try {
         if (Object.keys(rollback.patch).length > 0) {
-          await updateRegistryEntityInOrbit(studentId, env.KCS_ORBIT_ORGANIZATION_ID!, rollback.patch)
+          await updateRegistryEntityInOrbit(orbitStudentId, env.KCS_ORBIT_ORGANIZATION_ID!, rollback.patch)
           rollbackSucceeded = true
         }
       } catch (error) {
