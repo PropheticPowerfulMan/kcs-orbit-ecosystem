@@ -1,5 +1,6 @@
 import '@/components/shared/reportSurfaces.css'
-import { Navigate } from 'react-router-dom'
+import {workspaceRole} from '@/utils/accountScope'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Download, FileCheck2, FileText, PlusCircle, Printer, Send, ShieldCheck } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
@@ -14,7 +15,7 @@ const empty={title:'',category:'Operational',occurredAt:'',location:'',descripti
 
 
 export default function IncidentReportsPage({ embedded = false }: { embedded?: boolean }){
- const {user}=useAuthStore();const superAdmin=user?.id==='configured-superadmin';const ordinaryAdministrator=user?.role==='admin'&&!superAdmin;const language=useUIStore(state=>state.language);const tr=(fr:string,en:string)=>language==='fr'?fr:en
+ const {user}=useAuthStore();const currentLocation=useLocation();const activeRole=workspaceRole(user,currentLocation.pathname);const superAdmin=user?.id==='configured-superadmin';const ordinaryAdministrator=(activeRole==='admin'||activeRole==='staff')&&!superAdmin;const language=useUIStore(state=>state.language);const tr=(fr:string,en:string)=>language==='fr'?fr:en
  const labels={SUBMITTED:tr('Reçu','Received'),UNDER_REVIEW:tr('En analyse','Under review'),CLOSED:tr('Clôturé','Closed')}
  const categoryLabel=(value:string)=>({Operational:tr('Opérations','Operational'),'Santé et sécurité':tr('Santé et sécurité','Health and safety'),'Événement':tr('Événement','Event'),Autre:tr('Autre','Other')} as Record<string,string>)[value]||value
  const roleLabel=(value:string)=>({teacher:tr('Enseignant','Teacher'),student:tr('Élève','Student'),parent:tr('Parent','Parent'),admin:tr('Administration','Administration'),staff:tr('Personnel','Staff')} as Record<string,string>)[value.toLowerCase()]||value
@@ -29,7 +30,7 @@ export default function IncidentReportsPage({ embedded = false }: { embedded?: b
  const download=async(report:Report)=>{try{const response=await incidentReportsAPI.attachment(report.id);const url=URL.createObjectURL(response.data);const link=document.createElement('a');link.href=url;link.download=report.attachmentName||tr('preuve','evidence');document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url)}catch(error:any){setMessage(error?.response?.data?.message||tr('Téléchargement impossible.','Unable to download the attachment.'))}}
  const print=(r:Report)=>printOfficialPdf({title:'INCIDENT REPORT',subtitle:tr('Rapport officiel hors discipline','Official non-disciplinary report'),metadata:[[tr('Référence','Reference'),r.reference],[tr('Statut','Status'),labels[r.status]],[tr('Auteur','Author'),r.authorName],[tr('Rôle','Role'),roleLabel(r.authorRole)],[tr('Date du fait','Incident date'),new Date(r.occurredAt).toLocaleString(language === 'fr' ? 'fr-CD' : 'en-GB')],[tr('Lieu','Location'),r.location],[tr('Catégorie','Category'),categoryLabel(r.category)],[tr('Confidentialité','Confidentiality'),r.confidentiality],[tr('Empreinte SHA-256','SHA-256 fingerprint'),r.verificationHash],[tr('Vérification','Verification'),`${location.origin}/api/incident-reports/verify/${r.reference}`]],narrative:`${r.description}\n\n${tr('Personnes concernées','People involved')} · ${r.peopleInvolved||tr('Non renseigné','Not provided')}\n${tr('Mesures immédiates','Immediate actions')} · ${r.immediateActions||tr('Aucune','None')}\n\n${tr('Pièce justificative','Evidence attachment')} · ${r.attachmentName||tr('Aucune','None')}`})
  const update=async(r:Report,status:Report['status'])=>{setBusy(true);setMessage('');try{await incidentReportsAPI.updateStatus(r.id,{status,adminNotes:r.adminNotes||''});setMessage(tr('Rapport mis à jour avec succès.','Report updated successfully.'));await load()}catch(error:any){setMessage(error?.response?.data?.message||tr('Mise à jour impossible.','Unable to update the report.'))}finally{setBusy(false)}}
- if (user?.role === 'teacher' && !embedded) return <Navigate to="/portal/teacher/reports?view=incident" replace/>
+ if (activeRole === 'teacher' && !embedded) return <Navigate to="/portal/teacher/reports?view=incident" replace/>
  return <div className={embedded ? 'min-w-0' : 'portal-shell flex'}>{!embedded && <PortalSidebar/>}<main className={embedded ? 'min-w-0' : 'min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 pt-20 sm:p-6 sm:pt-20 dark:bg-kcs-blue-950 lg:p-8 lg:pt-8'}>
   <div className="portal-edge-header w-full min-w-0 max-w-none space-y-6" data-report-surface="incident">
    {!embedded && (ordinaryAdministrator ? <AdministratorPortalHeader/> : <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">

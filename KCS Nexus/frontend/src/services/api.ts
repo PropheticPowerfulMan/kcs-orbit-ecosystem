@@ -117,6 +117,12 @@ const mutationErrorMessage = (error: AxiosError) => {
 // Request interceptor - attach JWT token
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    // Capture URL context before a refresh awaits; retries keep the original request's scope.
+    if (!config.headers.has('X-Nexus-Workspace')) {
+      const path = window.location.pathname
+      const workspace = /^\/admin(?:\/|$)/.test(path) ? 'admin' : /^\/portal\/staff(?:\/|$)/.test(path) ? 'staff' : /^\/portal\/teacher(?:\/|$)/.test(path) ? 'teacher' : ''
+      if (workspace) config.headers.set('X-Nexus-Workspace', workspace)
+    }
     let { token } = useAuthStore.getState()
     const requestPath = config.url ?? ''
     if (token && !requestPath.includes('/auth/refresh') && !requestPath.includes('/auth/login') && accessTokenNeedsRefresh(token)) {

@@ -1,3 +1,5 @@
+import {useLocation} from 'react-router-dom'
+import {workspaceRole} from '@/utils/accountScope'
 import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import "./electives.css";
@@ -46,12 +48,12 @@ const tn = (t: any, fallback = "Unassigned") =>
     : fallback;
 export default function ElectivesPage() {
   const { user } = useAuthStore(),
+    activeRole=workspaceRole(user,useLocation().pathname),
     language = useUIStore((state) => state.language),
     tr = (fr: string, en: string) => (language === "fr" ? fr : en),
-    managerRole = user?.role === "admin" && user.id !== "configured-superadmin",
+    managerRole = activeRole === "admin" && user?.id !== "configured-superadmin",
     teacherRole =
-      user?.role === "teacher" ||
-      Boolean(user?.accessRoles?.includes("teacher")),
+      activeRole === "teacher",
     student = user?.role === "student";
   const [data, setData] = useState<any>({ cycles: [] }),
     [teachers, setTeachers] = useState<any[]>([]),

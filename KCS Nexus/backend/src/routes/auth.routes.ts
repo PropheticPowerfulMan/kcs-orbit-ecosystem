@@ -1,4 +1,4 @@
-import {hasStaffWorkspaceAccess,mergeStaffWorkspacePermission} from '../utils/staffWorkspace.js'
+import {hasStaffWorkspaceAccess,hasPrincipalWorkspaceAccess,mergeStaffWorkspacePermission} from '../utils/staffWorkspace.js'
 import { getOrbitSharedDirectory } from '../services/orbitSharedDirectory.js'
 import {isMediaAccount} from '../utils/mediaAccount.js'
 import { assertAccountAccess, inactiveStudentStatus } from '../services/accountAccess.service.js'
@@ -36,6 +36,7 @@ const buildSafeUserWithAccess = async (user: PrismaUser, includeAvatar = true) =
   const accessRoles = new Set<string>([user.role.toLowerCase()])
   if (profiles?.teacherProfile) accessRoles.add('teacher')
   if (hasStaffWorkspaceAccess(profiles)) accessRoles.add('staff')
+  if (hasPrincipalWorkspaceAccess(profiles)) accessRoles.add('admin')
   return {
     ...buildSafeUser(user, includeAvatar),
     staffFunction: user.staffFunction,

@@ -19,6 +19,8 @@ const calendarApiUrl = env.ACADEMIC_CALENDAR_ORBIT_API_URL || env.KCS_ORBIT_API_
 const calendarApiKey = env.ACADEMIC_CALENDAR_ORBIT_API_KEY || env.KCS_ORBIT_API_KEY
 const calendarOrganizationId = env.ACADEMIC_CALENDAR_ORBIT_ORGANIZATION_ID || env.KCS_ORBIT_ORGANIZATION_ID
 
+import {PRINCIPAL_WORKSPACE_PERMISSION} from '../utils/staffWorkspace.js'
+
 export const academicCalendarRouter = Router()
 academicCalendarRouter.use(authenticate)
 
@@ -33,6 +35,7 @@ const requireCalendarManager = async (req: AuthenticatedRequest, _res: Response,
     })
     const titles = normalized([user?.staffFunction, user?.staffProfile?.function].filter(Boolean).join(' '))
     const permissions = [...(user?.permissions ?? []), ...(user?.staffProfile?.permissions ?? [])].map(normalized)
+    if (user?.permissions.includes(PRINCIPAL_WORKSPACE_PERMISSION) && !user.permissions.includes('nexus:media-only')) return next()
     if ((user?.role === 'ADMIN' || user?.role === 'STAFF') && (titles.includes('principal') || titles.includes('prefet') || permissions.includes('academic_calendar_manage'))) return next()
     return next(new ApiError(403, 'Only the Super Administrator or Principal can update the academic calendar.'))
   } catch (error) { return next(error) }
