@@ -1,3 +1,4 @@
+import { teachingAttendanceRouter } from './teaching-attendance.routes.js'
 import { reportCardReceiptsRouter } from './report-card-receipts.routes.js'
 import { documentDownloadRouter } from './document-download.routes.js'
 import {academicVisibilityResponseGuard} from '../middleware/academicVisibility.js'
@@ -77,6 +78,7 @@ router.use('/data-migration', dataMigrationRouter)
 router.use('/academic-calendar', academicCalendarRouter)
 router.use('/academic-records', academicRecordsRouter)
 router.use('/attendance', attendanceRouter)
+router.use('/teaching-attendance', teachingAttendanceRouter)
 router.use('/electives', electivesRouter)
 router.use('/shining-students', shiningStudentsRouter)
 router.use('/syllabi', syllabiRouter)

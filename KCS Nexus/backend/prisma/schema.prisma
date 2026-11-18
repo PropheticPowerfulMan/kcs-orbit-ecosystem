@@ -464,6 +464,7 @@ model StudentProfile {
   electiveAllocations     ElectiveAllocation[]
   shiningStudentSchedules ShiningStudentSchedule[]
   archive                 StudentArchive?
+  coursePresences StudentCoursePresence[]
 }
 
 /// Immutable administrative snapshot created when a learner is permanently
@@ -549,6 +550,7 @@ model TeacherProfile {
   homeroomSection   String?
   diagnosticTests   DiagnosticTest[]
   reviews           TeacherReview[]
+  teachingSessions  TeachingSession[]
   activityReports   TeacherActivityReport[]
 }
 
@@ -562,6 +564,7 @@ model Course {
   credits     Int              @default(1)
   syllabus    String?
   teacher     TeacherProfile   @relation(fields: [teacherId], references: [id])
+  teachingSessions TeachingSession[]
   schedules   CourseSchedule[]
   assignments Assignment[]
   grades      Grade[]
@@ -1703,4 +1706,59 @@ model ApplicationPasswordResetToken {
   createdAt DateTime @default(now())
   credential ApplicationCredential @relation(fields:[credentialId],references:[id],onDelete:Cascade)
   @@index([credentialId,expiresAt])
+}
+
+// Session registers are independent of daily AttendanceRecord and of report-card averages.
+// Snapshot labels and references preserve history if a course/account is later removed.
+model TeachingSession {
+  id String @id @default(cuid())
+  courseId String?
+  courseReference String
+  teacherId String?
+  teacherUserId String
+  scheduleKey String
+  schoolDate String
+  academicYear String
+  semester Int
+  term String
+  courseName String
+  courseCode String
+  className String
+  teacherName String
+  room String
+  expectedStartAt DateTime
+  expectedEndAt DateTime
+  checkInAt DateTime?
+  checkOutAt DateTime?
+  teacherNote String?
+  reviewStatus String @default("PENDING")
+  reviewNote String?
+  reviewedById String?
+  reviewedAt DateTime?
+  rosterRevision Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  course Course? @relation(fields:[courseId], references:[id], onDelete:SetNull)
+  teacher TeacherProfile? @relation(fields:[teacherId], references:[id], onDelete:SetNull)
+  students StudentCoursePresence[]
+  @@unique([courseReference,scheduleKey,schoolDate])
+  @@index([teacherUserId,schoolDate])
+  @@index([academicYear,schoolDate])
+}
+model StudentCoursePresence {
+  id String @id @default(cuid())
+  sessionId String
+  studentId String?
+  studentReference String
+  studentName String
+  studentNumber String
+  className String
+  status AttendanceStatus
+  note String?
+  markedById String
+  markedAt DateTime
+  session TeachingSession @relation(fields:[sessionId], references:[id], onDelete:Cascade)
+  student StudentProfile? @relation(fields:[studentId], references:[id], onDelete:SetNull)
+  @@unique([sessionId,studentReference])
+  @@index([studentReference,markedAt])
 }

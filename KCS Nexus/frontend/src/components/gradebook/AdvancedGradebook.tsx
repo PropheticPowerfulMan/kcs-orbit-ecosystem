@@ -1,3 +1,4 @@
+import CourseRegularityPanel from '@/components/teachingAttendance/CourseRegularityPanel'
 import GradebookFocusHost from './GradebookFocusHost'
 import AcademicPeriodConfirmationSummary from '@/components/shared/AcademicPeriodConfirmationSummary'
 import { gradebookScorePercentage as parseScore, gradebookWeightedAverage, zeroWeightScoredAssessments, proposeScoredCategoryWeights } from '@/utils/gradebookCalculations'
@@ -1210,6 +1211,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </div></>}
         </div>
       </div>
+
+      {selectedCourse?.id && <CourseRegularityPanel courseId={selectedCourse.id} academicYear={academicYear} term={term}/>}
 
       <GradebookFocusHost expanded={spreadsheetOpen}>
       <div data-kcs-gradebook data-gradebook-focus={spreadsheetOpen||undefined} className={spreadsheetOpen ? "gradebook-focus-window fixed inset-0 z-[9990] flex flex-col overflow-hidden bg-[#e2edf7] text-kcs-blue-950 shadow-2xl dark:bg-[#081e31] dark:text-white" : "overflow-hidden rounded-2xl border border-sky-100 bg-white dark:border-sky-800 dark:bg-kcs-blue-900/50"}>

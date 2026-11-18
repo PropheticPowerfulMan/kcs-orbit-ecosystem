@@ -691,3 +691,18 @@ export const parentMeetingsAPI = {
  review: (id: string, data: object) => api.post(`/teachers/parent-meetings/${id}/review`, data),
  verify: (document: string, fingerprint: string) => api.get('/teachers/parent-meetings/verify', { params: { document, fingerprint } }),
 }
+
+// This register never writes the daily attendance/report-card data.
+const teachingMutation = { headers: { 'x-silent-feedback': 'true' } }
+export const teachingAttendanceAPI = {
+ clock: () => api.get('/teaching-attendance/clock', {timeout:10000}),
+ mine: (params:object) => api.get('/teaching-attendance/mine',{params,timeout:30000}),
+ principal: (params:object) => api.get('/teaching-attendance/principal',{params,timeout:30000}),
+ mark: (data:object) => api.post('/teaching-attendance/mark',data,teachingMutation),
+ register: (id:string) => api.get('/teaching-attendance/sessions/'+encodeURIComponent(id)+'/learners'),
+ saveRegister: (id:string,data:object) => api.put('/teaching-attendance/sessions/'+encodeURIComponent(id)+'/learners',data,teachingMutation),
+ review: (data:object) => api.post('/teaching-attendance/review',data,teachingMutation),
+ regularity: (params:object) => api.get('/teaching-attendance/regularity',{params}),
+ schedule: (params:object) => api.get('/teaching-attendance/schedule',{params}),
+ publishSchedule: (data:object) => api.put('/teaching-attendance/schedule',data,teachingMutation),
+}
