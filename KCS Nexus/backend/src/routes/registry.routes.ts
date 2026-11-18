@@ -718,7 +718,9 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     if(!entity.email)throw new ApiError(409,'Ajoutez une adresse e-mail officielle avant de créer les accès Nexus. / Add an official email before provisioning Nexus access.')
     const email=entity.email.trim().toLowerCase(),accessCode=String(entity.accessCode||entity.displayId||generateAccessCode(entityType)).toUpperCase()
     if(await prisma.user.findFirst({where:{OR:[{email},{accessCode}]},select:{id:true}}))throw new ApiError(409,'This identity conflicts with an existing Nexus account. No password was changed.')
-    user=await prisma.user.create({data:{email,accessCode,firstName:entity.firstName||entity.fullName||'KCS',middleName:entity.middleName||null,lastName:entity.lastName||'',role:entityType==='student'?'STUDENT':entityType==='parent'?'PARENT':'TEACHER',orbitUserId:entity.id,orbitOrganizationId:env.KCS_ORBIT_ORGANIZATION_ID,phone:entity.phone||null}})
+    const employeeType=String(entity.employeeType||entity.employee_type||'').trim().toLowerCase().replace(/[ _-]+/g,' ')
+    const employeeRole=['teacher','enseignant','teaching staff','faculty','academic'].includes(employeeType)?'TEACHER':'STAFF'
+    user=await prisma.user.create({data:{email,accessCode,firstName:entity.firstName||entity.fullName||'KCS',middleName:entity.middleName||null,lastName:entity.lastName||'',role:entityType==='student'?'STUDENT':entityType==='parent'?'PARENT':employeeRole,orbitUserId:entity.id,orbitOrganizationId:env.KCS_ORBIT_ORGANIZATION_ID,phone:entity.phone||null}})
   }
 
   const temporaryPassword = generateTemporaryPassword()
