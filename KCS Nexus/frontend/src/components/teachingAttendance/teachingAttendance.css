@@ -39,3 +39,8 @@
 @media(max-width:900px){.teaching-workspace .ta-session{grid-template-columns:minmax(0,1fr) minmax(150px,.8fr)}.teaching-workspace .ta-session-actions{grid-column:1/-1;justify-content:flex-end}}
 @media(max-width:600px){.teaching-workspace .ta-hero{padding:17px}.teaching-workspace .ta-panel{padding:13px;border-radius:17px}.teaching-workspace .ta-session{grid-template-columns:minmax(0,1fr);gap:12px;padding:13px}.teaching-workspace .ta-session-actions{grid-column:1;justify-content:flex-start}.teaching-workspace .ta-dialog-body{padding:12px}.teaching-workspace .ta-clock{padding:10px}.teaching-workspace .ta-stat b{font-size:22px}}
 @media(prefers-reduced-motion:reduce){.teaching-workspace .ta-btn{transition:none}.teaching-workspace .ta-btn:hover{transform:none}}
+
+.teaching-workspace .ta-badge[data-state="ON_TIME"]{background:#d2f3e5;color:#115f45;border-color:#58b68e}
+.teaching-workspace .ta-badge[data-state="LATE"]{background:#fff0d0;color:#805318;border-color:#d9a94b}
+.dark .teaching-workspace .ta-badge[data-state="ON_TIME"]{background:#104a3c;color:#a7f3d0;border-color:#348b72}
+.dark .teaching-workspace .ta-badge[data-state="LATE"]{background:#51391c;color:#ffe1a6;border-color:#b98b42}
