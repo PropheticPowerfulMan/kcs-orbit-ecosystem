@@ -1,3 +1,6 @@
+import {createHash} from 'node:crypto'
+import {combineTeachingSlots,type Position} from '../utils/teachingPresenceProof.js'
+import {attachPresenceProofs,consumePresenceChallenge,proofId} from './teachingPresenceProof.service.js'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
 import { ApiError } from '../utils/api.js'
@@ -162,7 +165,8 @@ export async function teachingPlan(filters: Filters, options: { strictCalendar?:
     const course=courses.find(row=>row.id===record.courseReference)
     sessions.set(keyOf(record.courseReference,record.scheduleKey,record.schoolDate),snapshot(record,course?.enrollments.filter(enrollment=>teachingStudentMatchesClass(enrollment.student,record.className)).length || record.students.length))
   }
-  const rows=[...sessions.values()].sort((a,b)=>a.expectedStartAt.getTime()-b.expectedStartAt.getTime() || a.teacherName.localeCompare(b.teacherName)).map(row=>({...row,timing:teachingTiming(row,now)}))
+  const grouped=combineTeachingSlots([...sessions.values()],keys=>'lesson-block:'+createHash('sha256').update(keys.join('|')).digest('hex').slice(0,32))
+  const rows=(await attachPresenceProofs(grouped)).sort((a,b)=>a.expectedStartAt.getTime()-b.expectedStartAt.getTime() || a.teacherName.localeCompare(b.teacherName)).map(row=>({...row,timing:teachingTiming(row,now)}))
   scheduleWarnings.sort((a,b)=>a.expectedStartAt.localeCompare(b.expectedStartAt)||a.teacherName.localeCompare(b.teacherName))
   return { now, trackingSince, calendars, courses, rows, saved, scheduleWarnings }
 }
@@ -200,7 +204,7 @@ export async function teachingBoard(filters: Filters) {
   }
 }
 export type Locator={courseId:string;scheduleKey:string;date:string}
-async function resolvePlanned(locator:Locator,teacherUserId?:string) {
+export async function resolvePlanned(locator:Locator,teacherUserId?:string) {
   const plan=await teachingPlan({from:locator.date,to:locator.date,courseId:locator.courseId,...(teacherUserId?{teacherUserId}:{})},{strictCalendar:true})
   const row=plan.rows.find(row=>row.scheduleKey===locator.scheduleKey)
   if(!row)throw new ApiError(404,'TEACHING_SESSION_NOT_SCHEDULED')
@@ -212,7 +216,7 @@ const createSnapshot=(row:Planned)=>({
   courseName:row.courseName,courseCode:row.courseCode,className:row.className,teacherName:row.teacherName,room:row.room,
   expectedStartAt:row.expectedStartAt,expectedEndAt:row.expectedEndAt,
 })
-export async function markTeachingTime(userId:string,locator:Locator,action:'ENTRY'|'EXIT',note?:string) {
+export async function markTeachingTime(userId:string,locator:Locator,action:'ENTRY'|'EXIT',note?:string,location?:{token:string;position:Position}) {
   const {plan,row}=await resolvePlanned(locator,userId)
   if(action==='ENTRY' && !schoolDayDecision(row.schoolDate,plan.calendars,(await nonSchoolSettings(row.academicYear)).ranges).allowed)throw new ApiError(409,'TEACHING_SCHOOL_DAY_CLOSED')
   const course=plan.courses.find(course=>course.id===row.courseReference && course.teacher.userId===userId)
@@ -232,11 +236,14 @@ export async function markTeachingTime(userId:string,locator:Locator,action:'ENT
       const open=await tx.teachingSession.findFirst({where:{teacherUserId:userId,checkInAt:{not:null},checkOutAt:null,schoolDate:row.schoolDate}})
       if(open && open.id!==previous?.id)throw new ApiError(409,'TEACHING_OTHER_SESSION_OPEN')
     } else if(!previous?.checkInAt)throw new ApiError(409,'TEACHING_ENTRY_REQUIRED')
+    if(!location)throw new ApiError(400,'TEACHING_LOCATION_REQUIRED')
+    const evidence=await consumePresenceChallenge(tx,userId,locator,action,location.token,location.position,now)
     const saved=await tx.teachingSession.upsert({
       where:{courseReference_scheduleKey_schoolDate:{courseReference:row.courseReference,scheduleKey:row.scheduleKey,schoolDate:row.schoolDate}},
       create:{...createSnapshot(row),checkInAt:now,...(note?{teacherNote:note}:{})},
       update:{...(action==='ENTRY'?{checkInAt:now}:{checkOutAt:now}),...(note?{teacherNote:note}:{})},
     })
+    await tx.auditLog.create({data:{id:proofId(saved.id,action),actorId:userId,action:'TEACHING_LOCATION_ACCEPTED',targetType:'TeachingSession',targetId:saved.id,metadata:evidence}})
     await tx.auditLog.create({data:{actorId:userId,action:'TEACHING_SESSION_'+action,targetType:'TeachingSession',targetId:saved.id,metadata:{schoolTimezone:TEACHING_TIMEZONE,serverUtc:now.toISOString(),scheduledStart:row.expectedStartAt.toISOString(),scheduledEnd:row.expectedEndAt.toISOString()}}})
     return saved
   },{maxWait:10000,timeout:20000})

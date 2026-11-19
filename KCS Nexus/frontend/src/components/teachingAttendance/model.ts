@@ -8,7 +8,9 @@ export type TeachingStats = {
  earlyExits:number;actualMinutes:number;punctuality95:[number,number]|null
 }
 export type CourseChoice={id:string;name:string;code:string;className:string;teacherUserId:string;teacherName:string;scheduleCount:number}
+export type PresenceProof={status:'PENDING'|'VERIFIED'|'REJECTED';revision:number;distanceMeters:number;accuracyMeters:number;recordedAt:string;note?:string}
 export type TeachingSession = {
+ presenceProof?:{entry:PresenceProof|null;exit:PresenceProof|null};
  id:string|null;courseReference:string;scheduleKey:string;schoolDate:string;academicYear:string;semester:number;term:string;
  teacherUserId:string;courseName:string;courseCode:string;className:string;teacherName:string;room:string;
  expectedStartAt:string;expectedEndAt:string;checkInAt:string|null;checkOutAt:string|null;teacherNote:string|null;
@@ -38,10 +40,18 @@ export const sessionLabels:Record<TeachingSession['timing']['status'],[string,st
  UNRECORDED:['Présence non enregistrée','No presence recorded'],IN_CLASS:['En cours','In class'],COMPLETED:['Séance terminée','Session completed'],
 }
 export const reviewLabels:Record<ReviewStatus,[string,string]>={
- PENDING:['À examiner','Awaiting review'],ACKNOWLEDGED:['Vérifié','Acknowledged'],
+ PENDING:['À examiner','Awaiting review'],ACKNOWLEDGED:['Observation consignée','Acknowledged'],
  FOLLOW_UP:['Suivi demandé','Follow-up requested'],JUSTIFIED:['Justification acceptée','Justification accepted'],
 }
 const errors:Record<string,[string,string]>={
+ TEACHING_LOCATION_UNAVAILABLE:['Autorisez la localisation ponctuelle dans votre navigateur, puis réessayez sur le campus.','Allow one-time browser location access, then retry on campus.'],
+ TEACHING_CAMPUS_NOT_CONFIGURED:['Le Principal doit d’abord configurer le périmètre GPS du campus dans Présences aux cours.','The Principal must first configure the campus GPS boundary in Teaching attendance.'],
+ TEACHING_CAMPUS_POLICY_INVALID:['Le rayon et la précision du campus sont incompatibles. La précision maximale doit être au plus la moitié du rayon.','Campus radius and accuracy are incompatible. Maximum uncertainty must be no more than half the radius.'],
+ TEACHING_LOCATION_REQUIRED:['Un contrôle GPS récent est requis pour ce pointage.','A fresh GPS check is required for this action.'],
+ TEACHING_LOCATION_OUTSIDE:['Votre position ou sa précision ne permet pas de confirmer que vous êtes sur le campus. Réessayez sur place avec un meilleur signal.','Your position or its uncertainty cannot confirm that you are on campus. Retry on site with a better signal.'],
+ TEACHING_LOCATION_CHALLENGE_INVALID:['Le contrôle GPS a expiré ou a déjà été utilisé. Recommencez le pointage.','The location check expired or was already used. Restart the action.'],
+ TEACHING_LOCATION_RATE_LIMIT:['Trop de tentatives. Attendez une minute avant de réessayer.','Too many attempts. Wait one minute before retrying.'],
+ TEACHING_SELF_VERIFICATION_DENIED:['Un autre responsable doit vérifier votre propre présence.','Another authorized manager must verify your own presence.'],
  TEACHING_SCHEDULE_INVALID:['Vérifiez les classes et l’ordre des heures de chaque créneau.','Check each time slot’s class and start/end order.'],
  TEACHING_SCHEDULE_OVERLAP:['Cet enseignant a déjà un cours sur une plage qui se chevauche. Aucun horaire n’a été modifié.','This teacher already has an overlapping class. No schedule was changed.'],
  TEACHING_CLOCK_UNAVAILABLE:['L’heure serveur est indisponible. Réessayez avant de pointer.','Server time is unavailable. Retry before checking in.'],
@@ -65,7 +75,7 @@ const errors:Record<string,[string,string]>={
 }
 export function teachingError(error:unknown,fr:boolean) {
  const e=error as {response?:{data?:{message?:string}}}
- const raw=e.response?.data?.message||''
+ const raw=e.response?.data?.message||(error instanceof Error?error.message:'')
  const known=Object.keys(errors).find(code=>raw.includes(code))
  if(known)return errors[known][fr?0:1]
  if(raw.includes('CLOSED')||raw.includes('closed period'))return fr?'Cette période est protégée. Demandez une autorisation au SuperAdmin.':'This period is protected. Ask Super Administration for access.'

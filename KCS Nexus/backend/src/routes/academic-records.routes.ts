@@ -184,6 +184,12 @@ academicRecordsRouter.get('/report-card-analytics/verify', asyncHandler(async (r
 }))
 
 academicRecordsRouter.use(authenticate)
+// Principal administration is consultative for academic records. Teacher workspace
+// retains its own homeroom/course permissions and SuperAdmin retains approval.
+academicRecordsRouter.use((req:AuthenticatedRequest,_res,next)=>{
+ if(req.user?.role==='admin'&&req.user.sub!=='configured-superadmin'&&!['GET','HEAD','OPTIONS'].includes(req.method))return next(new ApiError(403,'PRINCIPAL_ACADEMIC_RECORDS_READ_ONLY'))
+ next()
+})
 academicRecordsRouter.use('/certificates', certificateDeliveryRouter)
 academicRecordsRouter.get('/transcripts/recipients',requireSuperAdmin(),asyncHandler(async(_req,res)=>{
  const students=await prisma.studentProfile.findMany({where:{OR:[{grade:{in:['Grade 9','Grade 10','Grade 11','Grade 12']}},{legacyTranscriptRecords:{some:{verificationStatus:'VERIFIED'}}}]},select:{id:true,studentNumber:true,grade:true,section:true,user:{select:{id:true,firstName:true,middleName:true,lastName:true}},parentLinks:{select:{parent:{select:{id:true,firstName:true,middleName:true,lastName:true,email:true,phone:true}}}}},orderBy:{user:{lastName:'asc'}}})
@@ -895,7 +901,7 @@ const reportCardPrintDocumentHandler = (withTeacherReview: boolean) => asyncHand
  }
  const doc=(await prepareReportCardPdfs([printCard],language,true)).get(id)!
  const actorId=await resolveAcademicActorId(req)
- await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:doc.documentId,metadata:{fingerprint:doc.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:printCard.publicationStatus,approvedAt:printCard.approvedAt?.toISOString()??null,unsavedReviewPreview:unsavedReview}}})
+ if(req.user!.sub==='configured-superadmin'||req.user!.role!=='admin')await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:doc.documentId,metadata:{fingerprint:doc.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:printCard.publicationStatus,approvedAt:printCard.approvedAt?.toISOString()??null,unsavedReviewPreview:unsavedReview}}})
  res.setHeader('Cache-Control','private, no-store')
  return success(res,{html:doc.html,filename:doc.filename,documentId:doc.documentId,unsavedReviewPreview:unsavedReview},'Official report document prepared')
 })
@@ -921,7 +927,7 @@ academicRecordsRouter.get('/report-cards/:id/pdf',requireSuperAdmin(),asyncHandl
  if(!card)throw new ApiError(404,'Report card not found')
  const pdf=(await prepareReportCardPdfs([card],language)).get(id)!
  const actorId=await resolveAcademicActorId(req)
- await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:pdf.documentId,metadata:{fingerprint:pdf.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:card.publicationStatus,approvedAt:card.approvedAt?.toISOString()??null}}})
+ if(req.user!.sub==='configured-superadmin'||req.user!.role!=='admin')await prisma.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:pdf.documentId,metadata:{fingerprint:pdf.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:card.publicationStatus,approvedAt:card.approvedAt?.toISOString()??null}}})
  res.setHeader('Cache-Control','private, no-store')
  res.setHeader('Content-Disposition',"inline; filename=\"RC.pdf\"; filename*=UTF-8''"+encodeURIComponent(pdf.filename))
  res.type('application/pdf').send(pdf.buffer)
@@ -1059,9 +1065,9 @@ academicRecordsRouter.get('/transcripts/:studentId/document',requireRoles('admin
  const data=await authorizedTranscript(req,res),preview=!data.rows.length
  // Keep administrative previews available before official results are approved.
  // A preview is never issued and cannot bypass release or parent-delivery controls.
- if(preview&&req.user!.sub!=='configured-superadmin')throw new ApiError(409,'No approved or verified Grade 9–12 academic records are available for this learner.')
+ if(preview&&req.user!.sub!=='configured-superadmin'&&req.user!.role!=='admin')throw new ApiError(409,'No approved or verified Grade 9–12 academic records are available for this learner.')
  const document=await officialTranscriptDocument(data)
- await prisma.auditLog.create({data:{actorId:await databaseActorId(req.user!.sub),action:preview?'TRANSCRIPT_PREVIEW_GENERATED':'TRANSCRIPT_VERIFICATION_ISSUED',targetType:preview?'TranscriptPreview':'OfficialTranscript',targetId:document.documentId,metadata:{fingerprint:document.fingerprint,studentId:data.student.id,studentNumber:data.student.studentNumber,studentName:data.student.name,sourceVersion:data.sourceVersion,language:'en',preview}}})
+ if(req.user!.sub==='configured-superadmin'||req.user!.role!=='admin')await prisma.auditLog.create({data:{actorId:await databaseActorId(req.user!.sub),action:preview?'TRANSCRIPT_PREVIEW_GENERATED':'TRANSCRIPT_VERIFICATION_ISSUED',targetType:preview?'TranscriptPreview':'OfficialTranscript',targetId:document.documentId,metadata:{fingerprint:document.fingerprint,studentId:data.student.id,studentNumber:data.student.studentNumber,studentName:data.student.name,sourceVersion:data.sourceVersion,language:'en',preview}}})
  res.setHeader('Cache-Control','private, no-store');return success(res,document,preview?'Administrative transcript preview prepared — no official results on file':'Official English transcript prepared')
 }))
 academicRecordsRouter.get('/transcripts/:studentId',requireRoles('admin','staff','teacher','student','parent'),asyncHandler(async(req:AuthenticatedRequest,res)=>{

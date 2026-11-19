@@ -44,3 +44,16 @@
 .teaching-workspace .ta-badge[data-state="LATE"]{background:#fff0d0;color:#805318;border-color:#d9a94b}
 .dark .teaching-workspace .ta-badge[data-state="ON_TIME"]{background:#104a3c;color:#a7f3d0;border-color:#348b72}
 .dark .teaching-workspace .ta-badge[data-state="LATE"]{background:#51391c;color:#ffe1a6;border-color:#b98b42}
+
+/* These headers are dark in both themes; global light-theme heading rules must not recolor them. */
+.teaching-workspace .ta-dialog > .ta-dialog-head,
+.teaching-workspace .ta-dialog > .ta-dialog-head h2,
+.teaching-workspace .ta-dialog > .ta-dialog-head .ta-btn,
+.teaching-workspace .ta-hero h2,.teaching-workspace .ta-hero strong{color:#f4fbff!important}
+.teaching-workspace .ta-dialog > .ta-dialog-head{background:linear-gradient(115deg,#10344e,#12596a)!important}
+.teaching-workspace .ta-dialog > .ta-dialog-head h2{margin:0;line-height:1.4;overflow-wrap:anywhere}
+.teaching-workspace .ta-dialog > .ta-dialog-head .ta-btn{flex-shrink:0;background:#ffffff16!important}
+.teaching-workspace .ta-panel h3,.teaching-workspace .ta-dialog-body h3{color:var(--ta-ink)}
+.teaching-workspace .ta-evidence{border:1px solid var(--ta-border);border-radius:12px;padding:10px;background:var(--ta-panel);color:var(--ta-ink);font-size:11px}
+.teaching-workspace .ta-badge[data-state=VERIFIED]{background:#c6ebda;color:#0d5f48}
+.teaching-workspace .ta-badge[data-state=REJECTED]{background:#f5d0d5;color:#8a2441}

@@ -1,3 +1,5 @@
+import {campusPolicy,saveCampusPolicy,issuePresenceChallenge,verifyTeachingPresence} from '../services/teachingPresenceProof.service.js'
+import {resolvePlanned} from '../services/teachingAttendance.service.js'
 import {teachingScheduleEditor,publishTeachingSchedule} from '../services/teachingSchedule.service.js'
 import { Router } from 'express'
 import { z } from 'zod'
@@ -46,8 +48,8 @@ teachingAttendanceRouter.get('/principal',asyncHandler(async(req:AuthenticatedRe
   return success(res,await teachingBoard({...query,from:query.from||today,to:query.to||query.from||today}))
 }))
 teachingAttendanceRouter.post('/mark',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
-  const body=locator.extend({action:z.enum(['ENTRY','EXIT']),note:z.string().trim().max(1000).optional()}).strict().parse(req.body)
-  const saved=await markTeachingTime(req.user!.sub,body,body.action,body.note)
+  const body=locator.extend({action:z.enum(['ENTRY','EXIT']),location:z.object({token:z.string().regex(/^[a-f0-9]{64}$/),position:z.object({latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),accuracy:z.number().min(0).max(10000)}).strict()}).strict(),note:z.string().trim().max(1000).optional()}).strict().parse(req.body)
+  const saved=await markTeachingTime(req.user!.sub,body,body.action,body.note,body.location)
   return success(res,saved,body.action==='ENTRY'?'TEACHING_ENTRY_SAVED':'TEACHING_EXIT_SAVED')
 }))
 teachingAttendanceRouter.get('/sessions/:id/learners',asyncHandler(async(req:AuthenticatedRequest,res)=>{
@@ -80,4 +82,22 @@ teachingAttendanceRouter.put('/schedule',asyncHandler(async(req:AuthenticatedReq
  const actorId=await principalActor(req)
  const body=scheduleScope.extend({entries:z.array(z.object({day:z.enum(['Monday','Tuesday','Wednesday','Thursday','Friday']),startTime:z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),endTime:z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),room:z.string().trim().max(100),className:z.string().min(1).max(80),period:z.number().int().min(1).max(30)}).strict()).max(50)}).strict().parse(req.body)
  return success(res,await publishTeachingSchedule(actorId,body.courseId,body.academicYear,body.semester,body.entries),'TEACHING_SCHEDULE_PUBLISHED')
+}))
+
+teachingAttendanceRouter.get('/campus',requireRoles('teacher','admin'),asyncHandler(async(_req,res)=>success(res,await campusPolicy())))
+teachingAttendanceRouter.put('/campus',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const actorId=await principalActor(req)
+ const body=z.object({latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),radiusMeters:z.number().int().min(25).max(500),maxAccuracyMeters:z.number().int().min(5).max(100)}).strict().parse(req.body)
+ if(body.maxAccuracyMeters>body.radiusMeters/2)throw new ApiError(400,'TEACHING_CAMPUS_POLICY_INVALID')
+ return success(res,await saveCampusPolicy(actorId,body),'TEACHING_CAMPUS_SAVED')
+}))
+teachingAttendanceRouter.post('/location-challenge',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const body=locator.extend({action:z.enum(['ENTRY','EXIT'])}).strict().parse(req.body)
+ await resolvePlanned(body,req.user!.sub)
+ return success(res,await issuePresenceChallenge(req.user!.sub,body,body.action))
+}))
+teachingAttendanceRouter.post('/sessions/:id/verify-presence',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const actorId=await principalActor(req),id=z.string().min(1).max(150).parse(req.params.id)
+ const body=z.object({action:z.enum(['ENTRY','EXIT']),status:z.enum(['VERIFIED','REJECTED']),revision:z.number().int().min(0),note:z.string().trim().min(3).max(2000),observedOnSite:z.literal(true)}).strict().parse(req.body)
+ return success(res,await verifyTeachingPresence(actorId,id,body.action,body.status,body.revision,body.note),'TEACHING_PRESENCE_REVIEWED')
 }))

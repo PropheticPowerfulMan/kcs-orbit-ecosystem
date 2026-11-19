@@ -29,6 +29,7 @@ type Props = {
   onQueue: (queue: ReportQueue) => void;
   onReadyDelivery: () => void;
   readyDeliveryCount?: number;
+  readOnly?: boolean;
 };
 export default function ReportCardWorkflowBoard({
   documentKind = "report-card",
@@ -41,6 +42,7 @@ export default function ReportCardWorkflowBoard({
   onQueue,
   onReadyDelivery,
   readyDeliveryCount,
+  readOnly=false,
 }: Props) {
   const language = useUIStore((state) => state.language);
   const tr = (fr: string, en: string) => (language === "fr" ? fr : en);
@@ -205,10 +207,10 @@ export default function ReportCardWorkflowBoard({
           </button>
         ))}
       </div>
-      <button
+      {!readOnly && <button
         type="button"
         disabled={
-          busy || (readyDeliveryCount !== undefined ? !readyDeliveryCount : !scoped.some((card) => reportCardQueue(card) === "READY"))
+          readOnly || busy || (readyDeliveryCount !== undefined ? !readyDeliveryCount : !scoped.some((card) => reportCardQueue(card) === "READY"))
         }
         onClick={onReadyDelivery}
         className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
@@ -223,7 +225,7 @@ export default function ReportCardWorkflowBoard({
               "Select parents for ready report cards",
             )}
         {certificates && readyDeliveryCount !== undefined ? ` · ${readyDeliveryCount}` : ''}
-      </button>
+      </button>}
     </section>
   );
 }
