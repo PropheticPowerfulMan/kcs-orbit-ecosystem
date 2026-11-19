@@ -587,6 +587,7 @@ model KitchenCashierAccount {
   fullName String @default("Kitchen Cashier")
   email String @unique
   passwordHash String
+  version Int @default(1)
   isActive Boolean @default(true)
   updatedBy String
   lastLoginAt DateTime?
