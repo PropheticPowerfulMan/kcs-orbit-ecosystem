@@ -1,3 +1,4 @@
+import {cashierSessionMatches} from './cashier-session.js'
 import { prisma } from './db.js'
 import type { NextFunction, Request, Response } from 'express'
 import {createAccessVerifier} from './ecosystemAccessVerifier.js'
@@ -16,7 +17,7 @@ export type KitchenIdentity = {
   role: KitchenRole
   hasOfficialPhoto: boolean
   isSuperAdministrator?: boolean
-  credentialScope?: 'KITCHEN_LOCAL'
+  credentialScope?: 'KITCHEN_LOCAL' | 'KITCHEN_CASHIER_LOCAL'
   credentialVersion?: number
   canManageOwnCredentials: boolean
 }
@@ -34,7 +35,10 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
   if (!header?.startsWith('Bearer ')) return res.status(401).json({ message: 'Authentication required' })
   try {
     req.kitchenUser = jwt.verify(header.slice(7), env.JWT_SECRET, { issuer: 'kcs-kitchen' }) as KitchenIdentity
-    await verifyEcosystemAccess([req.kitchenUser.userId,req.kitchenUser.orbitPersonId,req.kitchenUser.email])
+    if(req.kitchenUser.userId.startsWith('kitchen-cashier:')){
+      const account=await prisma.kitchenCashierAccount.findUnique({where:{id:req.kitchenUser.userId.slice('kitchen-cashier:'.length)}})
+      if(!cashierSessionMatches(req.kitchenUser,account))return res.status(401).json({message:'Kitchen cashier credentials changed or access is disabled. Sign in again.'})
+    }else await verifyEcosystemAccess([req.kitchenUser.userId,req.kitchenUser.orbitPersonId,req.kitchenUser.email])
     if (req.kitchenUser.role === 'KITCHEN_ADMIN' || req.kitchenUser.credentialScope === 'KITCHEN_LOCAL' || (req.kitchenUser.role === 'CASHIER' && !req.kitchenUser.userId.startsWith('kitchen-cashier:'))) {
       const row=await prisma.kitchenManagerCredential.findUnique({where:{orbitPersonId:req.kitchenUser.orbitPersonId}})
       if(row){
@@ -42,7 +46,8 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
         if(!access?.isActive||access.role!=='KITCHEN_ADMIN')return res.status(403).json({message:'Kitchen manager access is disabled'})
         if(row.nexusUserId!==req.kitchenUser.userId||req.kitchenUser.credentialScope!=='KITCHEN_LOCAL'||row.version!==req.kitchenUser.credentialVersion)return res.status(401).json({message:'Kitchen credentials changed. Sign in again.'})
         req.kitchenUser.email=row.email
-      }else if(req.kitchenUser.credentialScope==='KITCHEN_LOCAL')return res.status(401).json({message:'Kitchen manager account is no longer available'})
+      }else if(req.kitchenUser.role==='CASHIER')return res.status(401).json({message:'Use the independent local Kitchen cashier account.'})
+      else if(req.kitchenUser.credentialScope==='KITCHEN_LOCAL')return res.status(401).json({message:'Kitchen manager account is no longer available'})
       else if(req.kitchenUser.role==='KITCHEN_ADMIN'&&!req.kitchenUser.isSuperAdministrator){const access=await prisma.kitchenAccess.findUnique({where:{orbitPersonId:req.kitchenUser.orbitPersonId}});if(!access?.isActive||access.role!=='KITCHEN_ADMIN')return res.status(403).json({message:'Kitchen manager access is disabled'})}
     }
     if (req.kitchenUser.personType === 'STUDENT') {

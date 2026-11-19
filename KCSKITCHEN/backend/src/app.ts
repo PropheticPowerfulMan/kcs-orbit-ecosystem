@@ -180,8 +180,10 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
       role: 'CASHIER',
       hasOfficialPhoto: false,
       canManageOwnCredentials: false,
+      credentialScope:'KITCHEN_CASHIER_LOCAL',credentialVersion:cashier.version,
     }
-    await prisma.kitchenCashierAccount.update({ where: { id: cashier.id }, data: { lastLoginAt: new Date() } })
+    const current=await prisma.kitchenCashierAccount.updateMany({where:{id:cashier.id,isActive:true,passwordHash:cashier.passwordHash,version:cashier.version},data:{lastLoginAt:new Date()}})
+    if(current.count!==1)return res.status(401).json({message:'Kitchen cashier credentials changed. Sign in again.'})
     return res.json({ token: signSession(identity), user: identity })
   }
 
@@ -197,6 +199,8 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     return res.json({token:signSession(identity),user:identity})
   }
 
+  // The cashier is always a Kitchen-owned account, never an alias of a Nexus administrator.
+  if(['CASHIER','STAFF'].includes(requestedMode))return res.status(401).json({message:'Use the local Kitchen cashier email and password. Nexus credentials cannot open this cashier account.'})
   const response = await fetch(new URL(requestedMode === 'CUSTOMER'?'/api/auth/application/login':'/api/auth/login', env.NEXUS_API_URL), {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-kcs-client': 'KCS_KITCHEN' },
@@ -247,6 +251,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     identity.role = personalRole
     identity.canManageOwnCredentials = false
   }
+  if(identity.role==='CASHIER'&&identity.credentialScope!=='KITCHEN_LOCAL')return res.status(401).json({message:'Use the independent local Kitchen cashier account.'})
   if (['CASHIER', 'STAFF'].includes(requestedMode)) {
     if (identity.role === 'KITCHEN_ADMIN') identity.role = 'CASHIER'
     if (identity.role !== 'CASHIER') {
@@ -2062,7 +2067,7 @@ app.put('/api/cashier-account', authenticate, allow('KITCHEN_ADMIN'), asyncRoute
   const account = await prisma.kitchenCashierAccount.upsert({
     where: { id: 'primary' },
     create: { id: 'primary', fullName: input.fullName, email: input.email, passwordHash: hashLocalPassword(input.password), isActive: input.isActive, updatedBy: req.kitchenUser!.orbitPersonId },
-    update: { fullName: input.fullName, email: input.email, passwordHash: hashLocalPassword(input.password), isActive: input.isActive, updatedBy: req.kitchenUser!.orbitPersonId },
+    update: { fullName: input.fullName, email: input.email, passwordHash: hashLocalPassword(input.password), version:{increment:1}, isActive: input.isActive, updatedBy: req.kitchenUser!.orbitPersonId },
     select: { id: true, fullName: true, email: true, isActive: true, lastLoginAt: true, updatedAt: true }
   })
   await audit(req, previous ? 'KITCHEN_CASHIER_CREDENTIALS_RESET' : 'KITCHEN_CASHIER_ACCOUNT_CREATED', 'KitchenCashierAccount', account.id, previous ? { email: previous.email, isActive: previous.isActive } : undefined, { email: account.email, isActive: account.isActive })
