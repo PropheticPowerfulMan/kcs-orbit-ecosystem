@@ -1,6 +1,6 @@
 import {transactionRevision,transactionManagementSnapshot,manageTransaction,lockKitchenPerson} from './transaction-management.js'
 import { hashLocalPassword, verifyLocalPassword } from './local-password.js'
-import { bootstrapManagerCredential, managerCredentialForChange, KitchenCredentialError } from './manager-credentials.js'
+import { bootstrapManagerCredential, managerCredentialForChange, managerCredentialByIdentifier, KitchenCredentialError } from './manager-credentials.js'
 import { passwordPolicyIssues } from './password-policy.js'
 import { resolveSalePortion } from './sale-portion.js'
 import express, { type NextFunction, type Request, type Response } from 'express'
@@ -188,7 +188,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     return res.json({ token: signSession(identity), user: identity })
   }
 
-  const manager = requestedMode !== 'CUSTOMER' ? await prisma.kitchenManagerCredential.findUnique({ where: { email: normalizedIdentifier } }) : null
+  const manager = requestedMode !== 'CUSTOMER' ? await managerCredentialByIdentifier(payload.identifier) : null
   if (manager) {
     const access = await prisma.kitchenAccess.findUnique({ where: {orbitPersonId:manager.orbitPersonId} })
     if (!access?.isActive || access.role !== 'KITCHEN_ADMIN' || !verifyLocalPassword(payload.password, manager.passwordHash)) return res.status(401).json({message:'Kitchen manager email or password is incorrect'})
@@ -222,7 +222,8 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const type = person ? personTypeFrom(person.kind) : 'ADMINISTRATIVE_STAFF'
   const access = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId } })
   const personalRole = defaultRole(String(nexusUser.role), type)
-  if (requestedMode !== 'CUSTOMER' && await prisma.kitchenManagerCredential.findUnique({where:{orbitPersonId}})) return res.status(401).json({message:'Use your current Kitchen manager email and password. Institutional consumer access remains separate.'})
+  const existingManager=requestedMode!=='CUSTOMER'?await prisma.kitchenManagerCredential.findUnique({where:{orbitPersonId}}):null
+  if(existingManager&&(payload.identifier.includes('@')||!reauthenticatedAsSameAccount(existingManager.nexusUserId,nexusUser.id)||!verifyLocalPassword(payload.password,existingManager.passwordHash)))return res.status(401).json({message:'Utilisez votre mot de passe Kitchen actuel avec votre e-mail de gestionnaire. / Use your current Kitchen password with your manager email. Other application passwords cannot replace it.'})
   if (access && !access.isActive) return res.status(403).json({ message: 'KCS Kitchen access is disabled' })
 
   const identity: KitchenIdentity = {
@@ -241,7 +242,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     }),
   }
   if (requestedMode !== 'CUSTOMER' && identity.role === 'KITCHEN_ADMIN' && identity.canManageOwnCredentials && !nexusUser.isSuperAdministrator) {
-    const local = await bootstrapManagerCredential(identity,payload.password,nexusUser)
+    const local = await bootstrapManagerCredential(identity,payload.password,nexusUser,payload.identifier)
     identity.email=local.email;identity.credentialScope='KITCHEN_LOCAL';identity.credentialVersion=local.version
   }
   if (nexusUser.isSuperAdministrator) identity.canManageOwnCredentials=false
