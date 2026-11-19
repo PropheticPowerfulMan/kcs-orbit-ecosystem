@@ -1,3 +1,4 @@
+import {seniorTeacherRouter} from './senior-teacher.routes.js'
 import { teachingAttendanceRouter } from './teaching-attendance.routes.js'
 import { reportCardReceiptsRouter } from './report-card-receipts.routes.js'
 import { documentDownloadRouter } from './document-download.routes.js'
@@ -79,6 +80,7 @@ router.use('/academic-calendar', academicCalendarRouter)
 router.use('/academic-records', academicRecordsRouter)
 router.use('/attendance', attendanceRouter)
 router.use('/teaching-attendance', teachingAttendanceRouter)
+router.use('/senior-teacher', seniorTeacherRouter)
 router.use('/electives', electivesRouter)
 router.use('/shining-students', shiningStudentsRouter)
 router.use('/syllabi', syllabiRouter)
