@@ -51,3 +51,9 @@ test('precise search combines names, subject, class and room in any order with a
  assert.equal(teachingSearchMatches(fields,'Algebra 101 missing'),false)
  assert.equal(teachingSearchMatches(fields,''),true)
 })
+
+test('search tolerates compact course and class labels while keeping exact numeric boundaries',()=>{
+ assert.equal(teachingSearchMatches(['Algebra2','Grade 11'],'Algebra 2 Grade11'),true)
+ assert.equal(teachingSearchMatches(['Algebra 2','Grade11'],'Algebra2 "Grade 11"'),true)
+ assert.equal(teachingSearchMatches(['Algebra2','Grade11'],'Grade1'),false)
+})

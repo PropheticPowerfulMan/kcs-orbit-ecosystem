@@ -68,10 +68,11 @@ export function teachingClassMatches(actual:string,selected?:string){
  * accidentally match Grade 11. Accents, punctuation and word order are ignored. */
 export function teachingSearchMatches(fields:Array<string|null|undefined>,query?:string){
  if(!query?.trim())return true
- const haystack=' '+normalizeTeachingLabel(fields.filter(Boolean).join(' '))+' '
+ const normalize=(value:string)=>normalizeTeachingLabel(value).replace(/([a-z])(\d)/g,'$1 $2').replace(/(\d)([a-z])/g,'$1 $2')
+ const haystack=' '+normalize(fields.filter(Boolean).join(' '))+' '
  const terms=query.match(/"[^"]+"|\S+/g)||[]
  return terms.every(term=>{
-  const value=normalizeTeachingLabel(term.replace(/^"|"$/g,''))
+  const value=normalize(term.replace(/^"|"$/g,''))
   if(!value||haystack.includes(' '+value+' '))return true
   return !term.startsWith('"')&&!/[0-9]/.test(value)&&value.length>=2&&haystack.trim().split(' ').some(word=>word.startsWith(value))
  })

@@ -166,7 +166,7 @@ try{
 
  const filtered=ok(await call('/principal?from='+day+'&to='+day+'&teacherUserId='+ids.teacher+'&className=Grade%2011&room=QA%20Completeness&search=Math','GET',null,'principal'))
  assert.equal(filtered.sessions.length,0,'Search uses the actual course name, not an unrelated official heading')
- const precise=ok(await call('/principal?from='+day+'&to='+day+'&teacherUserId='+ids.teacher+'&className=Grade%2011&room=QA%20Completeness&search=Algebra2','GET',null,'principal'))
+ const precise=ok(await call('/principal?from='+day+'&to='+day+'&teacherUserId='+ids.teacher+'&className=Grade%2011&room=QA%20Completeness&search=Algebra%202','GET',null,'principal'))
  assert.equal(precise.sessions.length,2);assert.equal(precise.summary.scheduled,2)
  assert.ok(precise.sessions.every(row=>row.className==='Grade 11'))
  const wrongGrade=ok(await call('/principal?from='+day+'&to='+day+'&teacherUserId='+ids.teacher+'&className=Grade%201','GET',null,'principal'))
