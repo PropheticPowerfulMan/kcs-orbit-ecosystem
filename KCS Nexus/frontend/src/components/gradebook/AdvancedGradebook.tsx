@@ -1,3 +1,5 @@
+import AcademicCycleNotice from '@/components/shared/AcademicCycleNotice'
+import {officialAcademicCycle,globallyClosedCycle} from '@/utils/academicCycleSelection'
 import CourseRegularityPanel from '@/components/teachingAttendance/CourseRegularityPanel'
 import GradebookFocusHost from './GradebookFocusHost'
 import AcademicPeriodConfirmationSummary from '@/components/shared/AcademicPeriodConfirmationSummary'
@@ -399,9 +401,16 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     : tr('Cette période est clôturée. Les notes sont en lecture seule.', 'This academic period is closed. Grades are read-only.')
   const closedNotice = () => onAction(periodNotice, true)
   const displayCategories = periodReadOnly && frozenCategoryWeights[term]?.length ? frozenCategoryWeights[term] : categories
+  const manuallyBrowsingPeriod=useRef(false)
   const [officialTerm, setOfficialTerm] = useState(terms[0])
   const [calendarReady, setCalendarReady] = useState(false)
   const [loadedScope, setLoadedScope] = useState('')
+  useEffect(()=>{
+    const current=officialAcademicCycle(periodAccess)
+    if(!current||current.academicYear!==academicYear)return
+    setOfficialTerm(current.term)
+    if(!manuallyBrowsingPeriod.current&&globallyClosedCycle(periodAccess,academicYear,term))setTerm(current.term)
+  },[periodAccess?.activeAcademicYear,periodAccess?.activeEntryTerm,academicYear,term])
   const [addingAssignment, setAddingAssignment] = useState(false)
   const cycleKey = `${selectedCourseId}::${academicYear}`
   useEffect(() => { setWeightFixOpen(false) }, [selectedCourseId, academicYear, term])
@@ -411,6 +420,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const autosavePreferenceKey = `kcs:nexus:gradebook:autosave:${userId}:${cycleKey}`
   activeScope.current = cycleKey
   const chooseTerm = (nextTerm: string) => {
+    manuallyBrowsingPeriod.current=true
     if (nextTerm === 'Annual final' && !annualSummaryReady) return
     const pending = pendingAutosave.current
     pendingAutosave.current = null
@@ -459,6 +469,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setLoadedSnapshotSavedAt('')
       setRecoveredCells(0)
       setPeriodRecoveryScope('')
+      let openingControl=periodAccess
       let saved: Partial<GradebookSnapshot> = {}
       let legacyBrowserSnapshot: Partial<GradebookSnapshot> = {}
       setAssignments([])
@@ -478,6 +489,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         }).catch(() => undefined)
         const [response, periodResponse] = await Promise.all([teacherWorkspaceAPI.get(), academicCalendarAPI.periodAccess().catch(() => ({ data: { data: periodAccess } }))])
         const activeControl = periodResponse.data?.data
+        openingControl=activeControl??openingControl
         const state = (response.data?.data?.state ?? {}) as Record<string, any>
         if (active) setFrozenCategoryWeights(Object.fromEntries(Object.entries(state.gradebookClosedCategoryWeightsByCycle ?? {}).filter(([key]) => key.startsWith(cycleKey + '::')).map(([key, value]) => [key.slice((cycleKey + '::').length), (value as any).categories ?? []])))
         const matchingCourses = (Array.isArray(state.courses) ? state.courses : []).filter((course: any) =>
@@ -518,7 +530,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setComments(saved.comments ?? {})
       setScores(buildMissingScoreCells(savedAssignments, students, saved.scores ?? {}))
       setSelectedAssignmentId(savedAssignments[0]?.id ?? '')
-      setTerm(openingGradebookTerm(savedAssignments, localStorage.getItem(periodPreferenceKey), officialTerm, terms, annualGradebookSummaryReady(periodAccess, academicYear)))
+      manuallyBrowsingPeriod.current=false
+      setTerm(openingGradebookTerm(savedAssignments, localStorage.getItem(periodPreferenceKey), openingControl?.activeEntryTerm||officialTerm, terms, annualGradebookSummaryReady(openingControl, academicYear), openingControl, academicYear))
       // The expected server version is kept separately from recovered browser data.
       setLoadedScope(cycleKey)
     }
@@ -1013,6 +1026,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
 
   return (
     <div data-kcs-gradebook="true" className="gradebook-mobile-surface space-y-6">
+      <AcademicCycleNotice official={officialAcademicCycle(periodAccess)} onFollow={()=>{const current=officialAcademicCycle(periodAccess);if(current){chooseTerm(current.term);manuallyBrowsingPeriod.current=false;if(current.academicYear!==academicYear)setAcademicYear(current.academicYear)}}}/>
       {excludedAssessments.length > 0 && !periodReadOnly && <section role="status" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
         <b>{tr('Des notes sont exclues par une pondération de 0 %.', 'Some scores are excluded by a 0% category weight.')}</b>
         <p className="mt-1">{excludedAssessments.map(task => task.title).join(', ')} · {tr('Ces notes restent enregistrées. Confirmez une pondération si elles doivent contribuer au résultat officiel.', 'These scores remain saved. Confirm a weighting if they should count toward the official result.')}</p>

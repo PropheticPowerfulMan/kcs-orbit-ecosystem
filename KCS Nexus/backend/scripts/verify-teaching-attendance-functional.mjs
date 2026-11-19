@@ -160,6 +160,10 @@ try{
  for(const[path,method]of[['/report-cards/generate','POST'],['/report-cards/fake/approve','PATCH'],['/report-cards/fake/publish','PATCH'],['/report-cards/fake/editorial','PATCH'],['/transcripts/verification','POST'],['/legacy-records/import','POST'],['/transcripts/fake/visibility','PATCH'],['/report-cards/deliver','POST']]){
   const res=await fetch('http://127.0.0.1:5000/api/academic-records'+path,{method,headers:{authorization:'Bearer '+token('principal'),'X-Nexus-Workspace':'admin','content-type':'application/json'},body:'{}'})
   assert.equal(res.status,403,path);assert.ok((await res.text()).includes('PRINCIPAL_ACADEMIC_RECORDS_READ_ONLY'))
+  const staffMode=await fetch('http://127.0.0.1:5000/api/academic-records'+path,{method,headers:{authorization:'Bearer '+token('principal'),'content-type':'application/json'},body:'{}'})
+  assert.equal(staffMode.status,403,path+' must remain read-only in the Staff workspace')
+  assert.ok((await staffMode.text()).includes('PRINCIPAL_ACADEMIC_RECORDS_READ_ONLY'))
+
  }
  for(const path of ['/report-cards?academicYear=2026-2027','/review?academicYear=2026-2027','/student-registry']){
   const res=await fetch('http://127.0.0.1:5000/api/academic-records'+path,{headers:{authorization:'Bearer '+token('principal'),'X-Nexus-Workspace':'admin'}})
