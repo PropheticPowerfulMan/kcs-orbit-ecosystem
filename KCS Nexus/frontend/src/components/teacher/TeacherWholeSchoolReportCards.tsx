@@ -1,5 +1,6 @@
+import {useAcademicCycleSelection} from '@/hooks/useAcademicCycleSelection'
+import AcademicCycleNotice from '@/components/shared/AcademicCycleNotice'
 import { confirmPortalAction } from '@/utils/portalActionDialogs';
-import { usePublishedAcademicCalendar } from '@/hooks/usePublishedAcademicCalendar';
 import { ACADEMIC_REPORT_PERIODS } from '@/constants/academicPeriods';
 import ReportCardAnalyticsPanel from '@/components/shared/ReportCardAnalyticsPanel';
 import { useUIStore } from '@/store/uiStore';
@@ -131,11 +132,10 @@ export default function TeacherWholeSchoolReportCards() {
   const language = useUIStore(state => state.language);
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en;
   const userId = useAuthStore((state) => state.user?.id ?? '');
-  const { calendar: publishedCalendar } = usePublishedAcademicCalendar();
-  const initializedYear = useRef(false);
-  const [academicYear, setAcademicYear] = useState('2026-2027');
-  useEffect(() => { if (publishedCalendar?.name && !initializedYear.current) { initializedYear.current = true; setAcademicYear(publishedCalendar.name) } }, [publishedCalendar?.name]);
-  const [term, setTerm] = useState(sessions[0]);
+  const cycleSelection=useAcademicCycleSelection();
+  const {year:academicYear,setYear:setAcademicYear,term,setTerm}=cycleSelection;
+
+
   const [dashboard, setDashboard] = useState<Dashboard | null>(() => readReportDashboardCache(userId, '2026-2027', sessions[0]));
   const [selectedId, setSelectedId] = useState('');
   const [query, setQuery] = useState('');
@@ -504,6 +504,7 @@ export default function TeacherWholeSchoolReportCards() {
 
   return (
     <section className="space-y-5">
+      <AcademicCycleNotice official={cycleSelection.official} onFollow={cycleSelection.followCurrent}/>
       <div className="rounded-3xl bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-800 to-kcs-blue-700 p-6 text-white shadow-xl">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
@@ -558,7 +559,7 @@ export default function TeacherWholeSchoolReportCards() {
         <div className="grid gap-3 lg:grid-cols-5">
           <label className="text-xs font-bold uppercase text-gray-400">
             Academic year
-            <input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => { initializedYear.current = true; setAcademicYear(event.target.value) }} />
+            <input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => { setAcademicYear(event.target.value) }} />
           </label>
           <label className="text-xs font-bold uppercase text-gray-400">
             Report session
@@ -779,11 +780,11 @@ export default function TeacherWholeSchoolReportCards() {
                   {!selected.isHomeroomStudent && <p className="mt-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-600 dark:bg-kcs-blue-950 dark:text-gray-300">You may review this learner's complete report card, but only the assigned main teacher may write or submit the institutional comment.</p>}
                   <label className="mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white">
                     Main teacher comment
-                    <textarea disabled={!selected.isHomeroomStudent || locked} className={`${field} min-h-28 disabled:cursor-not-allowed disabled:opacity-60`} maxLength={1500} value={teacherComment} onChange={(event) => setTeacherComment(event.target.value)} placeholder="Synthesize academic progress, effort, strengths, and the next priority." />
+                    <textarea disabled={!selected.isHomeroomStudent || locked} className={`${field} min-h-28 disabled:cursor-not-allowed disabled:opacity-60`} maxLength={1500} value={teacherComment} onChange={(event) => {cycleSelection.hold();setTeacherComment(event.target.value)}} placeholder="Synthesize academic progress, effort, strengths, and the next priority." />
                   </label>
                   <label className="mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white">
                     Conduct and learning habits
-                    <input disabled={!selected.isHomeroomStudent || locked} className={`${field} disabled:cursor-not-allowed disabled:opacity-60`} maxLength={500} value={conduct} onChange={(event) => setConduct(event.target.value)} placeholder="Conduct, responsibility, collaboration, punctuality..." />
+                    <input disabled={!selected.isHomeroomStudent || locked} className={`${field} disabled:cursor-not-allowed disabled:opacity-60`} maxLength={500} value={conduct} onChange={(event) => {cycleSelection.hold();setConduct(event.target.value)}} placeholder="Conduct, responsibility, collaboration, punctuality..." />
                   </label>
                   {selected.isHomeroomStudent && allVisibleSubmitted && hiddenCourseIds.length>0 && <p data-report-visibility-summary role="status" className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-100">{tr('Bulletin prêt : seuls les cours visibles seront soumis.','Report card ready: only visible courses will be submitted.')} {visibleSubjects.length} {tr('cours inclus','included course(s)')} · {hiddenCourseIds.length} {tr('cours masqué(s)','hidden course(s)')} · {tr('Moyenne recalculée : ','Recalculated average: ')}<b>{visibleAverage?.toFixed(2)}%</b></p>}
                   {selected.isHomeroomStudent && !allVisibleSubmitted && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">Submission remains locked: {visibleSubjects.length - visibleSubmittedCount} visible subject teacher(s) still need to submit final grades.</p>}

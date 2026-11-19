@@ -1,3 +1,5 @@
+import {useAcademicCycleSelection} from '@/hooks/useAcademicCycleSelection'
+import AcademicCycleNotice from '@/components/shared/AcademicCycleNotice'
 import ReportCardReceiptStatus from './ReportCardReceiptStatus'
 import CertificateDeliveryDialog from './CertificateDeliveryDialog'
 import ReportCardWorkflowBoard, { reportCardQueue, reportCardClass, type ReportQueue } from './ReportCardWorkflowBoard'
@@ -76,9 +78,10 @@ const readRecordCache = (year?: string) => {
 export default function AcademicRecordsControlCenterV2({ view = 'transcripts', readOnly=false }: { view?: 'transcripts' | 'report-cards'; readOnly?:boolean }) {
   const language = useUIStore((state) => state.language)
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
-  const [academicYear, setAcademicYear] = useState('2026-2027')
+  const cycleSelection=useAcademicCycleSelection()
+  const {year:academicYear,setYear:setAcademicYear,term,setTerm}=cycleSelection
 
-  const [term, setTerm] = useState('Semester 1 · Quarter 1')
+
   const { access: periodAccess } = useAcademicPeriodAccess()
   const cardReadOnly = (card: Card) => isAcademicPeriodReadOnly(periodAccess, card.term.split(' · ')[0], card.term.split(' · ').slice(1).join(' · '))
   const [grades, setGrades] = useState<Grade[]>(() => readRecordCache().grades ?? [])
@@ -472,6 +475,7 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts', r
 
     {!readOnly && deliveryOpen && <ReportCardDeliveryDialog cards={deliveryCardId ? cards.filter(card => card.id === deliveryCardId) : cards} initialReview={deliveryReview} initialYear={academicYear} initialTerm={term} initialGrade={cardGradeFilter} selected={selectedParents} onSelect={setSelectedParents} busy={deliveryBusy} progress={deliveryProgress} onClose={() => setDeliveryOpen(false)} onDeliver={(approvePending, deliveryLanguage) => void deliverSelected(approvePending, deliveryLanguage)}/>}
     {readOnly && <p data-principal-records-read-only className="rounded-xl border border-sky-300 bg-sky-50 p-3 text-sm font-bold text-sky-950 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-100">{tr('Consultation du Principal : recherche, aperçu et impression uniquement. Modification, approbation, publication, importation et envoi sont réservés au SuperAdmin.','Principal consultation: search, preview and print only. Editing, approval, publication, import and delivery remain reserved for SuperAdmin.')}</p>}
+    <AcademicCycleNotice official={cycleSelection.official} onFollow={cycleSelection.followCurrent}/>
     <div data-transcript-intro={showTranscripts||undefined} className="flex flex-wrap items-start justify-between gap-3"><div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-emerald-700 dark:text-emerald-300"><ShieldCheck size={17}/>{showTranscripts ? tr('Relevés académiques officiels', 'Official Academic Transcripts') : tr('Bulletins scolaires officiels', 'Official Report Cards')}</p><h2 className="mt-1 font-display text-2xl font-black text-kcs-blue-950 dark:text-white">{showTranscripts ? tr('Recherche, génération et impression des relevés', 'Transcript search, generation and printing') : readOnly?tr('Consultation des bulletins officiels','Official report-card consultation'):tr('Examen, toilettage, approbation et envoi aux parents', 'Review, edit, approve and deliver to parents')}</h2><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{showTranscripts ? tr('Les relevés restent séparés des bulletins et ne contiennent que les résultats approuvés.', 'Transcripts remain separate from report cards and contain approved records only.') : readOnly?tr('Consultez les moyennes, les présences et les documents transmis par les enseignants.','Review averages, attendance and documents submitted by teachers.'):tr('Sélectionnez précisément un ou plusieurs parents liés avant chaque envoi.', 'Precisely select one or more linked parents before delivery.')}</p></div><button disabled={busy} onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 px-3 py-2 text-sm font-bold text-emerald-800 dark:border-emerald-700 dark:text-emerald-200"><RefreshCw size={16} className={busy ? 'animate-spin' : ''}/>{tr('Actualiser', 'Refresh')}</button></div>
 
     {!readOnly && !showTranscripts && <ReportCardDeliveryToolbar cards={cards} year={academicYear} term={term} selected={selectedParents} onSelect={setSelectedParents} busy={busy || deliveryBusy} onReview={() => { setDeliveryCardId(''); setDeliveryReview(true); setDeliveryOpen(true) }}/>}

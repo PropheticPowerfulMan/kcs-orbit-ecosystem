@@ -1,3 +1,4 @@
+import {hasPrincipalWorkspaceAccess} from '../utils/staffWorkspace.js'
 import { reportCardVisibility } from '../utils/reportCardVisibility.js'
 import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
 import {coursePeriodStates} from '../services/courseTeachingPeriods.service.js'
@@ -186,10 +187,14 @@ academicRecordsRouter.get('/report-card-analytics/verify', asyncHandler(async (r
 academicRecordsRouter.use(authenticate)
 // Principal administration is consultative for academic records. Teacher workspace
 // retains its own homeroom/course permissions and SuperAdmin retains approval.
-academicRecordsRouter.use((req:AuthenticatedRequest,_res,next)=>{
- if(req.user?.role==='admin'&&req.user.sub!=='configured-superadmin'&&!['GET','HEAD','OPTIONS'].includes(req.method))return next(new ApiError(403,'PRINCIPAL_ACADEMIC_RECORDS_READ_ONLY'))
+academicRecordsRouter.use(asyncHandler(async(req:AuthenticatedRequest,_res,next)=>{
+ if(req.user&&req.user.sub!=='configured-superadmin'&&req.user.role!=='teacher'&&!['GET','HEAD','OPTIONS'].includes(req.method)){
+  const account=await prisma.user.findUnique({where:{id:req.user.sub},select:{role:true,permissions:true}})
+  // Switching to Staff must not turn the Principal's read-only access into write access.
+  if(req.user.role==='admin'||hasPrincipalWorkspaceAccess(account))throw new ApiError(403,'PRINCIPAL_ACADEMIC_RECORDS_READ_ONLY')
+ }
  next()
-})
+}))
 academicRecordsRouter.use('/certificates', certificateDeliveryRouter)
 academicRecordsRouter.get('/transcripts/recipients',requireSuperAdmin(),asyncHandler(async(_req,res)=>{
  const students=await prisma.studentProfile.findMany({where:{OR:[{grade:{in:['Grade 9','Grade 10','Grade 11','Grade 12']}},{legacyTranscriptRecords:{some:{verificationStatus:'VERIFIED'}}}]},select:{id:true,studentNumber:true,grade:true,section:true,user:{select:{id:true,firstName:true,middleName:true,lastName:true}},parentLinks:{select:{parent:{select:{id:true,firstName:true,middleName:true,lastName:true,email:true,phone:true}}}}},orderBy:{user:{lastName:'asc'}}})

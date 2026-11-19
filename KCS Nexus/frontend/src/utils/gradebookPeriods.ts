@@ -1,3 +1,4 @@
+import {officialAcademicCycle,globallyClosedCycle} from './academicCycleSelection'
 export function canonicalGradebookTerm(term: string): string {
   return term.replace(/\bTrimester\b/gi, 'Quarter')
 }
@@ -8,7 +9,15 @@ export function openingGradebookTerm(
   officialTerm: string,
   terms: readonly string[],
   annualReady = false,
+  access?:Parameters<typeof officialAcademicCycle>[0],
+  academicYear?:string,
 ): string {
+  const cycle=officialAcademicCycle(access)
+  if(cycle&&cycle.academicYear===academicYear){
+    // Reopened exceptions grant editing, not a new school-wide default.
+    const remembered=rememberedTerm?canonicalGradebookTerm(rememberedTerm):null
+    if(!remembered||globallyClosedCycle(access,academicYear!,remembered)||!terms.includes(remembered)||(remembered==='Annual final'&&!annualReady)||terms.indexOf(remembered)>terms.indexOf(cycle.term))return cycle.term
+  }
   const remembered = rememberedTerm ? canonicalGradebookTerm(rememberedTerm) : null
   if (remembered && terms.includes(remembered) && (remembered !== 'Annual final' || annualReady)) return remembered
   const populated = new Set(assignments.map((assignment) => canonicalGradebookTerm(assignment.term)))

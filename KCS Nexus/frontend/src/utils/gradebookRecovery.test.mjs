@@ -4,7 +4,7 @@ import test from 'node:test'
 import ts from 'typescript'
 const compile = (name) => ts.transpileModule(readFileSync(new URL(name, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText
 const uri = (source) => 'data:text/javascript;base64,' + Buffer.from(source).toString('base64')
-const { recoverGradebook, stableGradebookValue } = await import(uri(compile('./gradebookRecovery.ts').replace("'./gradebookPeriods'", JSON.stringify(uri(compile('./gradebookPeriods.ts'))))))
+const { recoverGradebook, stableGradebookValue } = await import(uri(compile('./gradebookRecovery.ts').replace("'./gradebookPeriods'", JSON.stringify(uri(compile('./gradebookPeriods.ts').replace("'./academicCycleSelection'", JSON.stringify(uri(compile('./academicCycleSelection.ts')))))))))
 const task = (id) => ({ id, title: id, type: 'quiz', category: 'quiz', maxPoints: 100, date: '2026-10-01', term: 'Semester 1 · Quarter 1', description: '' })
 const recover = (state, extra = {}) => recoverGradebook({ courseId: 'math-course', academicYear: '2026-2027', state, students: [], ...extra })
 

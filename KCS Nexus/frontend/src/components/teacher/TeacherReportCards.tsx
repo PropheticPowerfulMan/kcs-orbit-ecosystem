@@ -1,4 +1,5 @@
-import { usePublishedAcademicCalendar } from '@/hooks/usePublishedAcademicCalendar'
+import {useAcademicCycleSelection} from '@/hooks/useAcademicCycleSelection'
+import AcademicCycleNotice from '@/components/shared/AcademicCycleNotice'
 import AcademicPeriodConfirmationSummary from '@/components/shared/AcademicPeriodConfirmationSummary'
 import { createPortal } from 'react-dom'
 import { useUIStore } from '@/store/uiStore'
@@ -255,11 +256,10 @@ function SubjectGradeSubmission() {
   const [overviewState, setOverviewState] = useState<Record<string, any>>({})
   const [courses, setCourses] = useState<Course[]>([])
   const [courseId, setCourseId] = useState('')
-  const { calendar: publishedCalendar } = usePublishedAcademicCalendar()
-  const initialYearSet = useRef(false)
-  const [academicYear, setAcademicYear] = useState('2026-2027')
-  useEffect(() => { if (publishedCalendar?.name && !initialYearSet.current) { initialYearSet.current = true; setAcademicYear(publishedCalendar.name) } }, [publishedCalendar?.name])
-  const [term, setTerm] = useState(sessions[0])
+  const cycleSelection=useAcademicCycleSelection()
+  const {year:academicYear,setYear:setAcademicYear,term,setTerm}=cycleSelection
+
+
   const [drafts, setDrafts] = useState<DraftStore>({})
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [reportCards, setReportCards] = useState<ReportCard[]>([])
@@ -502,6 +502,7 @@ function SubjectGradeSubmission() {
   if (loading) return <div className={panel}><Clock3 className='mr-2 inline animate-spin' />Loading official report-card data...</div>
 
   return <section className='space-y-6'>
+    <AcademicCycleNotice official={cycleSelection.official} onFollow={cycleSelection.followCurrent}/>
     <div className='rounded-3xl bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-800 to-kcs-blue-700 p-6 text-white shadow-xl'>
       <div className='flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between'>
         <div>
@@ -527,7 +528,7 @@ function SubjectGradeSubmission() {
     <div className={panel}>
       <div className='grid gap-3 lg:grid-cols-[1.25fr_.7fr_.9fr_1fr]'>
         <label className='text-xs font-bold uppercase text-gray-400'>My assigned subject<select className={`${field} mt-1 normal-case`} value={course?.id ?? ''} onChange={(event) => setCourseId(event.target.value)}>{courses.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name} · {item.grade}</option>)}</select></label>
-        <label className='text-xs font-bold uppercase text-gray-400'>Academic year<input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => { initialYearSet.current = true; setAcademicYear(event.target.value) }} pattern='\d{4}-\d{4}' /></label>
+        <label className='text-xs font-bold uppercase text-gray-400'>Academic year<input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => { setAcademicYear(event.target.value) }} pattern='\d{4}-\d{4}' /></label>
         <label className='text-xs font-bold uppercase text-gray-400'>Report session<select className={`${field} mt-1 normal-case`} value={term} onChange={(event) => setTerm(event.target.value)}>{sessions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <label className='text-xs font-bold uppercase text-gray-400'>Search<input className={`${field} mt-1 normal-case`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder='Name or student number' /></label>
       </div>
