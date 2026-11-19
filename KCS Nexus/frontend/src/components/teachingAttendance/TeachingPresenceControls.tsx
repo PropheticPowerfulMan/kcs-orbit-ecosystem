@@ -39,7 +39,7 @@ export function CampusSettings(){
 }
 export function PresenceVerificationDialog({row,onClose,onSaved}:{row:TeachingSession;onClose:()=>void;onSaved:()=>void}){
  const fr=useUIStore(s=>s.language)==='fr',tr=(a:string,b:string)=>fr?a:b,userId=useAuthStore(s=>s.user?.id)
- const [action,setAction]=useState<'ENTRY'|'EXIT'>('ENTRY'),[note,setNote]=useState(''),[observed,setObserved]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('')
+ const [action,setAction]=useState<'ENTRY'|'EXIT'>(row.presenceProof?.entry?'ENTRY':'EXIT'),[note,setNote]=useState(''),[observed,setObserved]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('')
  const proof=row.presenceProof?.[action==='ENTRY'?'entry':'exit'],self=userId===row.teacherUserId
  const review=async(status:'VERIFIED'|'REJECTED')=>{if(!row.id||!proof)return;setBusy(true);try{await teachingAttendanceAPI.verifyPresence(row.id,{action,status,revision:proof.revision,note,observedOnSite:true});onSaved()}catch(e){setError(teachingError(e,fr))}finally{setBusy(false)}}
  return <TeachingDialog title={tr('Confirmation indépendante sur place','Independent on-site confirmation')} onClose={()=>!busy&&onClose()} footer={<><button className="ta-btn" disabled={busy} onClick={onClose}>{tr('Fermer','Close')}</button><button className="ta-btn ta-danger" disabled={busy||!proof||self||!observed||note.trim().length<3} onClick={()=>void review('REJECTED')}>{tr('Présence contestée','Dispute presence')}</button><button className="ta-btn ta-complete" disabled={busy||!proof||self||!observed||note.trim().length<3} onClick={()=>void review('VERIFIED')}>{tr('Confirmer après contrôle','Confirm after observation')}</button></>}>
