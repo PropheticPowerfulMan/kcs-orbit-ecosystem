@@ -1,4 +1,4 @@
-import {isMediaAccount,canUseStaffWorkspace,canUsePrincipalWorkspace,workspaceRole} from '@/utils/accountScope'
+import {isMediaAccount,canUseStaffWorkspace,canUsePrincipalWorkspace,canUseSeniorWorkspace,workspaceRole} from '@/utils/accountScope'
 import {loadPersonalAvatar} from '@/utils/personalAvatarCache'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
@@ -244,8 +244,17 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const activeRole = workspaceRole(user,location.pathname)!
   const principalWorkspace = canUsePrincipalWorkspace(user)
 
+  const seniorWorkspace=/^\/portal\/senior(?:\/|$)/.test(location.pathname)&&canUseSeniorWorkspace(user)
   const mediaAccount=isMediaAccount(user)
-  const navItems: NavItem[] = mediaAccount?[
+  const navItems: NavItem[] = seniorWorkspace?[
+   {to:'/portal/senior',label:language==='fr'?'Vue d’ensemble ST':'ST overview',icon:LayoutDashboard},
+   {to:'/portal/senior/cohort',label:language==='fr'?'Cohorte Grade 12':'Grade 12 cohort',icon:Users},
+   {to:'/portal/senior/applications',label:language==='fr'?'Candidatures universitaires':'University applications',icon:GraduationCap},
+   {to:'/portal/senior/roadmap',label:language==='fr'?'Échéances et rendez-vous':'Deadlines & meetings',icon:Calendar},
+   {to:'/portal/senior/reports',label:language==='fr'?'Rapports d’accompagnement':'Guidance reports',icon:BarChart3},
+   {to:'/portal/senior/handbook',label:language==='fr'?'Manuel de l’école':'School Handbook',icon:BookOpen},
+   {to:'/portal/senior/settings',label:t('portalNav.settings'),icon:Settings},
+  ]:mediaAccount?[
    {to:'/portal/media/site',label:language==='fr'?'Gestion du site web':'Website management',icon:FileText},
    {to:'/portal/media/news',label:language==='fr'?'Actualités et événements':'News & Events',icon:Megaphone},
    {to:'/portal/media/gallery',label:language==='fr'?'Galerie et vidéos':'Gallery & Videos',icon:LibraryBig},
@@ -286,7 +295,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     parent: 'bg-orange-500',
   }[activeRole]
 
-  const roleName = mediaAccount?'Media':{
+  const roleName = seniorWorkspace?'Senior Teacher · ST':mediaAccount?'Media':{
     admin: t('roles.admin'),
     staff: t('roles.staff'),
     teacher: t('roles.teacher'),
@@ -307,7 +316,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           <NavLink
             key={to}
             to={to}
-            end={to === (activeRole === 'admin' ? '/admin' : `/portal/${activeRole}`)}
+            end={to === (seniorWorkspace ? '/portal/senior' : activeRole === 'admin' ? '/admin' : `/portal/${activeRole}`)}
             onClick={() => {
               if (isMobile) {
                 setSidebarOpen(false)
@@ -348,7 +357,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             <span className="flex items-center justify-center gap-1.5"><GripHorizontal size={15} aria-hidden="true" />{currentLanguage === 'fr' ? 'Règle KCS · réussite et passage ≥ 70 %' : 'KCS rule · success and promotion ≥ 70%'}</span>
           </div>
         )}
-        {accessRoles.includes('teacher') && activeRole !== 'teacher' && (
+        {accessRoles.includes('teacher') && (activeRole !== 'teacher'||seniorWorkspace) && (
           <Link to="/portal/teacher" className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`} title={!isMobile && sidebarCollapsed ? (currentLanguage === 'fr' ? 'Espace enseignant' : 'Teacher workspace') : undefined}>
             <BookOpen size={18} />
             {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Espace enseignant' : 'Teacher workspace'}</span>}
@@ -359,6 +368,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             <UserCheck size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Mon espace habituel':'My usual workspace'}</span>}
           </Link>
         )}
+        {canUseSeniorWorkspace(user)&&!seniorWorkspace&&<Link to="/portal/senior" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title="Senior Teacher · ST"><GraduationCap size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Senior Teacher · ST':'Senior Teacher workspace'}</span>}</Link>}
         {canUseStaffWorkspace(user) && activeRole !== 'staff' && activeRole !== 'admin' && (
           <Link to={principalWorkspace ? '/admin' : '/portal/staff'} className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`} title={!isMobile && sidebarCollapsed ? (principalWorkspace ? (currentLanguage === 'fr' ? 'Espace Principal' : 'Principal workspace') : (currentLanguage === 'fr' ? 'Espace Staff' : 'Staff workspace')) : undefined}>
             <Shield size={18} />

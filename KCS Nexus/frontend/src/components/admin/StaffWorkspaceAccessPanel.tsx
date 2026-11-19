@@ -1,3 +1,4 @@
+import SeniorTeacherAccessPanel from './SeniorTeacherAccessPanel'
 import {useState} from 'react'
 import {ShieldCheck,Search,RefreshCw} from 'lucide-react'
 import {api} from '@/services/api'
@@ -20,7 +21,7 @@ export default function StaffWorkspaceAccessPanel(){
  }
  const normalize=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
  const visible=rows.filter(row=>normalize(row.name+' '+row.email+' '+row.role).includes(normalize(query)))
- return <section data-staff-workspace-access className="overflow-hidden rounded-2xl border border-sky-200 bg-sky-50/80 dark:border-sky-800 dark:bg-kcs-blue-950/60">
+ return <><section data-staff-workspace-access className="overflow-hidden rounded-2xl border border-sky-200 bg-sky-50/80 dark:border-sky-800 dark:bg-kcs-blue-950/60">
   <button type="button" aria-expanded={open} onClick={()=>{if(!open)void load();setOpen(!open)}} className="flex w-full items-center gap-3 p-4 text-left font-bold text-sky-950 dark:text-sky-100"><ShieldCheck size={20}/><span className="flex-1">{tr('Accès aux espaces Staff et Principal','Staff and Principal workspace access')}</span><span>{open?'−':'+'}</span></button>
   {open&&<div className="space-y-4 border-t border-sky-200 p-4 dark:border-sky-800">
    <p className="text-sm text-slate-700 dark:text-slate-200">{tr('Choisissez Staff pour les fonctions administratives ou Principal pour la direction pédagogique. Tout compte actif du répertoire peut recevoir cet accès et conserve son espace habituel, ses données et ses identifiants. Une fiche employé ne donne aucun accès supplémentaire à elle seule.','Choose Staff for administrative duties or Principal for academic leadership. Any active directory account can receive this access and retains its usual workspace, data and credentials. An employee record alone grants no additional access.')}</p>
@@ -32,5 +33,5 @@ export default function StaffWorkspaceAccessPanel(){
     <div className="flex gap-2">{(!row.enabled||(selection[row.id]??row.workspace)!==row.workspace)&&<button type="button" disabled={Boolean(busy)} onClick={()=>void change(row,true)} className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">{row.enabled?tr('Appliquer','Apply'):tr('Accorder l’accès','Grant access')}</button>}{row.enabled&&<button type="button" disabled={Boolean(busy)||(row.included&&(row.role==='ADMIN'||row.workspace!=='principal'))} onClick={()=>void change(row,false)} className="rounded-lg bg-rose-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">{row.included&&(row.role==='ADMIN'||row.workspace!=='principal')?(row.role==='ADMIN'?tr('Inclus dans son rôle Principal','Included in Principal role'):tr('Inclus dans son rôle Staff','Included in Staff role')):tr('Retirer l’accès','Remove access')}</button>}</div>
    </article>)}{!visible.length&&!busy&&<p className="p-3 text-sm text-slate-600 dark:text-slate-300">{tr('Aucun compte actif correspondant.','No matching active account.')}</p>}</div>
   </div>}
- </section>
+ </section><SeniorTeacherAccessPanel/></>
 }

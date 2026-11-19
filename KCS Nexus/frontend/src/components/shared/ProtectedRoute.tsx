@@ -1,4 +1,4 @@
-import {isMediaAccount,portalHome,canUseStaffWorkspace,canUsePrincipalWorkspace} from '@/utils/accountScope'
+import {isMediaAccount,portalHome,canUseStaffWorkspace,canUsePrincipalWorkspace,canUseSeniorWorkspace} from '@/utils/accountScope'
 import { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
@@ -43,6 +43,8 @@ const ProtectedRoute = ({ children, allowedRoles, redirectTo = '/login' }: Prote
 
   if(user&&isMediaAccount(user)&&!/^\/portal\/media(?:\/|$)/.test(location.pathname))return <Navigate to={portalHome(user)} replace/>
   if(user&&!isMediaAccount(user)&&/^\/portal\/media(?:\/|$)/.test(location.pathname))return <Navigate to={portalHome(user)} replace/>
+
+  if(user&&/^\/portal\/senior(?:\/|$)/.test(location.pathname)&&!canUseSeniorWorkspace(user))return <Navigate to={portalHome(user)} replace/>
 
   if(user&&/^\/portal\/staff(?:\/|$)/.test(location.pathname)&&!canUseStaffWorkspace(user))return <Navigate to={portalHome(user)} replace/>
 
