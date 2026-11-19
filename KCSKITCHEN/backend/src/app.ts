@@ -1,3 +1,4 @@
+import {transactionRevision,transactionManagementSnapshot,manageTransaction,lockKitchenPerson} from './transaction-management.js'
 import { hashLocalPassword, verifyLocalPassword } from './local-password.js'
 import { bootstrapManagerCredential, managerCredentialForChange, KitchenCredentialError } from './manager-credentials.js'
 import { passwordPolicyIssues } from './password-policy.js'
@@ -551,7 +552,7 @@ app.get('/api/school-subsidies', authenticate, allow('KITCHEN_ADMIN', 'FINANCE',
   const paidTotal = payments.reduce((sum, payment) => sum + Number(payment.amount), 0)
   const outstanding = Math.max(0, grossTotal - paidTotal)
   res.setHeader('Cache-Control', 'no-store')
-  res.json({ rows, payments, grossTotal, paidTotal, outstanding, total: outstanding, count: rows.length, currency: 'CDF', generatedAt: new Date().toISOString() })
+  res.json({ rows, payments, grossTotal, paidTotal, outstanding, availableCredit:Math.max(0,paidTotal-grossTotal), total: outstanding, count: rows.length, currency: 'CDF', generatedAt: new Date().toISOString() })
 }))
 
 app.post('/api/school-subsidies/payments', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
@@ -584,7 +585,7 @@ const kitchenDateKey = (date = new Date()) => {
   return [part('year'), part('month'), part('day')].join('-')
 }
 const receiptSignature = (reference: string) => crypto.createHmac('sha256', env.QR_SIGNING_SECRET).update(`receipt:${reference}`).digest('base64url')
-const withReceiptSignature = <T extends { transactionNumber: string }>(transaction: T) => ({ ...transaction, receiptSignature: receiptSignature(transaction.transactionNumber) })
+const withReceiptSignature = <T extends { transactionNumber: string }>(transaction: T) => ({ ...transaction, receiptSignature: receiptSignature(transaction.transactionNumber), revision:transactionRevision(transaction as unknown as Parameters<typeof transactionRevision>[0]) })
 const menuDate = (value: string) => new Date(`${value}T00:00:00.000Z`)
 
 app.get('/api/daily-menus/today', authenticate, asyncRoute(async (_req, res) => {
@@ -828,6 +829,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
   }
 
   const transaction = await runKitchenSerializableTransaction(async tx => {
+    await lockKitchenPerson(tx,person.id)
     await tx.$queryRaw(Prisma.sql`SELECT id FROM "DailyMenu" WHERE id = ${activeMenu.id} FOR UPDATE`)
     const verifiedMenu = await tx.dailyMenu.findUniqueOrThrow({ where: { id: activeMenu.id } })
     if (verifiedMenu.archivedAt || verifiedMenu.status !== 'PUBLISHED' || verifiedMenu.updatedAt.getTime() !== activeMenu.updatedAt.getTime()) throw Object.assign(new Error('The menu changed during checkout. Reload and confirm the current menu.'), { statusCode: 409 })
@@ -953,6 +955,7 @@ app.post('/api/transactions/:id/deliver', authenticate, allow('KITCHEN_ADMIN', '
   if (pending.status !== 'PENDING') return res.status(409).json({ message: 'Only a pending order can be marked as delivered' })
   if (!pending.confirmedByPersonAt) return res.status(409).json({ message: 'The customer must first confirm actual receipt of the order and, for a purchase, handover of payment' })
   const delivered = await runKitchenSerializableTransaction(async tx => {
+    await lockKitchenPerson(tx,pending.orbitPersonId)
     const claim = await tx.kitchenTransaction.updateMany({
       where: { id, status: 'PENDING', confirmedByPersonAt: { not: null }, confirmedByKitchenAt: null },
       data: { confirmedByKitchenAt: new Date() },
@@ -1007,10 +1010,11 @@ app.get('/api/transactions/verify/:reference', asyncRoute(async (req, res) => {
   if (!signature || signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
     return res.status(400).json({ valid: false, status: 'INVALID_SIGNATURE' })
   }
-  const transaction = await prisma.kitchenTransaction.findUnique({ where: { transactionNumber: reference }, select: { transactionNumber: true, status: true } })
-  res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300')
+  const transaction = await prisma.kitchenTransaction.findUnique({ where: { transactionNumber: reference }, select: { id:true, transactionNumber: true, status: true } })
+  res.setHeader('Cache-Control', 'no-store')
   if (!transaction) return res.status(404).json({ valid: false, status: 'NOT_FOUND' })
-  res.json({ valid: true, documentType: 'KCS_KITCHEN_RECEIPT', reference: transaction.transactionNumber, status: transaction.status })
+  const correction=await prisma.auditLog.findFirst({where:{entityType:'KitchenTransaction',entityId:transaction.id,action:'TRANSACTION_CORRECTED'},orderBy:{createdAt:'desc'},select:{createdAt:true}})
+  res.json({ valid: true, documentType: 'KCS_KITCHEN_RECEIPT', reference: transaction.transactionNumber, status: transaction.status, corrected:Boolean(correction), correctedAt:correction?.createdAt||null })
 }))
 
 app.get('/api/transactions/:id', authenticate, asyncRoute(async (req: AuthRequest, res) => {
@@ -1053,204 +1057,33 @@ app.post('/api/payments', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINAN
   }).parse(req.body)
   const person = await resolvePerson(input.orbitPersonId)
   if (!person) return res.status(404).json({ message: 'Active Orbit identity not found' })
-  const before = await balanceFor(person.id)
-  if (input.amount > before) return res.status(409).json({ message: 'Payment exceeds outstanding balance', balance: before })
-  const payment = await prisma.kitchenPayment.create({ data: {
-    orbitPersonId: person.id,
-    amount: new Prisma.Decimal(input.amount),
-    method: input.method,
-    reference: input.reference,
-    notes: input.notes,
-    receivedBy: req.kitchenUser!.orbitPersonId,
-    ledgerEntries: { create: {
-      orbitPersonId: person.id,
-      type: 'PAYMENT',
-      amount: new Prisma.Decimal(-input.amount),
-      description: 'Kitchen debt payment',
-      performedBy: req.kitchenUser!.orbitPersonId
-    } }
-  } })
-  await prisma.notificationOutbox.create({ data: {
-    orbitPersonId: person.id,
-    eventType: 'KITCHEN_PAYMENT_RECORDED',
-    channels: ['IN_APP', 'EMAIL'],
-    payload: { paymentId: payment.id, amount: input.amount, method: input.method }
-  } })
-  await audit(req, 'PAYMENT_RECEIVED', 'KitchenPayment', payment.id, undefined, payment)
-  res.status(201).json({ payment, balance: await balanceFor(person.id) })
+  const payment=await runKitchenSerializableTransaction(async tx=>{
+    await lockKitchenPerson(tx,person.id)
+    const before=Number((await tx.kitchenLedgerEntry.aggregate({where:{orbitPersonId:person.id},_sum:{amount:true}}))._sum.amount||0)
+    if(input.amount>before)throw Object.assign(new Error('Payment exceeds outstanding balance'),{statusCode:409})
+    const saved=await tx.kitchenPayment.create({data:{orbitPersonId:person.id,amount:new Prisma.Decimal(input.amount),method:input.method,reference:input.reference,notes:input.notes,receivedBy:req.kitchenUser!.orbitPersonId,ledgerEntries:{create:{orbitPersonId:person.id,type:'PAYMENT',amount:new Prisma.Decimal(-input.amount),description:'Kitchen debt payment',performedBy:req.kitchenUser!.orbitPersonId}}}})
+    await tx.notificationOutbox.create({data:{orbitPersonId:person.id,eventType:'KITCHEN_PAYMENT_RECORDED',channels:['IN_APP','EMAIL'],payload:{paymentId:saved.id,amount:input.amount,method:input.method}}})
+    await tx.auditLog.create({data:{actorId:req.kitchenUser!.orbitPersonId,actorRole:req.kitchenUser!.role,action:'PAYMENT_RECEIVED',entityType:'KitchenPayment',entityId:saved.id,newValue:JSON.parse(JSON.stringify(saved)),ipAddress:req.ip}})
+    return saved
+  })
+  res.status(201).json({payment,balance:await balanceFor(person.id)})
 }))
 
-const transactionCorrectionSchema = z.object({
-  items: z.array(z.object({ productId: z.string().min(1), quantity: z.coerce.number().positive().max(1000), unitPriceCdf: z.coerce.number().positive().max(100000000) })).min(1).max(50),
-  reason: z.string().trim().min(5).max(500)
-}).refine(value => new Set(value.items.map(item => item.productId)).size === value.items.length, { message: 'Each product may appear only once in a corrected transaction' })
-
-app.put('/api/transactions/:id', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
-  const id = routeParam(req, 'id')
-  const input = transactionCorrectionSchema.parse(req.body)
-  const original = await prisma.kitchenTransaction.findUnique({
-    where: { id },
-    include: { items: true, discounts: true, ledgerEntries: true, payments: true, reversals: true }
-  })
-  if (!original) return res.status(404).json({ message: 'Transaction not found' })
-  if (original.status !== 'CONFIRMED') return res.status(409).json({ message: 'Only a confirmed transaction can be corrected. Cancel pending orders or void a completed reversal.' })
-  if (original.payments.length || original.reversals.length || original.ledgerEntries.some(entry => ['REFUND', 'REVERSAL', 'ADJUSTMENT'].includes(entry.type))) {
-    return res.status(409).json({ message: 'This transaction has a linked payment or reversal and cannot be edited. Void it and create a corrected sale instead.' })
-  }
-
-  const productIds = input.items.map(item => item.productId)
-  const [menuItems, products] = await Promise.all([
-    prisma.dailyMenuItem.findMany({ where: { menuId: original.dailyMenuId, productId: { in: productIds } } }),
-    prisma.product.findMany({ where: { id: { in: [...new Set([...productIds, ...original.items.map(item => item.productId)])] } } })
-  ])
-  if (menuItems.length !== productIds.length) return res.status(409).json({ message: 'Corrected products must belong to the original daily menu' })
-  const productById = new Map(products.map(product => [product.id, product]))
-  const newLines = input.items.map(item => {
-    const product = productById.get(item.productId)
-    if (!product) throw Object.assign(new Error('A corrected product no longer exists'), { statusCode: 409 })
-    const priorLine = original.items.find(line => line.productId === item.productId)
-    const keepExactPortion = priorLine?.amountBased === true
-      && Number(priorLine.quantity) === item.quantity
-      && Number(priorLine.unitPriceAtPurchase) === item.unitPriceCdf
-    return { product, quantity: item.quantity, unitPriceCdf: item.unitPriceCdf,
-      amountBased: keepExactPortion, subtotal: keepExactPortion ? Number(priorLine.subtotal) : item.quantity * item.unitPriceCdf }
-  })
-  const oldQuantities = new Map<string, number>()
-  for (const item of original.items) oldQuantities.set(item.productId, (oldQuantities.get(item.productId) || 0) + Number(item.quantity))
-  const newQuantities = new Map<string, number>()
-  for (const item of newLines) newQuantities.set(item.product.id, (newQuantities.get(item.product.id) || 0) + item.quantity)
-  for (const product of products) {
-    if (!product.trackInventory) continue
-    const stockDelta = (oldQuantities.get(product.id) || 0) - (newQuantities.get(product.id) || 0)
-    if (stockDelta < 0 && Number(product.stockQuantity) < Math.abs(stockDelta)) return res.status(409).json({ message: `Insufficient stock to correct ${product.name}` })
-  }
-
-  const subtotal = newLines.reduce((sum, line) => sum + line.subtotal, 0)
-  const eligibleSubtotal = newLines.filter(line => line.product.discountEligible && line.product.category !== 'DRINK').reduce((sum, line) => sum + line.subtotal, 0)
-  const currentPerson = await resolvePerson(original.orbitPersonId)
-  const subsidyRole = currentPerson?.kind === 'TEACHER' ? 'TEACHER'
-    : ['STAFF', 'ADMINISTRATIVE_STAFF'].includes(currentPerson?.kind || '') ? 'STAFF'
-      : original.personType === 'STAFF' || Number(original.schoolSubsidy) > 0 ? 'STAFF' : original.personType
-  const schoolSubsidy = calculateSchoolSubsidy(eligibleSubtotal, subsidyRole)
-  const total = Math.max(0, subtotal - schoolSubsidy)
-  const corrected = await runKitchenSerializableTransaction(async tx => {
-    const claim = await tx.kitchenTransaction.updateMany({ where: { id, status: 'CONFIRMED' }, data: { status: 'PENDING' } })
-    if (claim.count !== 1) throw Object.assign(new Error('This transaction changed while it was being corrected; reload and try again'), { statusCode: 409 })
-    for (const product of products) {
-      if (!product.trackInventory) continue
-      const stockDelta = (oldQuantities.get(product.id) || 0) - (newQuantities.get(product.id) || 0)
-      if (stockDelta === 0) continue
-      await tx.product.update({ where: { id: product.id }, data: { stockQuantity: { increment: new Prisma.Decimal(stockDelta) } } })
-      await tx.stockMovement.create({ data: {
-        productId: product.id,
-        type: stockDelta > 0 ? 'RETURN' : 'SALE',
-        quantity: new Prisma.Decimal(stockDelta),
-        reason: `Correction ${original.transactionNumber}: ${input.reason}`,
-        actor: req.kitchenUser!.orbitPersonId
-      } })
-    }
-    await tx.kitchenTransactionItem.deleteMany({ where: { transactionId: id } })
-    await tx.kitchenTransactionItem.createMany({ data: newLines.map(line => ({
-      transactionId: id, productId: line.product.id, productNameSnapshot: line.product.name,
-      quantity: new Prisma.Decimal(line.quantity), unitPriceAtPurchase: new Prisma.Decimal(line.unitPriceCdf),
-      amountBased: line.amountBased, subtotal: new Prisma.Decimal(line.subtotal)
-    })) })
-    const transactionPatch = await tx.kitchenTransaction.update({ where: { id }, data: {
-      subtotal: new Prisma.Decimal(subtotal), eligibleSubtotal: new Prisma.Decimal(eligibleSubtotal),
-      discount: new Prisma.Decimal(schoolSubsidy), schoolSubsidy: new Prisma.Decimal(schoolSubsidy),
-      total: new Prisma.Decimal(total), creditAmount: new Prisma.Decimal(original.paymentMode === 'CREDIT' ? total : 0),
-      status: 'CONFIRMED'
-    } })
-    const entrySpecs: Array<{ type: 'PURCHASE' | 'DISCOUNT' | 'PAYMENT'; amount: number; description: string }> = [
-      { type: 'PURCHASE', amount: subtotal, description: 'Corrected consumption ' + original.transactionNumber },
-      { type: 'DISCOUNT', amount: -schoolSubsidy, description: 'Corrected school subsidy ' + original.transactionNumber },
-      ...(original.paymentMode === 'CREDIT' ? [] : [{ type: 'PAYMENT' as const, amount: -total, description: 'Corrected immediate payment ' + original.transactionNumber }])
-    ]
-    for (const spec of entrySpecs) {
-      const existing = original.ledgerEntries.find(entry => entry.type === spec.type)
-      if (existing) await tx.kitchenLedgerEntry.update({ where: { id: existing.id }, data: { amount: new Prisma.Decimal(spec.amount), description: spec.description, reason: input.reason, performedBy: req.kitchenUser!.orbitPersonId } })
-      else if (spec.type !== 'DISCOUNT' || schoolSubsidy > 0) await tx.kitchenLedgerEntry.create({ data: {
-        transactionId: id, orbitPersonId: original.orbitPersonId, type: spec.type, amount: new Prisma.Decimal(spec.amount),
-        description: spec.description, reason: input.reason, performedBy: req.kitchenUser!.orbitPersonId
-      } })
-    }
-    const priorDiscount = original.discounts[0]
-    if (priorDiscount) await tx.discountApplication.update({ where: { id: priorDiscount.id }, data: {
-      originalAmount: new Prisma.Decimal(eligibleSubtotal), discountAmount: new Prisma.Decimal(schoolSubsidy),
-      finalAmount: new Prisma.Decimal(total), reason: 'Corrected KCS staff/teacher school subsidy', approvedBy: req.kitchenUser!.orbitPersonId
-    } })
-    else if (schoolSubsidy > 0) await tx.discountApplication.create({ data: {
-      transactionId: id, originalAmount: new Prisma.Decimal(eligibleSubtotal), discountAmount: new Prisma.Decimal(schoolSubsidy),
-      finalAmount: new Prisma.Decimal(total), reason: 'Corrected KCS staff/teacher school subsidy', appliedAutomatically: true,
-      approvedBy: req.kitchenUser!.orbitPersonId
-    } })
-    await tx.notificationOutbox.create({ data: {
-      orbitPersonId: original.orbitPersonId, eventType: 'KITCHEN_TRANSACTION_CORRECTED', channels: ['IN_APP'],
-      payload: { transactionNumber: original.transactionNumber, reason: input.reason, previousTotal: Number(original.total), correctedTotal: total }
-    } })
-    return { transactionPatch, items: newLines }
-  })
-  const updated = await prisma.kitchenTransaction.findUniqueOrThrow({ where: { id }, include: { items: true, discounts: true, disputes: true } })
-  await audit(req, 'TRANSACTION_CORRECTED', 'KitchenTransaction', id, original, updated, input.reason)
-  res.json({ transaction: withReceiptSignature(updated), balance: await balanceFor(original.orbitPersonId), previousTotal: Number(original.total), correctedTotal: total })
+const mutationIdentity={revision:z.string().regex(/^[a-f0-9]{64}$/),requestId:z.string().uuid(),reason:z.string().trim().min(5).max(500)}
+const transactionCorrectionSchema=z.object({...mutationIdentity,settlementConfirmed:z.boolean().optional(),items:z.array(z.object({productId:z.string().min(1).max(150),quantity:z.coerce.number().positive().max(1000).refine(v=>Math.abs(v*1000-Math.round(v*1000))<.000001,'Use at most 3 quantity decimals'),unitPriceCdf:z.coerce.number().positive().max(100000000).refine(v=>Math.abs(v*100-Math.round(v*100))<.00001,'Use at most 2 price decimals')}).strict()).min(1).max(50)}).strict().refine(value=>new Set(value.items.map(item=>item.productId)).size===value.items.length,{message:'Each product may appear only once in a corrected transaction'})
+app.get('/api/transactions/:id/management',authenticate,allow('KITCHEN_ADMIN','FINANCE'),asyncRoute(async(req:AuthRequest,res)=>{
+ const snapshot=await transactionManagementSnapshot(routeParam(req,'id'))
+ if(!snapshot)return res.status(404).json({message:'Transaction not found'})
+ res.setHeader('Cache-Control','no-store');res.json({...snapshot,transaction:withReceiptSignature(snapshot.transaction)})
 }))
-
-app.post('/api/transactions/:id/void', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
-  const reason = z.object({ reason: z.string().trim().min(5).max(500) }).parse(req.body).reason
-  const original = await prisma.kitchenTransaction.findUnique({ where: { id: routeParam(req, 'id') }, include: { items: true } })
-  if (!original) return res.status(404).json({ message: 'Transaction not found' })
-  if (original.status !== 'CONFIRMED') return res.status(409).json({ message: 'Only a confirmed transaction can be voided' })
-
-  const result = await prisma.$transaction(async tx => {
-    const counter = await tx.kitchenCounter.upsert({
-      where: { name: 'REVERSAL-' + new Date().getUTCFullYear() },
-      create: { name: 'REVERSAL-' + new Date().getUTCFullYear(), value: 1 },
-      update: { value: { increment: 1 } }
-    })
-    const number = 'KITCHEN-REV-' + new Date().getUTCFullYear() + '-' + String(counter.value).padStart(6, '0')
-    const reversal = await tx.kitchenTransaction.create({ data: {
-      transactionNumber: number,
-      dailyMenuId: original.dailyMenuId,
-      orbitPersonId: original.orbitPersonId,
-      personType: original.personType,
-      personNameSnapshot: original.personNameSnapshot,
-      cashierOrbitPersonId: req.kitchenUser!.orbitPersonId,
-      cashierNameSnapshot: req.kitchenUser!.fullName,
-      subtotal: new Prisma.Decimal(0),
-      discount: new Prisma.Decimal(0),
-      total: new Prisma.Decimal(0),
-      paymentMode: original.paymentMode,
-      paymentStatus: 'VOIDED',
-      status: 'REVERSED',
-      creditAmount: new Prisma.Decimal(0),
-      notes: reason,
-      originalTransactionId: original.id,
-      ledgerEntries: Number(original.creditAmount) > 0 ? { create: {
-        orbitPersonId: original.orbitPersonId,
-        type: 'REVERSAL',
-        amount: new Prisma.Decimal(-Number(original.total)),
-        description: 'Reversal of ' + original.transactionNumber,
-        reason,
-        performedBy: req.kitchenUser!.orbitPersonId
-      } } : undefined
-    } })
-    await tx.kitchenTransaction.update({ where: { id: original.id }, data: { status: 'VOIDED', paymentStatus: 'VOIDED' } })
-    for (const item of original.items) {
-      const product = await tx.product.findUnique({ where: { id: item.productId } })
-      if (!product?.trackInventory) continue
-      await tx.product.update({ where: { id: product.id }, data: { stockQuantity: { increment: item.quantity } } })
-      await tx.stockMovement.create({ data: {
-        productId: product.id,
-        type: 'RETURN',
-        quantity: item.quantity,
-        reason: 'Void ' + original.transactionNumber + ': ' + reason,
-        actor: req.kitchenUser!.orbitPersonId
-      } })
-    }
-    return reversal
-  })
-  await audit(req, 'TRANSACTION_VOIDED', 'KitchenTransaction', original.id, original, result, reason)
-  res.json({ reversal: result, balance: await balanceFor(original.orbitPersonId) })
+app.put('/api/transactions/:id',authenticate,allow('KITCHEN_ADMIN','FINANCE'),asyncRoute(async(req:AuthRequest,res)=>{
+ const input=transactionCorrectionSchema.parse(req.body),result=await manageTransaction(routeParam(req,'id'),input,'EDIT',{id:req.kitchenUser!.orbitPersonId,role:req.kitchenUser!.role,ip:req.ip},String(req.headers['x-kcs-language']||'en'))
+ res.json({...result,transaction:withReceiptSignature(result.transaction)})
+}))
+app.post('/api/transactions/:id/void',authenticate,allow('KITCHEN_ADMIN','FINANCE'),asyncRoute(async(req:AuthRequest,res)=>{
+ const input=z.object({...mutationIdentity,refundMode:z.enum(['KEEP_CREDIT','REFUND_CONFIRMED']).default('KEEP_CREDIT'),confirmedRefundAmount:z.number().nonnegative().max(999999999999.99).optional()}).strict().parse(req.body)
+ const result=await manageTransaction(routeParam(req,'id'),input,'VOID',{id:req.kitchenUser!.orbitPersonId,role:req.kitchenUser!.role,ip:req.ip},String(req.headers['x-kcs-language']||'en'))
+ res.json({...result,transaction:withReceiptSignature(result.transaction)})
 }))
 
 app.post('/api/stock-movements', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
