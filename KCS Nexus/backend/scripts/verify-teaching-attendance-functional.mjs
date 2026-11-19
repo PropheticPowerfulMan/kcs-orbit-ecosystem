@@ -146,6 +146,44 @@ try{
  const stillSaved=ok(await call(editQuery,'GET',null,'principal'))
  assert.equal(stillSaved.entries.length,1)
  pass('Real short-name official timetables map without guessing; only Principal publishes schedules and overlapping publication rolls back')
+ // Reproduce the real missed morning periods with short official labels.
+ const algebraId=uid+'-algebra',programmingId=uid+'-programming'
+ for(const[id,name,grade]of[[algebraId,'Algebra2','Grade 11'],[programmingId,'Programming','Grade 7 A']]){
+  await db.course.create({data:{id,name,code:id,description:'Timetable completeness QA',grade,teacherId:ids.teacher+'-profile',credits:1}})
+ }
+ for(const[courseId,label,grade,group,period,planned]of[
+  [algebraId,'Math','Grade 11',null,1,'08:30'],
+  [algebraId,'Math','Grade 11',null,2,'09:15'],
+  [programmingId,'Programming (O)','Grade 7','G7A',5,'11:30'],
+ ]){
+  await db.academicScheduleEntry.create({data:{sourceKey:uid+'-complete-'+period,academicYear:'2026-2027',semester:1,grade,classGroup:group,day:weekday,period,startTime:planned,endTime:planned==='08:30'?'09:15':planned==='09:15'?'10:00':'12:15',subject:label,teacherName:uid+' Teacher',room:'QA Completeness',sourceDocument:'QA completeness'}})
+ }
+ const complete=ok(await call('/mine?from='+day+'&to='+day))
+ assert.equal(complete.sessions.filter(row=>row.courseReference===algebraId).length,2)
+ assert.equal(complete.sessions.filter(row=>row.courseReference===programmingId).length,1)
+ assert.ok(complete.sessions.every((row,i,all)=>!i||row.expectedStartAt>=all[i-1].expectedStartAt))
+ pass('Morning Math and elective slots are complete and chronologically ordered under the real teacher course names')
+
+ const filtered=ok(await call('/principal?from='+day+'&to='+day+'&teacherUserId='+ids.teacher+'&className=Grade%2011&room=QA%20Completeness&search=Math','GET',null,'principal'))
+ assert.equal(filtered.sessions.length,0,'Search uses the actual course name, not an unrelated official heading')
+ const precise=ok(await call('/principal?from='+day+'&to='+day+'&teacherUserId='+ids.teacher+'&className=Grade%2011&room=QA%20Completeness&search=Algebra2','GET',null,'principal'))
+ assert.equal(precise.sessions.length,2);assert.equal(precise.summary.scheduled,2)
+ assert.ok(precise.sessions.every(row=>row.className==='Grade 11'))
+ const wrongGrade=ok(await call('/principal?from='+day+'&to='+day+'&teacherUserId='+ids.teacher+'&className=Grade%201','GET',null,'principal'))
+ assert.equal(wrongGrade.sessions.length,0)
+ pass('Principal class, teacher, room and multi-term filters also scope statistics without Grade 1/11 collisions')
+ const nextSchool=new Date(day+'T12:00:00Z');do{nextSchool.setUTCDate(nextSchool.getUTCDate()+1)}while([0,6].includes(nextSchool.getUTCDay()))
+ const nextDay=nextSchool.toISOString().slice(0,10)
+ await db.courseSchedule.create({data:{courseId:algebraId,day:weekdayOfSchool(nextDay),startTime:'08:30',endTime:'09:15',room:'QA Future'}})
+ const nextBoard=ok(await call('/mine?from='+nextDay+'&to='+nextDay))
+ assert.ok(nextBoard.sessions.some(row=>row.courseReference===algebraId&&row.source==='MY_COURSES'))
+ pass('An official slot on one weekday no longer suppresses My Courses schedules on other weekdays')
+
+ await db.course.create({data:{id:uid+'-geometry',name:'Geometry',code:uid+'-geometry',description:'Ambiguity guard QA',grade:'Grade 11',teacherId:ids.teacher+'-profile',credits:1}})
+ const ambiguous=ok(await call('/mine?from='+day+'&to='+day))
+ assert.ok(ambiguous.scheduleWarnings.some(row=>row.subject==='Math'&&row.className==='Grade 11'&&row.reason==='AMBIGUOUS'))
+ assert.ok(!ambiguous.sessions.some(row=>row.courseReference===algebraId))
+ pass('Ambiguous official slots remain visible as course-match warnings without inventing attendance')
  writeFileSync('/tmp/teaching-browser-fixtures.json',JSON.stringify({day,ids,courses,browserCourseId,start,end,tokens:{teacher:token('teacher'),principal:token('principal')},sessionId:saved.id}))
  console.log(JSON.stringify({status:'PASS',checks,productionUntouched:true,reportCardImpact:false,gradeImpact:false}))
 }catch(e){console.error(e.stack);process.exitCode=1}finally{await db.$disconnect()}

@@ -16,7 +16,9 @@ export type TeachingSession = {
  studentSummary:PresenceSummary;source:string;
  timing:{status:'UPCOMING'|'AWAITING_ENTRY'|'UNRECORDED'|'IN_CLASS'|'MISSING_EXIT'|'COMPLETED';lateMinutes:number|null;earlyExitMinutes:number|null;actualMinutes:number|null;onTime:boolean|null}
 }
+export type ScheduleWarning={key:string;schoolDate:string;subject:string;teacherName:string;className:string;room:string;expectedStartAt:string;expectedEndAt:string;reason:'NO_COURSE'|'AMBIGUOUS'}
 export type TeachingBoard = {
+ scheduleWarnings?:ScheduleWarning[];classes?:string[];rooms?:string[];
  serverUtc:string;schoolTimezone:string;trackingSince:string;range:{from:string;to:string};summary:TeachingStats;
  calendars:Array<{name:string;startDate:string;endDate:string;isCurrent?:boolean}>;
  courses:CourseChoice[];sessions:TeachingSession[];

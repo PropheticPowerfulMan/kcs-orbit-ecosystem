@@ -14,7 +14,12 @@ teachingAttendanceRouter.use(authenticate)
 teachingAttendanceRouter.use((_req,res,next)=>{res.setHeader('Cache-Control','private, no-store');next()})
 const date=z.string().refine(validTeachingDate,'Invalid school date')
 const locator=z.object({courseId:z.string().min(1).max(150),scheduleKey:z.string().min(1).max(200),date})
-const filters=z.object({from:date.optional(),to:date.optional(),courseId:z.string().min(1).max(150).optional(),teacherUserId:z.string().min(1).max(150).optional()}).strict()
+const filters=z.object({
+ from:date.optional(),to:date.optional(),courseId:z.string().min(1).max(150).optional(),teacherUserId:z.string().min(1).max(150).optional(),
+ className:z.string().trim().max(80).optional(),room:z.string().trim().max(100).optional(),search:z.string().trim().max(200).optional(),
+ searchScope:z.enum(['sessions','learners']).optional(),status:z.enum(['UPCOMING','AWAITING_ENTRY','UNRECORDED','IN_CLASS','MISSING_EXIT','COMPLETED']).optional(),
+ reviewStatus:z.enum(['PENDING','ACKNOWLEDGED','FOLLOW_UP','JUSTIFIED']).optional(),
+}).strict()
 async function isManager(req:AuthenticatedRequest) {
   if(req.user!.sub==='configured-superadmin')return true
   const user=await prisma.user.findUnique({where:{id:req.user!.sub},select:{role:true,permissions:true}})
@@ -33,12 +38,12 @@ teachingAttendanceRouter.get('/clock',requireRoles('teacher','admin'),asyncHandl
 }))
 teachingAttendanceRouter.get('/mine',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
   const query=filters.parse(req.query),today=dayOfSchool(await teachingServerTime())
-  return success(res,await teachingBoard({from:query.from||today,to:query.to||query.from||today,teacherUserId:req.user!.sub,...(query.courseId?{courseId:query.courseId}:{})}))
+  return success(res,await teachingBoard({...query,from:query.from||today,to:query.to||query.from||today,teacherUserId:req.user!.sub}))
 }))
 teachingAttendanceRouter.get('/principal',asyncHandler(async(req:AuthenticatedRequest,res)=>{
   await principalActor(req)
   const query=filters.parse(req.query),today=dayOfSchool(await teachingServerTime())
-  return success(res,await teachingBoard({from:query.from||today,to:query.to||query.from||today,...(query.teacherUserId?{teacherUserId:query.teacherUserId}:{}),...(query.courseId?{courseId:query.courseId}:{})}))
+  return success(res,await teachingBoard({...query,from:query.from||today,to:query.to||query.from||today}))
 }))
 teachingAttendanceRouter.post('/mark',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
   const body=locator.extend({action:z.enum(['ENTRY','EXIT']),note:z.string().trim().max(1000).optional()}).strict().parse(req.body)

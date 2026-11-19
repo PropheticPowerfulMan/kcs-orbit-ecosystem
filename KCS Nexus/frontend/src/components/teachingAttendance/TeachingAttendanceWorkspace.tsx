@@ -1,3 +1,4 @@
+import TeachingLiveOverview from './TeachingLiveOverview'
 import TeachingScheduleEditor from './TeachingScheduleEditor'
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react'
 import {Bar,BarChart,CartesianGrid,Legend,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts'
@@ -39,31 +40,32 @@ function dateRange(day:string,kind:'day'|'week'|'month'|'year',calendar?:Teachin
  const from=date.toISOString().slice(0,10);date.setUTCDate(date.getUTCDate()+6)
  return{from,to:date.toISOString().slice(0,10)}
 }
-const normalize=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
 export default function TeachingAttendanceWorkspace({manager=false}:{manager?:boolean}){
  const fr=useUIStore(s=>s.language)==='fr',tr=useCallback((a:string,b:string)=>fr?a:b,[fr])
  const clock=useTeachingClock()
  const [range,setRange]=useState({from:'',to:''}),[draft,setDraft]=useState({from:'',to:''})
  const [board,setBoard]=useState<TeachingBoard|null>(null),[catalog,setCatalog]=useState<CourseChoice[]>([])
+ const [className,setClassName]=useState(''),[room,setRoom]=useState(''),[statusFilter,setStatusFilter]=useState(''),[search,setSearch]=useState('')
  const [courseId,setCourseId]=useState(''),[teacherId,setTeacherId]=useState(''),[query,setQuery]=useState(''),[reviewFilter,setReviewFilter]=useState('')
  const [tab,setTab]=useState<'sessions'|'learners'|'analysis'|'schedules'>('sessions'),[page,setPage]=useState(1),[loading,setLoading]=useState(true),[error,setError]=useState('')
  const [busyKey,setBusyKey]=useState(''),[roster,setRoster]=useState<TeachingSession|null>(null),[review,setReview]=useState<TeachingSession|null>(null)
  const [receipt,setReceipt]=useState<{title:string;message:string;ok:boolean}|null>(null),[notes,setNotes]=useState<Record<string,string>>({})
  const sequence=useRef(0)
+ useEffect(()=>{const timer=setTimeout(()=>setSearch(query.trim()),250);return()=>clearTimeout(timer)},[query])
  useEffect(()=>{if(clock.schoolDate&&!range.from){const next={from:clock.schoolDate,to:clock.schoolDate};setRange(next);setDraft(next)}},[clock.schoolDate,range.from])
  const load=useCallback(async(quiet=false)=>{
   if(!range.from||!range.to)return
   const request=++sequence.current
   if(!quiet)setLoading(true)
   try{
-   const response=await(manager?teachingAttendanceAPI.principal:teachingAttendanceAPI.mine)({...range,...(courseId?{courseId}:{}),...(manager&&teacherId?{teacherUserId:teacherId}:{})})
+   const response=await(manager?teachingAttendanceAPI.principal:teachingAttendanceAPI.mine)({...range,...(courseId?{courseId}:{}),...(manager&&teacherId?{teacherUserId:teacherId}:{}),...(className?{className}:{}),...(room?{room}:{}),...(statusFilter&&tab==='sessions'?{status:statusFilter}:{}),...(reviewFilter&&tab==='sessions'?{reviewStatus:reviewFilter}:{}),...(search?{search}:{}),searchScope:tab==='learners'?'learners':'sessions'})
    if(request!==sequence.current)return
    const next=response.data.data as TeachingBoard
    setBoard(next);setError('')
    setCatalog(current=>!courseId&&!teacherId?next.courses:[...new Map([...current,...next.courses].map(row=>[row.id,row])).values()])
   }catch(e){if(request===sequence.current)setError(teachingError(e,fr))}
   finally{if(request===sequence.current)setLoading(false)}
- },[manager,range.from,range.to,courseId,teacherId,fr])
+ },[manager,range.from,range.to,courseId,teacherId,className,room,statusFilter,reviewFilter,search,tab,fr])
  useEffect(()=>{
   void load()
   const interval=Date.parse(range.to)-Date.parse(range.from)<=7*86400000?setInterval(()=>{if(document.visibilityState==='visible')void load(true)},10000):undefined
@@ -71,7 +73,7 @@ export default function TeachingAttendanceWorkspace({manager=false}:{manager?:bo
   document.addEventListener('visibilitychange',resume)
   return()=>{sequence.current++;clearInterval(interval);document.removeEventListener('visibilitychange',resume)}
  },[load])
- useEffect(()=>setPage(1),[query,reviewFilter,range.from,range.to,courseId,teacherId,tab])
+ useEffect(()=>setPage(1),[search,reviewFilter,statusFilter,className,room,range.from,range.to,courseId,teacherId,tab])
  const rowKey=(row:TeachingSession)=>[row.courseReference,row.scheduleKey,row.schoolDate].join('|')
  const mark=async(row:TeachingSession,action:'ENTRY'|'EXIT')=>{
   if(busyKey)return
@@ -85,8 +87,14 @@ export default function TeachingAttendanceWorkspace({manager=false}:{manager?:bo
   finally{setBusyKey('')}
  }
  const teachers=useMemo(()=>[...new Map(catalog.map(row=>[row.teacherUserId,{id:row.teacherUserId,name:row.teacherName}])).values()].sort((a,b)=>a.name.localeCompare(b.name)),[catalog])
- const filtered=(board?.sessions||[]).filter(row=>(!reviewFilter||row.reviewStatus===reviewFilter)&&normalize([row.teacherName,row.courseName,row.courseCode,row.className,row.room,row.schoolDate].join(' ')).includes(normalize(query)))
- const learnerRows=(board?.learners||[]).filter(row=>normalize([row.name,row.className,row.courseName].join(' ')).includes(normalize(query)))
+ const filtered=board?.sessions||[]
+ const learnerRows=board?.learners||[]
+ const classOptions=useMemo(()=>{
+  const list=board?.classes||[]
+  return [...new Set(list.flatMap(label=>[label.replace(/\s+[AB]$/,''),label]))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))
+ },[board?.classes])
+ const resetFilters=()=>{setQuery('');setSearch('');setReviewFilter('');setStatusFilter('');setCourseId('');setTeacherId('');setClassName('');setRoom('')}
+
  const pageCount=Math.max(1,Math.ceil((tab==='learners'?learnerRows.length:filtered.length)/8)),visible=filtered.slice((page-1)*8,page*8)
  useEffect(()=>setPage(p=>Math.min(p,pageCount)),[pageCount])
  const calendar=board?.calendars.find(row=>row.isCurrent)||board?.calendars.find(row=>clock.schoolDate>=row.startDate.slice(0,10)&&clock.schoolDate<=row.endDate.slice(0,10))
@@ -96,7 +104,7 @@ export default function TeachingAttendanceWorkspace({manager=false}:{manager?:bo
   const learner=tab==='learners'
   printOfficialPdf({
    title:learner?tr('Régularité des élèves par cours','Learner course regularity'):tr('Présence et ponctualité des enseignants','Teacher session attendance and punctuality'),
-   metadata:[[tr('Période','Period'),range.from+' – '+range.to],[tr('Fuseau officiel','Official timezone'),'Africa/Kinshasa'],[tr('Début du suivi','Tracking since'),board.trackingSince]],
+   metadata:[[tr('Période','Period'),range.from+' – '+range.to],[tr('Fuseau officiel','Official timezone'),'Africa/Kinshasa'],[tr('Début du suivi','Tracking since'),board.trackingSince],[tr('Classe','Class'),className||tr('Toutes','All')],[tr('Recherche','Search'),search||'—']],
    indicators:learner?[[tr('Statuts renseignés','Recorded learner statuses'),board.learnerSummary.recorded],[tr('Présence','Attendance'),percentage(board.learnerSummary.attendanceRate)],[tr('Retards','Late'),board.learnerSummary.late]]:[[tr('Présences enregistrées','Recorded sessions'),stats.recorded],[tr('Ponctualité','Punctuality'),percentage(stats.punctualityRate)],[tr('Retard moyen (min)','Mean delay (min)'),stats.meanLateMinutes??'—']],
    columns:learner?[tr('Élève','Learner'),tr('Classe','Class'),tr('Cours','Course'),tr('Présents','Present'),tr('Retards','Late'),tr('Absents','Absent'),tr('Taux','Rate')]:[tr('Date','Date'),tr('Professeur','Teacher'),tr('Cours','Course'),tr('Horaire prévu','Scheduled'),tr('Entrée','Entry'),tr('Sortie','Exit'),tr('Retard (min)','Delay (min)'),tr('Statut','Status')],
    rows:learner?learnerRows.map(row=>[row.name,row.className,row.courseName,row.present,row.late,row.absent,percentage(row.attendanceRate)]):filtered.map(row=>[row.schoolDate,row.teacherName,row.courseName,timeLabel(row.expectedStartAt,fr)+'–'+timeLabel(row.expectedEndAt,fr),timeLabel(row.checkInAt,fr),timeLabel(row.checkOutAt,fr),row.timing.lateMinutes,sessionLabels[row.timing.status][fr?0:1]]),
@@ -110,6 +118,7 @@ export default function TeachingAttendanceWorkspace({manager=false}:{manager?:bo
    <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.17em]">KCS · {tr('Chaque séance compte','Every session matters')}</p><h2 className="mt-2 flex items-center gap-3 text-xl font-black"><GraduationCap size={25}/>{manager?tr('Présences aux cours','Teaching attendance'):tr('Mes séances de cours','My teaching sessions')}</h2><p className="mt-2 max-w-2xl text-xs">{manager?tr('Horaires, arrivées, sorties et régularité des élèves : un suivi précis pour vos décisions.','Schedules, arrivals, departures and learner regularity: clear evidence for your decisions.'):tr('Pointez votre entrée, relevez les élèves présents, puis enregistrez votre sortie.','Check in, record your learners’ attendance, then check out.')}</p></div>
    <div className="ta-clock"><span className="flex items-center gap-2 text-[10px] uppercase tracking-wider"><Clock3 size={13}/>{tr('Heure serveur · Kinshasa','Server time · Kinshasa')}</span><strong className="mt-1 block text-2xl tracking-widest" data-teaching-clock>{clock.now?new Intl.DateTimeFormat(fr?'fr-FR':'en-GB',{timeZone:'Africa/Kinshasa',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(clock.now):'—'}</strong><p className="text-[10px]">{clock.synchronized?tr('Synchronisée','Synchronized'):tr('Resynchronisation…','Resynchronizing…')}</p></div>
   </header>
+  {manager&&board&&<TeachingLiveOverview sessions={filtered} warnings={board.scheduleWarnings||[]} now={clock.now} fr={fr} onReview={setReview} onSchedules={()=>setTab('schedules')}/>}
   <section className="ta-panel space-y-4">
    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2">{(['day','week','month','year'] as const).map((kind,i)=><button key={kind} type="button" className="ta-btn" disabled={!clock.schoolDate||(kind==='year'&&!calendar)} onClick={()=>{const next=dateRange(clock.schoolDate,kind,calendar);setRange(next);setDraft(next)}}>{[tr('Jour','Day'),tr('Semaine','Week'),tr('Mois','Month'),tr('Année scolaire','School year')][i]}</button>)}</div><div className="flex gap-2"><button type="button" className="ta-btn" disabled={loading} onClick={()=>void load()}><RefreshCw size={14} className={loading?'animate-spin':''}/>{tr('Actualiser','Refresh')}</button><button type="button" className="ta-btn" disabled={!board||!!error} onClick={exportReport}><Download size={14}/>{tr('Rapport / PDF','Report / PDF')}</button></div></div>
    <form className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1.2fr_1.2fr_auto]" onSubmit={e=>{e.preventDefault();setRange(draft)}}>
@@ -126,7 +135,16 @@ export default function TeachingAttendanceWorkspace({manager=false}:{manager?:bo
   </div>
   <section className="ta-panel">
    <nav className="mb-4 flex flex-wrap gap-2" aria-label={tr('Vues du registre','Register views')}>{([['sessions',Clock3,tr('Séances des enseignants','Teacher sessions')],['learners',Users,tr('Présences des élèves','Learner attendance')],['analysis',BarChart3,tr('Analyses et tendances','Analysis and trends')]] as const).map(([value,Icon,label])=><button type="button" key={value} className="ta-btn" aria-pressed={tab===value} onClick={()=>setTab(value)}><Icon size={16}/>{label}</button>)}{manager&&<button type="button" className="ta-btn" aria-pressed={tab==='schedules'} onClick={()=>setTab('schedules')}><CalendarDays size={16}/>{tr('Programmer les cours','Schedule subjects')}</button>}</nav>
-   {tab!=='analysis'&&tab!=='schedules'&&<div className="mb-4 flex flex-wrap items-end gap-3"><label className="min-w-[210px] flex-1 text-xs font-semibold"><span className="mb-1 flex items-center gap-2"><Search size={14}/>{tab==='learners'?tr('Rechercher un élève, une classe ou un cours','Search learner, class or subject'):tr('Rechercher un nom, un cours, une classe ou une salle','Search name, subject, class or room')}</span><input className="ta-field" value={query} onChange={e=>setQuery(e.target.value)}/></label>{manager&&tab==='sessions'&&<label className="text-xs font-semibold">{tr('Examen du Principal','Principal review')}<select className="ta-field mt-1" value={reviewFilter} onChange={e=>setReviewFilter(e.target.value)}><option value="">{tr('Tous les états','All review states')}</option>{Object.entries(reviewLabels).map(([value,label])=><option value={value} key={value}>{label[fr?0:1]}</option>)}</select></label>}<button type="button" className="ta-btn" onClick={()=>{setQuery('');setReviewFilter('');setCourseId('');setTeacherId('')}}>{tr('Réinitialiser','Reset')}</button></div>}
+   {tab!=='schedules'&&<div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <label className="min-w-0 text-xs font-semibold"><span className="mb-1 flex items-center gap-2"><Search size={14}/>{tab==='learners'?tr('Rechercher un élève, une classe ou un cours','Search learner, class or subject'):tr('Rechercher un nom, un cours, une classe ou une salle','Search name, subject, class or room')}</span><input maxLength={200} className="ta-field" value={query} placeholder={tr('Ex. : Jonathan "Grade 11"','E.g. Jonathan "Grade 11"')} onChange={e=>setQuery(e.target.value)}/></label>
+    <label className="text-xs font-semibold">{tr('Classe / section exacte','Exact class / section')}<select className="ta-field mt-1" value={className} onChange={e=>setClassName(e.target.value)} data-teaching-class-filter><option value="">{tr('Toutes les classes','All classes')}</option>{[...new Set([...classOptions,...(className?[className]:[])])].map(value=><option key={value} value={value}>{value}</option>)}</select></label>
+    <label className="text-xs font-semibold">{tr('Salle','Room')}<select className="ta-field mt-1" value={room} onChange={e=>setRoom(e.target.value)}><option value="">{tr('Toutes les salles','All rooms')}</option>{[...new Set([...(board?.rooms||[]),...(room?[room]:[])])].map(value=><option key={value} value={value}>{value}</option>)}</select></label>
+    {tab==='sessions'&&<label className="text-xs font-semibold">{tr('État de la séance','Session status')}<select className="ta-field mt-1" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">{tr('Tous les états','All statuses')}</option>{Object.entries(sessionLabels).map(([value,label])=><option value={value} key={value}>{label[fr?0:1]}</option>)}</select></label>}
+    {manager&&tab==='sessions'&&<label className="text-xs font-semibold">{tr('Examen du Principal','Principal review')}<select className="ta-field mt-1" value={reviewFilter} onChange={e=>setReviewFilter(e.target.value)}><option value="">{tr('Toutes les décisions','All review states')}</option>{Object.entries(reviewLabels).map(([value,label])=><option value={value} key={value}>{label[fr?0:1]}</option>)}</select></label>}
+    <div className="flex flex-wrap items-end gap-2"><button type="button" className="ta-btn" onClick={resetFilters}>{tr('Réinitialiser','Reset')}</button><span className="ta-muted self-center text-[10px]">{tr('Mots dans tout ordre · accents ignorés · guillemets pour une expression exacte.','Words in any order · accents ignored · quotes for an exact phrase.')}</span></div>
+   </div>}
+   {!!board?.scheduleWarnings?.length&&<details className="ta-alert mb-4 text-xs" data-teaching-schedule-warnings><summary className="cursor-pointer font-bold">{tr('Créneaux officiels nécessitant une correspondance','Official timetable slots needing a course match')} · {board.scheduleWarnings.length}</summary><p className="my-2">{tr('Ces créneaux sont affichés sans inventer de présence ou d’absence. Vérifiez les noms et les classes dans My Courses, puis les horaires avec le Principal.','These slots are shown without inventing presence or absence. Check subject names and classes in My Courses, then review the timetable with the Principal.')}</p><div className="grid gap-2 sm:grid-cols-2">{board.scheduleWarnings.map(row=><div className="rounded-lg border border-amber-600/25 p-2" key={row.key}><b>{row.teacherName} · {row.subject}</b><p className="mt-1">{row.className} · {row.schoolDate} · {timeLabel(row.expectedStartAt,fr)}–{timeLabel(row.expectedEndAt,fr)}</p><p className="mt-1">{row.reason==='AMBIGUOUS'?tr('Plusieurs cours possibles : validation nécessaire.','Multiple possible courses: verification required.'):tr('Aucun cours correspondant pour cette classe.','No matching course for this class.')}</p></div>)}</div></details>}
+
    {loading&&!board?<p role="status" className="p-10 text-center text-sm">{tr('Chargement des séances et du registre…','Loading sessions and attendance…')}</p>:<>
     {tab==='schedules'&&manager&&board&&<TeachingScheduleEditor courses={catalog} calendars={board.calendars} onPublished={()=>void load(true)}/>}
     {tab==='sessions'&&<div className="space-y-3">{visible.map(row=>{

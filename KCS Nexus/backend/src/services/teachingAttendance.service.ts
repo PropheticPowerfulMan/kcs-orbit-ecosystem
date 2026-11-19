@@ -8,10 +8,12 @@ import { courseMatchesPeriod } from '../utils/courseTeachingPeriods.js'
 import { schoolDayDecision } from '../utils/schoolDayPolicy.js'
 import { protectAcademicPeriod } from './academicPeriodAccess.service.js'
 import { splitClassName } from '../utils/className.js'
-import { canonicalTeachingDay, coursePresenceStatistics, dayOfSchool, normalizeTeachingLabel, sameTeacherName, teachingAliasMatches, normalizedTeachingSubject, uniquelyAssignedCourse, schoolInstant, teachingStatistics, teachingTiming, TEACHING_TIMEZONE, weekdayOfSchool } from '../utils/teachingAttendance.js'
+import { canonicalTeachingDay, coursePresenceStatistics, dayOfSchool, normalizeTeachingLabel, teachingAliasMatches, schoolInstant, teachingStatistics, teachingTiming, TEACHING_TIMEZONE, weekdayOfSchool } from '../utils/teachingAttendance.js'
+
+import {resolveTeachingSubjects, teachingClassMatches, teachingSearchMatches, teachingSubjectScore} from '../utils/teachingTimetable.js'
 
 type Database = Prisma.TransactionClient | typeof prisma
-type Filters = { from: string; to: string; teacherUserId?: string; courseId?: string }
+type Filters = { from: string; to: string; teacherUserId?: string; courseId?: string; className?:string; room?:string; search?:string; searchScope?:'sessions'|'learners'; status?:string; reviewStatus?:string }
 type Session = Prisma.TeachingSessionGetPayload<{ include: { students: true } }>
 export const teachingCourseInclude = {
   teacher: { include: { user: { select: { id: true, firstName: true, middleName: true, lastName: true } } } },
@@ -93,28 +95,47 @@ export async function teachingPlan(filters: Filters, options: { strictCalendar?:
   // search for every subject on every day of an annual report.
   const manualScopes=new Set(official.filter(row=>row.sourceDocument.startsWith('Principal course schedule · ')).map(row=>row.academicYear+'|'+row.semester+'|'+row.sourceDocument.slice('Principal course schedule · '.length)))
   const mappedOfficial=new Map<string,typeof official>()
+  const unresolvedOfficial:Array<{entry:typeof official[number];subject:string;teacherName:string;reason:'NO_COURSE'|'AMBIGUOUS'}>=[]
   for(const entry of official){
     const scope=entry.academicYear+'|'+entry.semester+'|'
     const manualId=entry.sourceDocument.startsWith('Principal course schedule · ')?entry.sourceDocument.slice('Principal course schedule · '.length):null
-    const candidates=manualId?mappingCourses.filter(candidate=>candidate.id===manualId):mappingCourses.filter(candidate=>
-      !manualScopes.has(scope+candidate.id)&&
+    const eligible=mappingCourses.filter(candidate=>
       courseMatchesPeriod(periods.get(candidate.id)?.periods||[],entry.academicYear,'Semester '+entry.semester)&&
-      [candidate.name,candidate.code].some(name=>normalizedTeachingSubject(name)===normalizedTeachingSubject(entry.subject))&&
-      teachingAliasMatches(entry.teacherName,fullName(candidate.teacher.user))&&
       teachingCourseMatchesClass(candidate,entry.grade,entry.classGroup))
-    const owner=uniquelyAssignedCourse(candidates)
-    if(owner){const key=scope+owner.id;mappedOfficial.set(key,[...(mappedOfficial.get(key)||[]),entry])}
+    const resolved=manualId?{owners:eligible.filter(candidate=>candidate.id===manualId),unresolved:[]}:
+      resolveTeachingSubjects(entry,eligible.filter(candidate=>!manualScopes.has(scope+candidate.id)),candidate=>fullName(candidate.teacher.user))
+    for(const owner of resolved.owners){const key=scope+owner.id;mappedOfficial.set(key,[...(mappedOfficial.get(key)||[]),entry])}
+    for(const issue of resolved.unresolved){
+      // Replaced manual schedules supersede their former imported labels.
+      const superseded=mappingCourses.some(candidate=>manualScopes.has(scope+candidate.id)&&
+        teachingAliasMatches(issue.teacherName,fullName(candidate.teacher.user))&&
+        teachingCourseMatchesClass(candidate,entry.grade,entry.classGroup)&&
+        teachingSubjectScore(issue.subject,candidate.name)>0)
+      if(!superseded)unresolvedOfficial.push({entry,...issue})
+    }
   }
+  const scheduleWarnings:Array<{key:string;schoolDate:string;subject:string;teacherName:string;className:string;room:string;expectedStartAt:string;expectedEndAt:string;reason:'NO_COURSE'|'AMBIGUOUS'}>=[]
   const sessions = new Map<string, Planned>()
   for (let day=filters.from; day<=filters.to;) {
     const cycle = cycleOn(day,calendars)
     if (day >= trackingSince && cycle && schoolDayDecision(day,calendars,ranges.get(cycle.academicYear) || []).allowed) {
       const weekday = weekdayOfSchool(day)
+      for(const issue of unresolvedOfficial){
+        const entry=issue.entry
+        if(entry.academicYear!==cycle.academicYear||entry.semester!==cycle.semester||canonicalTeachingDay(entry.day)!==weekday)continue
+        const own=courses.find(course=>teachingAliasMatches(issue.teacherName,fullName(course.teacher.user)))
+        if(filters.teacherUserId&&!own)continue
+        if(filters.courseId&&(!own||teachingSubjectScore(issue.subject,own.name)===0))continue
+        const start=schoolInstant(day,entry.startTime),end=schoolInstant(day,entry.endTime)
+        if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||end<=start||start<activation!.createdAt)continue
+        scheduleWarnings.push({key:entry.id+'|'+issue.teacherName+'|'+day,schoolDate:day,subject:issue.subject,teacherName:issue.teacherName,className:[entry.grade,entry.classGroup?.match(/[A-Z]$/)?.[0]].filter(Boolean).join(' '),room:entry.room||'',expectedStartAt:start.toISOString(),expectedEndAt:end.toISOString(),reason:issue.reason})
+      }
+
       for (const course of courses) {
         if (!courseMatchesPeriod(periods.get(course.id)?.periods || [],cycle.academicYear,cycle.term)) continue
         const teacherName = fullName(course.teacher.user)
-        const exact=mappedOfficial.get(cycle.academicYear+'|'+cycle.semester+'|'+course.id)||[]
-        const entries = exact.length ? exact.filter(row => canonicalTeachingDay(row.day) === weekday).map(row => ({
+        const exact=(mappedOfficial.get(cycle.academicYear+'|'+cycle.semester+'|'+course.id)||[]).filter(row => canonicalTeachingDay(row.day) === weekday)
+        const entries = exact.length ? exact.map(row => ({
           key: 'official-period:'+row.grade+':'+(row.classGroup||'')+':'+row.period, start: row.startTime, end: row.endTime, room: row.room || '', source: 'OFFICIAL_TIMETABLE', className:[row.grade,row.classGroup?.match(/[A-Z]$/)?.[0]].filter(Boolean).join(' '),
         })) : course.schedules.filter(row => canonicalTeachingDay(row.day) === weekday).map(row => ({
           key: 'course-schedule:'+row.id, start: row.startTime, end: row.endTime, room: row.room, source: 'MY_COURSES', className:course.grade,
@@ -142,29 +163,38 @@ export async function teachingPlan(filters: Filters, options: { strictCalendar?:
     sessions.set(keyOf(record.courseReference,record.scheduleKey,record.schoolDate),snapshot(record,course?.enrollments.filter(enrollment=>teachingStudentMatchesClass(enrollment.student,record.className)).length || record.students.length))
   }
   const rows=[...sessions.values()].sort((a,b)=>a.expectedStartAt.getTime()-b.expectedStartAt.getTime() || a.teacherName.localeCompare(b.teacherName)).map(row=>({...row,timing:teachingTiming(row,now)}))
-  return { now, trackingSince, calendars, courses, rows, saved }
+  scheduleWarnings.sort((a,b)=>a.expectedStartAt.localeCompare(b.expectedStartAt)||a.teacherName.localeCompare(b.teacherName))
+  return { now, trackingSince, calendars, courses, rows, saved, scheduleWarnings }
 }
 export async function teachingBoard(filters: Filters) {
   const plan=await teachingPlan(filters)
-  const byTeacher=new Map<string,typeof plan.rows>(), byDay=new Map<string,typeof plan.rows>()
-  for(const row of plan.rows) {
+  const classRoom=(row:{className:string;room?:string})=>teachingClassMatches(row.className,filters.className)&&(!filters.room||normalizeTeachingLabel(row.room)===normalizeTeachingLabel(filters.room))
+  const rows=plan.rows.filter(row=>classRoom(row)&&(!filters.status||row.timing.status===filters.status)&&(!filters.reviewStatus||row.reviewStatus===filters.reviewStatus)&&
+    (filters.searchScope==='learners'||teachingSearchMatches([row.teacherName,row.courseName,row.courseCode,row.className,row.room,row.schoolDate],filters.search)))
+  const selectedKeys=new Set(rows.map(row=>keyOf(row.courseReference,row.scheduleKey,row.schoolDate)))
+  const saved=plan.saved.filter(row=>selectedKeys.has(keyOf(row.courseReference,row.scheduleKey,row.schoolDate)))
+  const scheduleWarnings=plan.scheduleWarnings.filter(row=>classRoom(row)&&!filters.status&&!filters.reviewStatus&&
+    (filters.searchScope==='learners'||teachingSearchMatches([row.teacherName,row.subject,row.className,row.room,row.schoolDate],filters.search)))
+  const byTeacher=new Map<string,typeof rows>(), byDay=new Map<string,typeof rows>()
+  for(const row of rows) {
     byTeacher.set(row.teacherUserId,[...(byTeacher.get(row.teacherUserId)||[]),row])
     byDay.set(row.schoolDate,[...(byDay.get(row.schoolDate)||[]),row])
   }
   const learnerGroups=new Map<string,{studentId:string;name:string;className:string;courseId:string;courseName:string;statuses:string[]}>()
-  for(const session of plan.saved)for(const mark of session.students){
+  for(const session of saved)for(const mark of session.students){
     const key=session.courseReference+'|'+mark.studentReference
     const entry=learnerGroups.get(key)||{studentId:mark.studentReference,name:mark.studentName,className:mark.className,courseId:session.courseReference,courseName:session.courseName,statuses:[]}
     entry.statuses.push(mark.status);learnerGroups.set(key,entry)
   }
-  const learners=[...learnerGroups.values()].map(({statuses,...identity})=>({...identity,...coursePresenceStatistics(statuses)}))
+  const learners=[...learnerGroups.values()].map(({statuses,...identity})=>({...identity,...coursePresenceStatistics(statuses)})).filter(row=>filters.searchScope!=='learners'||teachingSearchMatches([row.name,row.className,row.courseName],filters.search))
   return {
-    learners, learnerSummary:coursePresenceStatistics(plan.saved.flatMap(row=>row.students.map(mark=>mark.status))),
+    learners, learnerSummary:coursePresenceStatistics(saved.flatMap(row=>row.students.filter(mark=>filters.searchScope!=='learners'||teachingSearchMatches([mark.studentName,mark.className,row.courseName],filters.search)).map(mark=>mark.status))),
+    scheduleWarnings,classes:[...new Set([...plan.rows,...plan.scheduleWarnings].map(row=>row.className))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})),rooms:[...new Set([...plan.rows,...plan.scheduleWarnings].map(row=>row.room).filter(Boolean))].sort(),
     serverUtc:plan.now.toISOString(),schoolTimezone:TEACHING_TIMEZONE,clockAuthority:'PostgreSQL clock_timestamp',
     trackingSince:plan.trackingSince,range:{from:filters.from,to:filters.to},
     calendars:plan.calendars.map(row=>({name:row.name,startDate:row.startDate,endDate:row.endDate,isCurrent:row.isCurrent})),
     courses:plan.courses.map(row=>({id:row.id,name:row.name,code:row.code,className:row.grade,teacherUserId:row.teacher.userId,teacherName:fullName(row.teacher.user),scheduleCount:row.schedules.length})),
-    sessions:plan.rows,summary:teachingStatistics(plan.rows,plan.now),
+    sessions:rows,summary:teachingStatistics(rows,plan.now),
     teachers:[...byTeacher].map(([id,rows])=>({id,name:rows[0].teacherName,...teachingStatistics(rows,plan.now)})),
     trend:[...byDay].map(([day,rows])=>({day,...teachingStatistics(rows,plan.now)})),
   }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-teaching-attendance-20261118-v45'
+const CACHE_NAME = 'kcs-nexus-teaching-timetable-20261119-v46'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
