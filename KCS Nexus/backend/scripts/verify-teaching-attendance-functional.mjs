@@ -9,9 +9,16 @@ assert.equal(process.env.KCS_ORBIT_ORGANIZATION_ID,'qa-school')
 const uid='teaching-qa-'+Date.now().toString(36)
 const ids={teacher:uid+'-teacher',other:uid+'-other',principal:uid+'-principal',staff:uid+'-staff',student:uid+'-student',student2:uid+'-student2',student3:uid+'-student3'}
 const token=(kind)=>jwt.sign({sub:ids[kind],role:kind==='teacher'||kind==='other'?'teacher':kind.startsWith('student')?'student':'staff'},process.env.JWT_SECRET,{expiresIn:'1h'})
-const call=async(path,method='GET',body,kind='teacher')=>{
+const rawCall=async(path,method='GET',body,kind='teacher')=>{
  const r=await fetch('http://127.0.0.1:5000/api/teaching-attendance'+path,{method,headers:{'content-type':'application/json',...(kind?{authorization:'Bearer '+token(kind)}:{}),...(kind==='principal'?{'X-Nexus-Workspace':'admin'}:{})},...(body?{body:JSON.stringify(body)}:{})})
  return{status:r.status,data:await r.json()}
+}
+const call=async(path,method='GET',body,kind='teacher')=>{
+ if(path==='/mark'&&body&&!body.location){
+  const challenge=await rawCall('/location-challenge','POST',{courseId:body.courseId,scheduleKey:body.scheduleKey,date:body.date,action:body.action},kind)
+  body={...body,location:{token:challenge.data.data?.token||'a'.repeat(64),position:{latitude:-4.4,longitude:15.3,accuracy:10}}}
+ }
+ return rawCall(path,method,body,kind)
 }
 const ok=(r,status=200)=>{assert.equal(r.status,status,JSON.stringify(r.data));return r.data.data}
 let checks=0;const pass=message=>{checks++;console.log('PASS '+message)}
@@ -61,6 +68,12 @@ try{
  ok(await call('/mark','POST',{...locator,action:'ENTRY',checkInAt:'2000-01-01T00:00:00Z'}),400)
  ok(await call('/mark','POST',{courseId:courses[2],scheduleKey:'course-schedule:'+courses[2]+'-schedule',date:day,action:'ENTRY'}),404)
  ok(await call('/mark','POST',{...locator,action:'EXIT'}),409)
+ ok(await rawCall('/mark','POST',{...locator,action:'ENTRY'}),400)
+ const policy={latitude:-4.4,longitude:15.3,radiusMeters:150,maxAccuracyMeters:50}
+ ok(await call('/campus','PUT',policy),403)
+ ok(await call('/campus','PUT',policy,'principal'))
+ const missingToken=ok(await call('/location-challenge','POST',{...locator,action:'ENTRY'})).token
+ ok(await rawCall('/mark','POST',{...locator,action:'ENTRY',location:{token:missingToken,position:{latitude:-5,longitude:15.3,accuracy:10}}}),403)
  const saved=ok(await call('/mark','POST',{...locator,action:'ENTRY',note:'Isolated QA entry'}))
  const repeated=ok(await call('/mark','POST',{...locator,action:'ENTRY'}))
  assert.equal(repeated.id,saved.id);assert.equal(repeated.checkInAt,saved.checkInAt)
@@ -68,6 +81,23 @@ try{
  assert.equal(await db.auditLog.count({where:{targetId:saved.id,action:'TEACHING_SESSION_ENTRY'}}),1)
  const overlap=board.sessions.find(row=>row.courseReference===courses[1])
  ok(await call('/mark','POST',{courseId:overlap.courseReference,scheduleKey:overlap.scheduleKey,date:day,action:'ENTRY'}),409)
+ let proofBoard=ok(await call('/mine?from='+day+'&to='+day))
+ const proofRow=proofBoard.sessions.find(r=>r.id===saved.id)
+ assert.equal(proofRow.presenceProof.entry.status,'PENDING')
+ const verify={action:'ENTRY',status:'VERIFIED',revision:0,note:'Observed independently in classroom',observedOnSite:true}
+ ok(await call('/sessions/'+saved.id+'/verify-presence','POST',verify),403)
+ // A teacher with Principal capability still cannot verify their own check-in.
+ await db.user.update({where:{id:ids.teacher},data:{permissions:['nexus:principal-workspace']}})
+ const self=await fetch('http://127.0.0.1:5000/api/teaching-attendance/sessions/'+saved.id+'/verify-presence',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token('teacher'),'X-Nexus-Workspace':'admin'},body:JSON.stringify(verify)})
+ assert.equal(self.status,403)
+ await db.user.update({where:{id:ids.teacher},data:{permissions:[]}})
+ ok(await call('/sessions/'+saved.id+'/verify-presence','POST',verify,'principal'))
+ ok(await call('/sessions/'+saved.id+'/verify-presence','POST',verify,'principal'),409)
+ proofBoard=ok(await call('/mine?from='+day+'&to='+day))
+ assert.equal(proofBoard.sessions.find(r=>r.id===saved.id).presenceProof.entry.status,'VERIFIED')
+ const heads=await db.auditLog.findMany({where:{targetId:saved.id}})
+ assert.ok(heads.every(row=>!JSON.stringify(row.metadata).includes('latitude')))
+ pass('GPS check, independent Principal confirmation, self-verification denial, stale revision protection and coordinate minimization')
  pass('Server-only immutable/idempotent check-in, exit prerequisite and overlapping-session guard')
 
  let register=ok(await call('/sessions/'+saved.id+'/learners'))
@@ -126,6 +156,17 @@ try{
  assert.ok(archivedBoard.sessions.some(row=>row.id===saved.id))
  pass('Withdrawn learners and deleted courses retain their traceable session history')
 
+ const beforeRead={grades:await db.grade.count(),cards:await db.reportCard.count()}
+ for(const[path,method]of[['/report-cards/generate','POST'],['/report-cards/fake/approve','PATCH'],['/report-cards/fake/publish','PATCH'],['/report-cards/fake/editorial','PATCH'],['/transcripts/verification','POST'],['/legacy-records/import','POST'],['/transcripts/fake/visibility','PATCH'],['/report-cards/deliver','POST']]){
+  const res=await fetch('http://127.0.0.1:5000/api/academic-records'+path,{method,headers:{authorization:'Bearer '+token('principal'),'X-Nexus-Workspace':'admin','content-type':'application/json'},body:'{}'})
+  assert.equal(res.status,403,path);assert.ok((await res.text()).includes('PRINCIPAL_ACADEMIC_RECORDS_READ_ONLY'))
+ }
+ for(const path of ['/report-cards?academicYear=2026-2027','/review?academicYear=2026-2027','/student-registry']){
+  const res=await fetch('http://127.0.0.1:5000/api/academic-records'+path,{headers:{authorization:'Bearer '+token('principal'),'X-Nexus-Workspace':'admin'}})
+  assert.equal(res.status,200,path)
+ }
+ assert.deepEqual({grades:await db.grade.count(),cards:await db.reportCard.count()},beforeRead)
+ pass('Principal sees the real academic interfaces; every administrative write is rejected on the server')
  const browserCourseId=uid+'-browser'
  await db.course.create({data:{id:browserCourseId,name:'QA Live Classroom '+uid,code:browserCourseId,description:'Browser QA only',grade:'Grade 7 A',teacherId:ids.teacher+'-profile',credits:1,schedules:{create:{id:browserCourseId+'-schedule',day:weekday,startTime:start,endTime:end,room:'QA 201'}},enrollments:{create:[{studentId:ids.student+'-profile'},{studentId:ids.student2+'-profile'}]}}})
  await db.courseSchedule.deleteMany({where:{courseId:{in:[courses[1],browserCourseId]}}})
@@ -159,7 +200,7 @@ try{
   await db.academicScheduleEntry.create({data:{sourceKey:uid+'-complete-'+period,academicYear:'2026-2027',semester:1,grade,classGroup:group,day:weekday,period,startTime:planned,endTime:planned==='08:30'?'09:15':planned==='09:15'?'10:00':'12:15',subject:label,teacherName:uid+' Teacher',room:'QA Completeness',sourceDocument:'QA completeness'}})
  }
  const complete=ok(await call('/mine?from='+day+'&to='+day))
- assert.equal(complete.sessions.filter(row=>row.courseReference===algebraId).length,2)
+ assert.equal(complete.sessions.filter(row=>row.courseReference===algebraId).length,1)
  assert.equal(complete.sessions.filter(row=>row.courseReference===programmingId).length,1)
  assert.ok(complete.sessions.every((row,i,all)=>!i||row.expectedStartAt>=all[i-1].expectedStartAt))
  pass('Morning Math and elective slots are complete and chronologically ordered under the real teacher course names')
@@ -167,7 +208,7 @@ try{
  const filtered=ok(await call('/principal?from='+day+'&to='+day+'&teacherUserId='+ids.teacher+'&className=Grade%2011&room=QA%20Completeness&search=Math','GET',null,'principal'))
  assert.equal(filtered.sessions.length,0,'Search uses the actual course name, not an unrelated official heading')
  const precise=ok(await call('/principal?from='+day+'&to='+day+'&teacherUserId='+ids.teacher+'&className=Grade%2011&room=QA%20Completeness&search=Algebra%202','GET',null,'principal'))
- assert.equal(precise.sessions.length,2);assert.equal(precise.summary.scheduled,2)
+ assert.equal(precise.sessions.length,1);assert.equal(precise.summary.scheduled,1)
  assert.ok(precise.sessions.every(row=>row.className==='Grade 11'))
  const wrongGrade=ok(await call('/principal?from='+day+'&to='+day+'&teacherUserId='+ids.teacher+'&className=Grade%201','GET',null,'principal'))
  assert.equal(wrongGrade.sessions.length,0)

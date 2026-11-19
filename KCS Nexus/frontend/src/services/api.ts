@@ -695,6 +695,10 @@ export const parentMeetingsAPI = {
 // This register never writes the daily attendance/report-card data.
 const teachingMutation = { headers: { 'x-silent-feedback': 'true' } }
 export const teachingAttendanceAPI = {
+ campus:()=>api.get('/teaching-attendance/campus'),
+ saveCampus:(data:object)=>api.put('/teaching-attendance/campus',data,teachingMutation),
+ challenge:(data:object)=>api.post('/teaching-attendance/location-challenge',data,teachingMutation),
+ verifyPresence:(id:string,data:object)=>api.post('/teaching-attendance/sessions/'+encodeURIComponent(id)+'/verify-presence',data,teachingMutation),
  clock: () => api.get('/teaching-attendance/clock', {timeout:10000}),
  mine: (params:object) => api.get('/teaching-attendance/mine',{params,timeout:30000}),
  principal: (params:object) => api.get('/teaching-attendance/principal',{params,timeout:30000}),

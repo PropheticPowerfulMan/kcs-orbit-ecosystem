@@ -257,6 +257,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     { to: '/admin/incident-reports', label: t('portalNav.incidentReport'), icon: ClipboardList },
     { to: '/admin/electives', label: t('portalNav.electives'), icon: BookOpenCheck },
     { to: '/admin/main-teachers', label: t('portalNav.mainTeacherAssignment'), icon: UserCheck },
+    { to: '/admin/report-cards', label: language === 'fr' ? 'Bulletins · lecture' : 'Report cards · view', icon: FileSpreadsheet },
+    { to: '/admin/transcripts', label: language === 'fr' ? 'Transcripts · lecture' : 'Transcripts · view', icon: FileSpreadsheet },
     { to: '/admin/teaching-attendance', label: language === 'fr' ? 'Présences aux cours' : 'Teaching attendance', icon: Clock3 },
     { to: '/admin/students', label: t('portalNav.students'), icon: LibraryBig },
     { to: '/admin/parents', label: t('portalNav.parents'), icon: Users },

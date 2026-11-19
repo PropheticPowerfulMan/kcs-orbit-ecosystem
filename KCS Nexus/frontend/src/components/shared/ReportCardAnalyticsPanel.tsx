@@ -14,6 +14,7 @@ type Props = {
   students: ReportStatisticsStudent[];
   academicYear: string;
   term: string;
+  readOnly?: boolean;
 };
 const field =
   "w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white";
@@ -21,6 +22,7 @@ export default function ReportCardAnalyticsPanel({
   students,
   academicYear,
   term,
+  readOnly=false,
 }: Props) {
   const language = useUIStore((state) => state.language);
   const tr = (fr: string, en: string) => (language === "fr" ? fr : en);
@@ -124,7 +126,7 @@ export default function ReportCardAnalyticsPanel({
         </div>
         <button
           type="button"
-          disabled={printing || !ranked.length}
+          disabled={readOnly || printing || !ranked.length}
           onClick={() => void print()}
           className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-800 disabled:opacity-50"
         >
