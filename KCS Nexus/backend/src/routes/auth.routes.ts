@@ -1,3 +1,4 @@
+import {isVerifiedInstitutionalStudentAlias} from '../utils/institutionalStudentAlias.js'
 import {registerApplicationPasswordRoutes} from '../services/applicationPasswords.js'
 import {hasStaffWorkspaceAccess,hasPrincipalWorkspaceAccess,mergeStaffWorkspacePermission} from '../utils/staffWorkspace.js'
 import { getOrbitSharedDirectory } from '../services/orbitSharedDirectory.js'
@@ -172,6 +173,8 @@ async function generateUniqueAccessCode(role: string) {
 }
 
 type ExternalUserProfile = {
+  provider?: 'SAVANEX'
+  institutionalStudentNumber?: string
   email: string
   accessCode: string
   role: 'ADMIN' | 'STAFF' | 'TEACHER' | 'STUDENT' | 'PARENT'
@@ -349,6 +352,8 @@ async function authenticateWithSavanex(identifier: string, password: string, aut
   return {
     email,
     accessCode,
+    provider: 'SAVANEX' as const,
+    institutionalStudentNumber: mappedRole === 'STUDENT' && typeof externalUser.username === 'string' ? externalUser.username : undefined,
     role: mappedRole,
     firstName,
     middleName,
@@ -541,6 +546,12 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
     return user
   }
 }
+function ensureSecondFactor(user: PrismaUser, code?: string) {
+  if (user.twoFactorEnabled && (!user.twoFactorSecret || !code || !verifyTotp(user.twoFactorSecret, code))) {
+    throw new ApiError(428, code ? 'Invalid two-factor authentication code' : 'Two-factor authentication code required')
+  }
+}
+
 async function upsertExternalUser(externalUser: ExternalUserProfile | null, password: string) {
   if (!externalUser) {
     return null
@@ -555,12 +566,18 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
   // The access code is the stable cross-application identity. Prefer it when
   // an older local copy already owns the canonical email.
   if (accessCodeUser && emailUser && accessCodeUser.id !== emailUser.id) throw new ApiError(409, 'Conflicting institutional account identifiers. No account or password was changed.')
+  let verifiedStudentAlias = false
   if (!accessCodeUser && emailUser?.accessCode && emailUser.accessCode.trim().toUpperCase() !== externalUser.accessCode.trim().toUpperCase()) {
     let sameCanonicalIdentity = false
     if(emailUser.orbitUserId && env.KCS_ORBIT_API_URL && env.KCS_ORBIT_API_KEY && env.KCS_ORBIT_ORGANIZATION_ID) {
-      const directory = await getOrbitSharedDirectory(true)
+      const directory = await getOrbitSharedDirectory(true, true)
       const official = [...directory.parents,...directory.students,...directory.teachers].find(person=>person.id===emailUser.orbitUserId)
       sameCanonicalIdentity = Boolean(official && official.email?.trim().toLowerCase()===externalUser.email.trim().toLowerCase() && official.accessCode?.trim().toUpperCase()===externalUser.accessCode.trim().toUpperCase())
+      if (!sameCanonicalIdentity && externalUser.provider === 'SAVANEX' && emailUser.role === 'STUDENT') {
+        const profile = await prisma.studentProfile.findUnique({where:{userId:emailUser.id},select:{studentNumber:true}})
+        verifiedStudentAlias = isVerifiedInstitutionalStudentAlias(emailUser, profile?.studentNumber, externalUser, directory.students)
+        sameCanonicalIdentity = verifiedStudentAlias
+      }
     }
     if(!sameCanonicalIdentity)throw new ApiError(409,'Conflicting institutional account identity. No account or password was changed.')
   }
@@ -573,6 +590,7 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
     // or demote/promote the primary Nexus role. A teacher may also hold an
     // administrative employee function, but the provider used for a specific
     // login must never decide which dashboard becomes the primary dashboard.
+    if (verifiedStudentAlias) return user // Keep the official code, all credentials and roles intact.
     const preserveCanonicalIdentity = Boolean(user.orbitUserId)
     return prisma.user.update({
       where: { id: user.id },
@@ -697,11 +715,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     const isValid = await bcrypt.compare(payload.password, user.passwordHash)
     if (isValid) {
       if (user.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
-      if (user.twoFactorEnabled) {
-        if (!user.twoFactorSecret || !payload.twoFactorCode || !verifyTotp(user.twoFactorSecret, payload.twoFactorCode)) {
-          throw new ApiError(428, payload.twoFactorCode ? 'Invalid two-factor authentication code' : 'Two-factor authentication code required')
-        }
-      }
+      ensureSecondFactor(user, payload.twoFactorCode)
       const loginUser = await resolveEffectiveLoginUser(user)
       const effectiveUser = loginUser.role === 'STUDENT' ? await refreshCanonicalIdentity(loginUser) : loginUser
       await assertAccountAccess(effectiveUser.id)
@@ -738,6 +752,8 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
 
+  ensureSecondFactor(resolvedUser, payload.twoFactorCode)
+  await ensureAccountNotLocked(resolvedUser)
   const loginUser = await resolveEffectiveLoginUser(resolvedUser)
   const effectiveUser = loginUser.role === 'STUDENT' ? await refreshCanonicalIdentity(loginUser) : loginUser
   await assertAccountAccess(effectiveUser.id)
