@@ -1,4 +1,5 @@
 import { confirmPortalAction } from '@/utils/portalActionDialogs'
+import './adminSuspensions.css'
 import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
@@ -228,8 +229,8 @@ export default function AdminSuspensionCenter({
   };
 
   return (
-    <div className="nexus-suspension-center space-y-6">
-      <style>{`.dark .portal-shell .nexus-suspension-center button.suspension-reset { color:#041e34!important; background-color:#ffd566!important; background-image:none!important; opacity:1!important; border-color:#f2cb52!important; } .portal-shell .nexus-suspension-center button.suspension-reset:focus-visible { outline:3px solid #22d3ee; outline-offset:3px; }`}</style>
+    <div data-suspension-center className="nexus-suspension-center space-y-6">
+
       <section className="rounded-3xl bg-gradient-to-br from-kcs-blue-950 to-rose-900 p-6 text-white shadow-xl">
         <div className="flex items-start gap-4">
           <span className="rounded-2xl bg-white/10 p-3">
@@ -256,11 +257,12 @@ export default function AdminSuspensionCenter({
             </p>
           </div>
         </div>
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div role="group" aria-label={tr("Type de mesure disciplinaire", "Disciplinary action type")} className="mt-5 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setMode("suspension")}
-            className={`rounded-xl px-4 py-2 text-sm font-black ${mode === "suspension" ? "bg-white text-rose-800 dark:!bg-rose-100 dark:!text-rose-950" : "bg-white/10 text-white dark:!text-white"}`}
+            aria-pressed={mode === "suspension"}
+            className="suspension-mode"
           >
             <Ban className="mr-2 inline" size={16} />
             {tr("Suspension temporaire", "Temporary suspension")}
@@ -268,7 +270,8 @@ export default function AdminSuspensionCenter({
           <button
             type="button"
             onClick={() => setMode("dismissal")}
-            className={`rounded-xl px-4 py-2 text-sm font-black ${mode === "dismissal" ? "bg-white text-rose-800 dark:!bg-rose-100 dark:!text-rose-950" : "bg-white/10 text-white dark:!text-white"}`}
+            aria-pressed={mode === "dismissal"}
+            className="suspension-mode"
           >
             <UserX className="mr-2 inline" size={16} />
             {tr("Renvoi définitif", "Permanent dismissal")}
@@ -348,15 +351,15 @@ function StudentSearch({
     setSectionFilter("ALL");
   };
   return (
-    <section className="mt-4 rounded-2xl border border-sky-100 bg-sky-50/70 p-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
+    <section className="suspension-search mt-4 rounded-2xl border border-sky-100 bg-sky-50/70 p-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
       <p className="text-xs font-black uppercase tracking-wide text-kcs-blue-700 dark:text-sky-200">
         {tr(
           "Recherche précise dans le registre officiel",
           "Precise official-registry search",
         )}
       </p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(14rem,1fr)_11rem_10rem_auto]">
-        <label className="relative sm:col-span-2 xl:col-span-1">
+      <div className="suspension-search-grid">
+        <label className="suspension-search-query relative">
           <Search
             size={16}
             className="absolute left-3 top-3.5 text-slate-400"
@@ -411,7 +414,7 @@ function StudentSearch({
         <button
           type="button"
           onClick={reset}
-          className="suspension-reset rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm font-black text-kcs-blue-800 dark:border-kcs-blue-600 dark:border-kcs-gold-300 dark:!bg-kcs-gold-400 dark:!text-kcs-blue-950 dark:hover:!bg-kcs-gold-300 focus-visible:ring-2 focus-visible:ring-kcs-gold-400"
+          className="suspension-reset"
         >
           {tr("Réinitialiser", "Reset")}
         </button>

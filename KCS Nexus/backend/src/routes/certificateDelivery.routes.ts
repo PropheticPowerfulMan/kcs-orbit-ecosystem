@@ -16,6 +16,7 @@ import { databaseActorId } from "../utils/databaseActor.js";
 import { isSequentialAcademicYear } from "../utils/academicCycle.js";
 import { normalizeClassParts } from "../utils/className.js";
 import { officialCertificatePdf } from "../utils/officialCertificatePdf.js";
+import { certificateFilename } from "../utils/certificateFilename.js";
 
 export const certificateDeliveryRouter = Router();
 certificateDeliveryRouter.use(requireSuperAdmin());
@@ -457,6 +458,7 @@ export const deliverOfficialDocuments = asyncHandler(async (req: AuthenticatedRe
                 ),
               );
             const pdf = documents.get(student.id)!;
+            const attachmentFilename = payload.documentType === "transcript" ? pdf.documentId + ".pdf" : certificateFilename({ documentType: payload.documentType, grade: [student.grade, student.section].filter(Boolean).join(" "), academicYear: payload.academicYear, studentName: fullName(student.user) });
             if (payload.documentType === 'transcript' && pdf.sourceVersion) {
               const currentSource = await transcriptSource(student.id, pdf.activeAcademicYear ?? null, tx)
               if (currentSource.sourceVersion !== pdf.sourceVersion) throw new ApiError(409, tr('Le dossier académique a changé pendant la préparation. Actualisez puis réessayez.', 'The academic record changed during preparation. Reload and retry.'))
@@ -478,7 +480,7 @@ export const deliverOfficialDocuments = asyncHandler(async (req: AuthenticatedRe
             );
             const attachment = await tx.messageAttachment.create({
               data: {
-                name: pdf.documentId + ".pdf",
+                name: attachmentFilename,
                 mime: "application/pdf",
                 size: pdf.buffer.length,
                 data: pdf.buffer,
@@ -500,7 +502,7 @@ export const deliverOfficialDocuments = asyncHandler(async (req: AuthenticatedRe
                 subject,
                 body: parentBody(parent),
                 priority: "high",
-                attachmentName: pdf.documentId + ".pdf",
+                attachmentName: attachmentFilename,
                 attachmentMime: "application/pdf",
                 attachmentSize: pdf.buffer.length,
                 sharedAttachmentId: attachment.id,

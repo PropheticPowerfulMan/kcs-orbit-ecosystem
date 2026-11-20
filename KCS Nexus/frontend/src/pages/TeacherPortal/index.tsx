@@ -2744,7 +2744,7 @@ const TeacherDashboardHome = () => {
   }, [location.search])
 
   return (<div data-teacher-home><DashboardPanels id="teacher-dashboard" value={dashboardTab} onChange={setDashboardTab} label={dashboardLanguage==='fr'?'Rubriques du tableau de bord':'Dashboard sections'} items={[
-{key:'overview',label:dashboardLanguage==='fr'?'Vue d’ensemble':'Overview',content:<>      <div className="teacher-home-metrics grid grid-cols-2 gap-4 lg:grid-cols-4">
+{key:'overview',label:dashboardLanguage==='fr'?'Vue d’ensemble':'Overview',content:<>      <div data-dashboard-stats className="teacher-home-metrics grid grid-cols-2 gap-4 lg:grid-cols-4">
         {metricCards.map((item, index) => {
           const Icon = item.icon
           return (

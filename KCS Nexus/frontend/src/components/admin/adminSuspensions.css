@@ -1,0 +1,29 @@
+/* Discipline controls own their contrast in both themes; filtering/actions are unchanged. */
+.nexus-suspension-center .suspension-search { container: suspension-search / inline-size; min-width:0; }
+.nexus-suspension-center .suspension-search-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px;min-width:0; }
+.nexus-suspension-center .suspension-search-grid>label { min-width:0; }
+.nexus-suspension-center .suspension-search-grid :is(input,select) { min-width:0;max-width:100%; }
+.nexus-suspension-center .suspension-search-query { grid-column:1/-1; }
+body[data-nexus-dashboard] [data-suspension-center] .suspension-reset {
+  display:inline-flex;align-items:center;justify-content:center;grid-column:1/-1;justify-self:end;
+  max-width:100%;min-width:0;min-height:40px;padding:9px 15px;border-radius:11px;border:1px solid #9db9cc;
+  background:#dcebf5!important;background-image:none!important;color:#143750!important;font-size:13px;font-weight:800;
+}
+body[data-nexus-dashboard] [data-suspension-center] .suspension-reset:hover { background:#c8deec!important; }
+body[data-nexus-dashboard] [data-suspension-center] .suspension-mode {
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:0 1 auto;max-width:100%;min-height:42px;
+  padding:10px 16px;border:1px solid #94b7ca;border-radius:12px;font-size:14px;font-weight:800;
+  background:#18384f!important;background-image:none!important;color:#f1f7fc!important;
+}
+body[data-nexus-dashboard] [data-suspension-center] .suspension-mode svg { flex-shrink:0;margin:0; }
+body[data-nexus-dashboard] [data-suspension-center] .suspension-mode[aria-pressed=true] { background:#e0f0f7!important;color:#12344a!important;border-color:#e0f0f7;box-shadow:0 3px 12px #081c3333; }
+body[data-nexus-dashboard] [data-suspension-center] :is(.suspension-mode,.suspension-reset):focus-visible { outline:3px solid #6fc6dd;outline-offset:3px; }
+.dark body[data-nexus-dashboard] [data-suspension-center] :is(.suspension-mode,.suspension-reset) { background:#1a354c!important;color:#e4eff8!important;border-color:#55748a; }
+.dark body[data-nexus-dashboard] [data-suspension-center] .suspension-mode[aria-pressed=true] { background:#bedfeb!important;color:#102638!important;border-color:#d7edf6; }
+.dark body[data-nexus-dashboard] [data-suspension-center] :is(.suspension-mode,.suspension-reset):hover { background:#294b64!important;color:#f1f7fc!important; }
+.dark body[data-nexus-dashboard] [data-suspension-center] .suspension-mode[aria-pressed=true]:hover { background:#d4eaf3!important;color:#102638!important; }
+@container suspension-search (min-width:760px) {
+ .nexus-suspension-center .suspension-search-grid { grid-template-columns:minmax(0,1fr) minmax(0,11rem) minmax(0,10rem) auto; }
+ .nexus-suspension-center .suspension-search-query { grid-column:auto; }
+ body[data-nexus-dashboard] [data-suspension-center] .suspension-reset { grid-column:auto; }
+}

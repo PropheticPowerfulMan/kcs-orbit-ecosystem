@@ -1,4 +1,5 @@
 import { showOfficialDocument } from './officialDocumentPreview'
+import { attendanceBatchFilename } from './certificateFilename'
 import QRCode from "qrcode";
 import { academicRecordsAPI } from "@/services/api";
 import type { CertificateStudent } from "./officialCertificatePrint";
@@ -95,5 +96,5 @@ export async function printAttendanceCertificates(
     "</style>",
     ".logo{width:27mm;height:27mm;max-height:none;border-radius:50%;object-fit:contain;filter:drop-shadow(0 5px 10px #052f5f25)}.qr img{display:block;width:29mm;height:29mm;margin:auto;image-rendering:auto}.sheet:before{content:'';position:absolute;inset:11mm;border:1px solid rgba(214,166,42,.34);pointer-events:none}</style>",
   );
-  await showOfficialDocument(popup, polishedHtml, { filename: 'KCS-attendance-certificates-' + academicYear, language, onError });
+  await showOfficialDocument(popup, polishedHtml, { filename: attendanceBatchFilename(students.map(student => ({ grade: [student.grade, student.section].filter(Boolean).join(' '), studentName: [student.user?.lastName, student.user?.middleName, student.user?.firstName].filter(Boolean).join(' ') })), academicYear, language), language, onError });
 }
