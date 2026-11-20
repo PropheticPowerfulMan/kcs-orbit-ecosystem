@@ -1,9 +1,10 @@
+import { seniorAcademicPresentation } from './seniorAcademicPresentation'
 import { showOfficialDocument } from './officialDocumentPreview'
 import {academicRecordsAPI} from '@/services/api'
 type OfficialTranscript={student:{id?:string;studentNumber:string;name:string};rows:unknown[]}
 
 /** Reserve the preview during the click, and keep it available after printing or a failed request. */
-export async function printOfficialTranscript(transcript:OfficialTranscript,onBlocked:(message:string)=>void){
+export async function printOfficialTranscript(transcript:OfficialTranscript,onBlocked:(message:string)=>void,presentation?:'senior'){
  const fr=document.documentElement.lang.toLowerCase().startsWith('fr')
  const text=fr?{
   loading:'Préparation de l’aperçu du transcript…',print:'Imprimer / Enregistrer en PDF',close:'Fermer',retry:'Réessayer',
@@ -41,7 +42,7 @@ export async function printOfficialTranscript(transcript:OfficialTranscript,onBl
    const html=response.data.data.html as string
    if(typeof html!=='string'||!/^<!doctype html>/i.test(html))throw new Error('Invalid transcript document')
    if(win.closed)return
-   await showOfficialDocument(win, html, { filename: `KCS-transcript-${transcript.student.studentNumber}`, language: fr?'fr':'en', onError: onBlocked })
+   await showOfficialDocument(win, presentation === 'senior' ? seniorAcademicPresentation(html) : html, { filename: `KCS-transcript-${transcript.student.studentNumber}`, language: fr?'fr':'en', onError: onBlocked })
   }catch{
    if(!win.closed)status(text.failed,true)
    onBlocked(text.failed)
