@@ -3,6 +3,7 @@ import http from "node:http";
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import { recoveryEmail } from "./emailTemplate.mjs";
+import { serviceUrl } from "./serviceConfig.mjs";
 
 const required = [
   "APP_URL", "SUPABASE_URL", "SUPABASE_ANON_KEY", "NEXUS_API_URL",
@@ -19,15 +20,17 @@ const hasServiceRoleKey = Boolean(
   !configuredServiceRoleKey.includes("your-service-role-key")
 );
 
+const nexusApiUrl = serviceUrl(process.env.NEXUS_API_URL, "NEXUS_API_URL");
+const supabaseUrl = serviceUrl(process.env.SUPABASE_URL, "SUPABASE_URL", {supabase:true});
 const port = Number(process.env.PORT || 3001);
 const appUrl = process.env.APP_URL.replace(/\/$/, "");
 const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || appUrl).split(",").map((value) => value.trim()));
 const supabase = hasServiceRoleKey
-  ? createClient(process.env.SUPABASE_URL, configuredServiceRoleKey, {
+  ? createClient(supabaseUrl, configuredServiceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     })
   : null;
-const supabasePublic = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+const supabasePublic = createClient(supabaseUrl, process.env.SUPABASE_ANON_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 if (!supabase) {
@@ -192,7 +195,7 @@ const ecosystemLogin = async (body) => {
     const existing=await findAuthUserByEmail(identifier.toLowerCase());
     if(existing){const denied=new Error("Incorrect Lesson Plan password.");denied.status=401;throw denied}
   }
-  const nexusResponse = await fetch(new URL("/api/auth/login", process.env.NEXUS_API_URL), {
+  const nexusResponse = await fetch(new URL("/api/auth/login", nexusApiUrl), {
     method: "POST",
     headers: { "content-type": "application/json", "x-kcs-client": "KCS_LESSON_PLAN" },
     body: JSON.stringify({ identifier, password }),
@@ -228,7 +231,8 @@ const ecosystemSso = async (body) => {
     error.status = 400;
     throw error;
   }
-  const nexusResponse = await fetch(new URL("/api/lesson-plan/exchange", process.env.NEXUS_API_URL), {
+  requireSupabaseAdmin(); // Check readiness before consuming the one-use Nexus ticket.
+  const nexusResponse = await fetch(new URL("/api/lesson-plan/exchange", nexusApiUrl), {
     method: "POST",
     headers: { "content-type": "application/json", "x-kcs-client": "KCS_LESSON_PLAN" },
     body: JSON.stringify({ ticket }),
@@ -240,7 +244,9 @@ const ecosystemSso = async (body) => {
     error.status = nexusResponse.status === 400 ? 400 : 401;
     throw error;
   }
-  const { email } = await ensureSupabaseProfile(nexusBody.data);
+  const identity = {...nexusBody.data, id: nexusBody.data.id || nexusBody.data.userId};
+  if (!identity.id || !identity.email) throw new Error("The institutional launch identity is incomplete.");
+  const { email } = await ensureSupabaseProfile(identity);
   return createSupabaseSession(email);
 };
 
@@ -253,7 +259,7 @@ const server = http.createServer(async (request, response) => {
     try {
       const bearer=String(request.headers.authorization||'');
       if(!bearer.startsWith('Bearer '))return sendJson(response,401,{error:'Super Administration authorization required.'},corsOrigin);
-      const verified=await fetch(new URL('/api/auth/me',process.env.NEXUS_API_URL),{headers:{authorization:bearer},signal:AbortSignal.timeout(8000)}),identity=await verified.json().catch(()=>null);
+      const verified=await fetch(new URL('/api/auth/me',nexusApiUrl),{headers:{authorization:bearer},signal:AbortSignal.timeout(8000)}),identity=await verified.json().catch(()=>null);
       if(!verified.ok||identity?.data?.id!=='configured-superadmin')return sendJson(response,403,{error:'Super Administration authorization required.'},corsOrigin);
       const body=await readJson(request),email=String(body.email||'').trim().toLowerCase();
       if(!email||typeof body.blocked!=='boolean')return sendJson(response,400,{error:'Exact email and blocked flag required.'},corsOrigin);
