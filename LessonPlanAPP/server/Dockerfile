@@ -3,6 +3,6 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY index.mjs emailTemplate.mjs ./
+COPY index.mjs emailTemplate.mjs serviceConfig.mjs ./
 EXPOSE 3001
 CMD ["node", "index.mjs"]

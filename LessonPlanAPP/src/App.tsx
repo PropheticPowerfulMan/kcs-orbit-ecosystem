@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { createHashRouter, Navigate, RouterProvider, useNavigate, useSearchParams } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
 import { useAuth } from "./contexts/AuthContext";
@@ -22,25 +22,29 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
 };
 
 const InstitutionalSso = () => {
-  const { currentUser, loading, signInWithTicket } = useAuth();
+  const { loading, signInWithTicket } = useAuth();
   const [params] = useSearchParams();
+  const ticket = params.get("ticket") || "";
   const navigate = useNavigate();
   const [error, setError] = useState("");
+  // StrictMode and auth-context updates must never consume the one-use ticket twice.
+  const attempt = useRef<{ticket:string; promise:Promise<void>} | null>(null);
   useEffect(() => {
     if (loading) return;
-    if (currentUser) {
-      navigate("/", { replace: true });
-      return;
-    }
-    const ticket = params.get("ticket") || "";
     if (!ticket) {
-      setError("The secure launch ticket is missing.");
+      setError("The secure launch ticket is missing. Open EduPlanner again from Nexus.");
       return;
     }
-    void signInWithTicket(ticket)
-      .then(() => navigate("/", { replace: true }))
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Secure launch failed."));
-  }, [currentUser, loading, navigate, params, signInWithTicket]);
+    if (attempt.current?.ticket !== ticket) {
+      setError("");
+      attempt.current = {ticket, promise: signInWithTicket(ticket)};
+    }
+    let cancelled = false;
+    void attempt.current.promise
+      .then(() => { if (!cancelled) navigate("/", { replace: true }); })
+      .catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "Secure launch failed. Open EduPlanner again from Nexus."); });
+    return () => { cancelled = true; };
+  }, [loading, navigate, ticket, signInWithTicket]);
   if (error) {
     return <main className="grid min-h-screen place-items-center bg-[#030d14] p-6 text-center text-white"><div><h1 className="text-xl font-black">Secure access unavailable</h1><p className="mt-2 text-sm text-cyan-100">{error}</p><button className="mt-5 rounded-md bg-cyan-500 px-4 py-2 font-bold text-slate-950" onClick={() => navigate("/login", { replace: true })}>Open sign in</button></div></main>;
   }
