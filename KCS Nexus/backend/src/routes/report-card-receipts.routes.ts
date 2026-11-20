@@ -40,12 +40,14 @@ reportCardReceiptsRouter.get('/:id', asyncHandler(async (req, res) => {
 }))
 reportCardReceiptsRouter.post('/:id', asyncHandler(async (req, res) => {
   const id = z.string().regex(/^[a-zA-Z0-9-]{8,100}$/).parse(req.params.id)
-  const {token} = z.object({ token:z.string().regex(/^[a-f0-9]{64}$/), confirmed:z.literal('yes'),formVersion:z.literal('2').optional(),emailReceived:z.literal('yes').optional(),pdfReceived:z.literal('yes').optional() }).superRefine((value,ctx)=>{if(value.formVersion==='2'&&(value.emailReceived!=='yes'||value.pdfReceived!=='yes'))ctx.addIssue({code:z.ZodIssueCode.custom,message:'Confirm both email and attached PDF receipt'})}).parse(req.body)
+  const confirmation = z.object({ token:z.string().regex(/^[a-f0-9]{64}$/), confirmed:z.literal('yes'),formVersion:z.literal('2').optional(),emailReceived:z.literal('yes').optional(),pdfReceived:z.literal('yes').optional() }).superRefine((value,ctx)=>{if(value.formVersion==='2'&&(value.emailReceived!=='yes'||value.pdfReceived!=='yes'))ctx.addIssue({code:z.ZodIssueCode.custom,message:'Confirm both email and attached PDF receipt'})}).parse(req.body)
+  const {token}=confirmation
   await prisma.$transaction(async tx => {
     await tx.$queryRaw(Prisma.sql`SELECT id FROM "CorrespondenceLog" WHERE id = ${id} FOR UPDATE`)
     const row = await tx.correspondenceLog.findUnique({ where:{id} })
     if (!row || row.channel !== 'EMAIL' || !verifyReportCardReceipt(row, token, env.JWT_SECRET)) throw new ApiError(400,'This receipt confirmation link is invalid / Ce lien de confirmation est invalide')
     const m = receiptMetadata(row.metadata)
+    if(Number(m.reportCardReceiptVersion)>=2&&(confirmation.emailReceived!=='yes'||confirmation.pdfReceived!=='yes'))throw new ApiError(400,'Confirm both email and attached PDF receipt / Confirmez la réception du mail et du PDF joint')
     if (m.reportCardReceiptConfirmedAt) return
     const now = new Date()
     await tx.correspondenceLog.update({ where:{id}, data:{ status:'DELIVERED', deliveredAt:row.deliveredAt??now, metadata:{ ...m, reportCardReceiptConfirmedAt:now.toISOString(),reportCardReceiptConfirmationMethod:'PARENT_EMAIL_AND_PDF_ACKNOWLEDGEMENT',reportCardReceiptEmailConfirmed:true,reportCardReceiptPdfConfirmed:true } as Prisma.InputJsonValue } })
