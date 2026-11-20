@@ -37,12 +37,14 @@ export async function showOfficialDocument(win: Window, html: string, options: P
   const fr = (options.language || document.documentElement.lang).toLowerCase().startsWith('fr')
   const tr = (a: string, b: string) => fr ? a : b
   // Older generators included inline print scripts; controls now own the print lifecycle.
+  const night = document.documentElement.classList.contains('dark')
   const cleaned = html.replace(/<script\b[^>]*>[\s\S]*?(?:<\/script\s*>|<\\\/script\s*>)/gi, '')
   win.document.open(); win.document.write(cleaned); win.document.close()
   win.document.title = fileName(options.filename).replace(/\.pdf$/i, '')
   const style = win.document.createElement('style')
   style.dataset.kcsDocumentControls = ''
   style.textContent = '[data-kcs-document-controls]{box-sizing:border-box!important;position:sticky;top:0;z-index:9999;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;padding:12px;background:#073b70;color:white;font:14px Arial,sans-serif;box-shadow:0 3px 12px #10284933}[data-kcs-document-controls] button{border:1px solid #aac8e0;border-radius:9px;padding:10px 18px;background:#e9f5fc;color:#073b70;font:700 14px Arial,sans-serif;cursor:pointer}[data-kcs-document-controls] button[data-download]{background:#b9f4e4;border-color:#75dcc0;color:#064b46}[data-kcs-document-controls] button:disabled{opacity:.65;cursor:wait}[data-kcs-document-controls] [role=status]{flex-basis:100%;text-align:center;font-size:13px}[data-kcs-document-controls] [role=status]:empty{display:none}@media print{[data-kcs-document-controls]{display:none!important}}'
+  if (night) style.textContent += '@media screen{[data-kcs-document-controls]{background:linear-gradient(120deg,#19394f,#132b40);border-bottom:1px solid #304a62;color:#e4eff8}[data-kcs-document-controls] button{background:#1a354c;border-color:#42627a;color:#e4eff8}[data-kcs-document-controls] button:hover{background:#213e58}[data-kcs-document-controls] button[data-download]{background:#16483f;border-color:#39786b;color:#c2f7e9}[data-kcs-document-controls] button:focus-visible{outline:3px solid #79c5d9;outline-offset:2px}}'
   win.document.head.append(style)
   const toolbar = win.document.createElement('nav'); toolbar.dataset.kcsDocumentControls = ''; toolbar.setAttribute('aria-label', tr('Actions du document', 'Document actions'))
   const button = (label: string, action: () => void) => { const b = win.document.createElement('button'); b.type = 'button'; b.textContent = label; b.addEventListener('click', action); return b }

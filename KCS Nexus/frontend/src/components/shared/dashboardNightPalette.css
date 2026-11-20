@@ -1,0 +1,127 @@
+/* Nexus dashboard night palette. Screen only: public pages, daylight and issued documents retain their colours. */
+@media screen {
+  .dark body[data-nexus-dashboard] {
+    --nexus-night-base: #0e2033;
+    --nexus-night-panel: #132b40;
+    --nexus-night-raised: #1a354c;
+    --nexus-night-field: #102638;
+    --nexus-night-hover: #213e58;
+    --nexus-night-line: #304a62;
+    --nexus-night-ink: #e4eff8;
+    --nexus-night-muted: #aec5d6;
+    --nexus-night-heading: linear-gradient(120deg, #19394f, #132b40);
+    background-color: var(--nexus-night-base);
+    color-scheme: dark;
+  }
+
+  /* Reuse each module's existing design tokens; keep its structure, spacing and status colours. */
+  .dark body[data-nexus-dashboard] :is([data-portal-workspace], [data-media-workspace], [data-principal-workspace]) {
+    --nw-paper: var(--nexus-night-panel); --nw-card: var(--nexus-night-raised);
+    --nw-ink: var(--nexus-night-ink); --nw-muted: var(--nexus-night-muted); --nw-line: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] [data-admin-workspace] {
+    --admin-paper: var(--nexus-night-panel); --admin-ink: var(--nexus-night-ink); --admin-line: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] [data-nexus-dialog] {
+    --nd-paper: var(--nexus-night-panel); --nd-card: var(--nexus-night-raised);
+    --nd-ink: var(--nexus-night-ink); --nd-muted: var(--nexus-night-muted); --nd-line: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] [data-entity-dialog] {
+    --rd-paper: var(--nexus-night-panel); --rd-card: var(--nexus-night-raised);
+    --rd-ink: var(--nexus-night-ink); --rd-muted: var(--nexus-night-muted); --rd-line: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] .st-workspace {
+    --st-bg: var(--nexus-night-base); --st-card: var(--nexus-night-panel); --st-field: var(--nexus-night-raised);
+    --st-ink: var(--nexus-night-ink); --st-muted: var(--nexus-night-muted); --st-line: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] .teaching-workspace {
+    --ta-bg: var(--nexus-night-field); --ta-panel: var(--nexus-night-panel);
+    --ta-ink: var(--nexus-night-ink); --ta-muted: var(--nexus-night-muted); --ta-border: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] [data-main-teacher-workspace] {
+    --as-paper: var(--nexus-night-panel); --as-card: var(--nexus-night-raised);
+    --as-ink: var(--nexus-night-ink); --as-muted: var(--nexus-night-muted); --as-line: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] [data-report-surface] {
+    --rp-card: var(--nexus-night-panel); --rp-field: var(--nexus-night-field);
+    --rp-ink: var(--nexus-night-ink); --rp-muted: var(--nexus-night-muted); --rp-line: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] .parent-meeting-workspace {
+    --pm-surface: var(--nexus-night-panel); --pm-soft: var(--nexus-night-raised); --pm-field: var(--nexus-night-field);
+    --pm-ink: var(--nexus-night-ink); --pm-muted: var(--nexus-night-muted); --pm-border: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] .forum-experience {
+    --forum-card: var(--nexus-night-panel); --forum-soft: var(--nexus-night-field);
+    --forum-ink: var(--nexus-night-ink); --forum-line: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] .school-handbook {
+    --hb-paper: var(--nexus-night-panel); --hb-ink: var(--nexus-night-ink);
+    --hb-muted: var(--nexus-night-muted); --hb-border: var(--nexus-night-line);
+  }
+
+  .dark body[data-nexus-dashboard] .portal-shell {
+    background: radial-gradient(ellipse at 0 0, #1e5a7826, transparent 52%), linear-gradient(165deg, #132b40, #0e2033) !important;
+    color: var(--nexus-night-ink);
+  }
+  .dark body[data-nexus-dashboard] :is(.portal-shell > main, .forum-experience main) { background: transparent; }
+  .dark body[data-nexus-dashboard] :is(.portal-dashboard-topbar, .portal-shell > main > .sticky:first-child) {
+    background: var(--nexus-night-heading) !important; border-color: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] :is(.nexus-workspace-heading, [data-admin-hero], .nexus-assignment-hero, .nexus-shining-hero, .nexus-activity-report-heading, [data-transcript-intro], .nexus-gradebook-focus-heading) {
+    background: var(--nexus-night-heading) !important; border-color: #3e627c !important;
+  }
+  .dark body[data-nexus-dashboard] .nexus-workspace-card { --nw-paper: var(--nexus-night-panel); border-color: var(--nexus-night-line); }
+  .dark body[data-nexus-dashboard] :is(.published-calendar-strip, [data-transcript-workspace], .workspace-dashboard-tabs, .newsroom-navigation, .handbook-pdf-viewer) {
+    background: var(--nexus-night-panel); border-color: var(--nexus-night-line); color: var(--nexus-night-ink);
+  }
+  .dark body[data-nexus-dashboard] :is(.published-calendar-content article, .handbook-pdf-toolbar, .nexus-weekly-timetable .timetable-stat) {
+    background: var(--nexus-night-raised); border-color: var(--nexus-night-line); color: var(--nexus-night-ink);
+  }
+  .dark body[data-nexus-dashboard] .nexus-timetable-editor { background: var(--nexus-night-heading) !important; }
+  .dark body[data-nexus-dashboard] :is(.elective-disclosure, .elective-roster, .elective-workspace main article, .elective-empty) {
+    background: var(--nexus-night-panel); border-color: var(--nexus-night-line); color: var(--nexus-night-ink);
+  }
+  .dark body[data-nexus-dashboard] .elective-notice { background: var(--nexus-night-raised); }
+  .dark body[data-nexus-dashboard] [data-shining-presentation] { background: var(--nexus-night-heading) !important; }
+
+  /* Older utility-based panels, including the dedicated gradebook window. Never recolour official paper or semantic alerts. */
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback]) :is(
+    [class*="dark:bg-kcs-blue-900"], [class~="dark:bg-gray-800"], [class~="dark:bg-gray-900"], [class~="dark:bg-slate-800"], [class~="dark:bg-slate-900"]
+  ):not(:where([data-official-document], [data-official-document] *, .report-card-paper, .report-card-paper *, .report-card-document, .report-card-document *, .official-report-card, .official-report-card *, .transcript-paper, .transcript-paper *, [data-report-card-document], [data-report-card-document] *)) {
+    background-color: var(--nexus-night-panel) !important;
+  }
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback]) :is(
+    [class*="dark:bg-kcs-blue-950"], [class~="dark:bg-gray-950"], [class~="dark:bg-slate-950"], [class*="dark:bg-[#081e31]"]
+  ):not(:where([data-official-document], [data-official-document] *, .report-card-paper, .report-card-paper *, .report-card-document, .report-card-document *, .official-report-card, .official-report-card *, .transcript-paper, .transcript-paper *, [data-report-card-document], [data-report-card-document] *)) {
+    background-color: var(--nexus-night-field) !important;
+  }
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback])
+  :is(.bg-white, .bg-gray-50, .bg-slate-50):not([class*="dark:bg-"]):not(:where(
+    [data-official-document], [data-official-document] *, .report-card-paper, .report-card-paper *, .report-card-document, .report-card-document *, .official-report-card, .official-report-card *, .transcript-paper, .transcript-paper *, [data-report-card-document], [data-report-card-document] *, [class*="bg-gradient"], [data-admin-hero], [data-admin-tone=dark]
+  )) { background-color: var(--nexus-night-panel) !important; color: var(--nexus-night-ink); }
+
+  /* Remove legacy multicolour decoration only from neutral containers, never from explicit artwork/hero gradients. */
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog])
+  :is(div, section, article, fieldset, details, form):is([class*="dark:bg-kcs-blue-900"], [class*="dark:bg-kcs-blue-950"]):not(:where([class*="bg-gradient"], [style*="background-image"], [data-admin-hero], [data-admin-tone=dark], [data-official-document], [data-official-document] *, .report-card-paper, .report-card-paper *, .report-card-document, .report-card-document *, .official-report-card, .official-report-card *, .transcript-paper, .transcript-paper *, [data-report-card-document], [data-report-card-document] *)) { background-image: none !important; }
+  .dark body[data-nexus-dashboard] :is([data-registry-list] thead, [data-principal-workspace] .principal-card thead th) { background: var(--nexus-night-raised); }
+  .dark body[data-nexus-dashboard] .admin-person-directory [data-registry-list] tbody tr { background: var(--nexus-night-panel); border-color: var(--nexus-night-line) !important; }
+  .dark body[data-nexus-dashboard] .admin-person-directory [data-registry-list] tbody tr:hover { background: var(--nexus-night-hover); }
+  .dark body[data-nexus-dashboard] :is([data-employee-metrics], [data-people-metrics]) > div { background: var(--nexus-night-raised) !important; border-color: #42627a !important; }
+
+  /* Windows mounted outside the portal inherit exactly the same palette. Destructive and success actions retain their meaning. */
+  .dark body[data-nexus-dashboard] :is(.registry-view-window.registry-dialog-window, .registry-view-card, .principal-record-dialog, .portal-action-surface) {
+    background: var(--nexus-night-panel) !important; color: var(--nexus-night-ink); border-color: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] :is(.registry-view-heading, .registry-view-actions, .registry-view-nav, .registry-view-contacts > article, .registry-view-learners > article, .portal-action-surface > footer) {
+    background: var(--nexus-night-field); border-color: var(--nexus-night-line);
+  }
+  .dark body[data-nexus-dashboard] :is(.registry-view-nav button, .registry-view-close, .registry-view-link, .portal-action-cancel) {
+    background: var(--nexus-night-raised); border-color: #42627a; color: var(--nexus-night-ink);
+  }
+  .dark body[data-nexus-dashboard] :is(.registry-view-nav button, .registry-view-close, .registry-view-link, .portal-action-cancel):hover { background: var(--nexus-night-hover); }
+  .dark body[data-nexus-dashboard] :is([data-nexus-dialog-panel] [data-nexus-dialog-header], .portal-action-surface > header) { background: var(--nexus-night-heading) !important; border-color: var(--nexus-night-line); }
+  .dark body[data-nexus-dashboard] .portal-action-content input { background: var(--nexus-night-field); color: var(--nexus-night-ink); border-color: var(--nexus-night-line); }
+  .dark body[data-nexus-dashboard] .teaching-workspace .ta-dialog > .ta-dialog-head { background: var(--nexus-night-heading) !important; }
+  .dark body[data-nexus-dashboard] [data-gradebook-focus] { background-color: var(--nexus-night-base) !important; }
+  .dark body[data-nexus-dashboard] [data-gradebook-focus] > .sticky { background-color: var(--nexus-night-panel) !important; }
+}

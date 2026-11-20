@@ -1,3 +1,4 @@
+import { seniorAcademicPresentation } from './seniorAcademicPresentation'
 import { showOfficialDocument } from './officialDocumentPreview'
 import { academicRecordsAPI } from '@/services/api'
 type ReportSubject = {
@@ -49,7 +50,7 @@ export type PrintableReportCard = {
   }
 }
 
-export async function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void, reservedWindow?: Window | null, review?: { teacherComment: string; conduct: string }) {
+export async function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void, reservedWindow?: Window | null, review?: { teacherComment: string; conduct: string }, presentation?: 'senior') {
   const language = document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en'
   const printWindow = reservedWindow ?? window.open('', '_blank', 'width=1100,height=900')
   if (!printWindow) {
@@ -61,7 +62,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
     // Only trusted, server-generated report HTML is accepted. All personal fields are escaped there.
     const html = response.data.data.html as string
     if (!html.startsWith('<!doctype html>')) throw new Error('Invalid official report document')
-    await showOfficialDocument(printWindow, html, { filename: response.data.data.filename || `KCS-report-card-${card.id}`, language, onError: onBlocked })
+    await showOfficialDocument(printWindow, presentation === 'senior' ? seniorAcademicPresentation(html) : html, { filename: response.data.data.filename || `KCS-report-card-${card.id}`, language, onError: onBlocked })
   } catch {
     printWindow.close()
     onBlocked(language === 'fr' ? 'Impossible de préparer le bulletin officiel. Réessayez.' : 'Unable to prepare the official report card. Please retry.')

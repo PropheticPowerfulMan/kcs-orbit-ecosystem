@@ -403,7 +403,7 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts', r
   const printTranscript = async () => {
     if (!transcript || transcriptPrinting) return
     setTranscriptPrinting(true)
-    try { await printOfficialTranscript(transcript, setNotice) } finally { setTranscriptPrinting(false) }
+    try { await printOfficialTranscript(transcript, setNotice, consultationRole === 'ST' ? 'senior' : undefined) } finally { setTranscriptPrinting(false) }
   }
 
   const printReportCard = async (card: Card) => {
@@ -412,7 +412,7 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts', r
     if (!preview) { setNotice(tr('Autorisez les fenêtres d’impression puis réessayez.', 'Allow print windows and try again.')); return }
     preview.document.body.textContent = tr('Préparation du bulletin officiel…', 'Preparing the official report card…')
     setReportPrintingId(card.id)
-    try { await printOfficialReportCard(card, setNotice, preview) }
+    try { await printOfficialReportCard(card, setNotice, preview, undefined, consultationRole === 'ST' ? 'senior' : undefined) }
     finally { setReportPrintingId('') }
   }
 
