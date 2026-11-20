@@ -85,23 +85,23 @@
   .dark body[data-nexus-dashboard] [data-shining-presentation] { background: var(--nexus-night-heading) !important; }
 
   /* Older utility-based panels, including the dedicated gradebook window. Never recolour official paper or semantic alerts. */
-  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback]) :is(
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback], [data-gradebook-focus]) :is(
     [class*="dark:bg-kcs-blue-900"], [class~="dark:bg-gray-800"], [class~="dark:bg-gray-900"], [class~="dark:bg-slate-800"], [class~="dark:bg-slate-900"]
   ):not(:where([data-official-document], [data-official-document] *, .report-card-paper, .report-card-paper *, .report-card-document, .report-card-document *, .official-report-card, .official-report-card *, .transcript-paper, .transcript-paper *, [data-report-card-document], [data-report-card-document] *)) {
     background-color: var(--nexus-night-panel) !important;
   }
-  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback]) :is(
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback], [data-gradebook-focus]) :is(
     [class*="dark:bg-kcs-blue-950"], [class~="dark:bg-gray-950"], [class~="dark:bg-slate-950"], [class*="dark:bg-[#081e31]"]
   ):not(:where([data-official-document], [data-official-document] *, .report-card-paper, .report-card-paper *, .report-card-document, .report-card-document *, .official-report-card, .official-report-card *, .transcript-paper, .transcript-paper *, [data-report-card-document], [data-report-card-document] *)) {
     background-color: var(--nexus-night-field) !important;
   }
-  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback])
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback], [data-gradebook-focus])
   :is(.bg-white, .bg-gray-50, .bg-slate-50):not([class*="dark:bg-"]):not(:where(
     [data-official-document], [data-official-document] *, .report-card-paper, .report-card-paper *, .report-card-document, .report-card-document *, .official-report-card, .official-report-card *, .transcript-paper, .transcript-paper *, [data-report-card-document], [data-report-card-document] *, [class*="bg-gradient"], [data-admin-hero], [data-admin-tone=dark]
   )) { background-color: var(--nexus-night-panel) !important; color: var(--nexus-night-ink); }
 
   /* Remove legacy multicolour decoration only from neutral containers, never from explicit artwork/hero gradients. */
-  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog])
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-gradebook-focus])
   :is(div, section, article, fieldset, details, form):is([class*="dark:bg-kcs-blue-900"], [class*="dark:bg-kcs-blue-950"]):not(:where([class*="bg-gradient"], [style*="background-image"], [data-admin-hero], [data-admin-tone=dark], [data-official-document], [data-official-document] *, .report-card-paper, .report-card-paper *, .report-card-document, .report-card-document *, .official-report-card, .official-report-card *, .transcript-paper, .transcript-paper *, [data-report-card-document], [data-report-card-document] *)) { background-image: none !important; }
   .dark body[data-nexus-dashboard] :is([data-registry-list] thead, [data-principal-workspace] .principal-card thead th) { background: var(--nexus-night-raised); }
   .dark body[data-nexus-dashboard] .admin-person-directory [data-registry-list] tbody tr { background: var(--nexus-night-panel); border-color: var(--nexus-night-line) !important; }
@@ -124,4 +124,88 @@
   .dark body[data-nexus-dashboard] .teaching-workspace .ta-dialog > .ta-dialog-head { background: var(--nexus-night-heading) !important; }
   .dark body[data-nexus-dashboard] [data-gradebook-focus] { background-color: var(--nexus-night-base) !important; }
   .dark body[data-nexus-dashboard] [data-gradebook-focus] > .sticky { background-color: var(--nexus-night-panel) !important; }
+
+  /* Teacher details that own independent gradients, translucent panels, or a body-mounted focus host. */
+  .dark body[data-nexus-dashboard] [data-teacher-schedule],
+  .dark body[data-nexus-dashboard] [data-account-identity] {
+    background: var(--nexus-night-panel) !important;
+    border-color: var(--nexus-night-line) !important;
+    color: var(--nexus-night-ink);
+  }
+  .dark body[data-nexus-dashboard] :is([data-teacher-schedule-item], [data-attendance-count], [data-account-identity-detail], [data-account-identity-avatar]) {
+    background: var(--nexus-night-raised) !important;
+    border-color: var(--nexus-night-line) !important;
+    color: var(--nexus-night-ink);
+  }
+  .dark body[data-nexus-dashboard] :is([data-teacher-schedule], [data-account-identity], [data-teacher-attendance-summary]) :is(.text-gray-400, .text-gray-500) {
+    color: var(--nexus-night-muted) !important;
+  }
+  .dark body[data-nexus-dashboard] [data-attendance-mark-all] { color: var(--nexus-night-ink); }
+  .dark body[data-nexus-dashboard] [data-attendance-mark-all] svg { color: #a4d9cd; }
+  .dark body[data-nexus-dashboard] [data-attendance-mark-all]:hover:not(:disabled) { color: #fff; }
+  .dark body[data-nexus-dashboard] [data-gradebook-focus] {
+    background: var(--nexus-night-base) !important;
+    color: var(--nexus-night-ink);
+  }
+  .dark body[data-nexus-dashboard] [data-gradebook-focus] :is([data-gradebook-toolbar], [data-gradebook-periods]) {
+    background: var(--nexus-night-panel) !important;
+    border-color: var(--nexus-night-line) !important;
+  }
+  .dark body[data-nexus-dashboard] [data-gradebook-focus] :is(table thead, table thead th, table tbody td:first-child) {
+    background: var(--nexus-night-panel) !important;
+    color: var(--nexus-night-ink);
+  }
+  .dark body[data-nexus-dashboard] [data-gradebook-focus] :is(.text-gray-400, .text-gray-500) {
+    color: var(--nexus-night-muted);
+  }
+  .dark body[data-nexus-dashboard] [data-gradebook-focus] button[class~="dark:bg-kcs-blue-800"] {
+    background-color: var(--nexus-night-raised);
+    color: var(--nexus-night-ink);
+  }
+
+  /* Remaining neutral inset panels in Parent, Student, Principal, Media and Teacher workspaces. */
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-gradebook-focus])
+  :is(div, section, article, fieldset, details)[class*="dark:bg-kcs-blue-800"]:not(:where([class*="bg-gradient"], [style*="background-image"], [data-admin-hero], [data-admin-tone=dark], [data-official-document], [data-official-document] *, .report-card-paper, .report-card-paper *, .report-card-document, .report-card-document *, .official-report-card, .official-report-card *, .transcript-paper, .transcript-paper *, [data-report-card-document], [data-report-card-document] *)) {
+    background-color: var(--nexus-night-raised) !important;
+    background-image: none !important;
+  }
+  .dark body[data-nexus-dashboard] [data-mutation-feedback][data-nexus-dialog-preserve][role="alertdialog"] button {
+    background: var(--nexus-night-raised) !important;
+    border: 1px solid #42627a;
+    color: var(--nexus-night-ink) !important;
+  }
+  .dark body[data-nexus-dashboard] [data-mutation-feedback][data-nexus-dialog-preserve][role="alertdialog"] button:hover {
+    background: var(--nexus-night-hover) !important;
+  }
+
+  /* All dashboard action buttons share the night accent; status/destructive actions keep their meaning. */
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-gradebook-focus], .portal-action-surface)
+  :is(button, a):is(.btn-primary, .btn-gold, [class~="bg-kcs-blue-600"], [class~="bg-kcs-blue-700"], [class~="bg-kcs-blue-800"], [class~="bg-blue-600"], [class~="bg-blue-700"], [class~="bg-teal-700"], [class~="bg-cyan-700"]):not(:where(#nexus-desktop-sidebar *, #nexus-sidebar-drawer *, [data-mutation-feedback] *, [class*="bg-red-"], [class*="bg-rose-"], [class*="bg-green-"], [class*="bg-emerald-"], [data-official-document] *, .report-card-paper *, .report-card-document *, .official-report-card *, .transcript-paper *, [data-report-card-document] *)) {
+    background: linear-gradient(115deg, #1d526d, #213e58) !important;
+    border-color: #42627a !important;
+    color: #f0f8ff !important;
+  }
+  .dark body[data-nexus-dashboard] :is(.portal-shell, [data-nexus-dialog-panel], [data-entity-dialog], [data-gradebook-focus], .portal-action-surface)
+  :is(button, a):is(.btn-primary, .btn-gold, [class~="bg-kcs-blue-600"], [class~="bg-kcs-blue-700"], [class~="bg-kcs-blue-800"], [class~="bg-blue-600"], [class~="bg-blue-700"], [class~="bg-teal-700"], [class~="bg-cyan-700"]):hover:not(:disabled):not(:where(#nexus-desktop-sidebar *, #nexus-sidebar-drawer *, [data-mutation-feedback] *, [class*="bg-red-"], [class*="bg-rose-"], [class*="bg-green-"], [class*="bg-emerald-"])) {
+    background: linear-gradient(115deg, #285f79, #2a4d68) !important;
+  }
+  .dark body[data-nexus-dashboard] [data-gradebook-focus] .input-kcs {
+    background: var(--nexus-night-field) !important;
+    border-color: var(--nexus-night-line) !important;
+    color: var(--nexus-night-ink) !important;
+  }
+  .dark body[data-nexus-dashboard] [data-gradebook-focus] table :is(th,td) { border-color: var(--nexus-night-line) !important; }
+  .dark body[data-nexus-dashboard] [data-gradebook-focus] tfoot :is(tr,td,th) { background: var(--nexus-night-raised) !important; }
+}
+
+/* Native rails, including portaled windows; paper and public pages retain their own styling. */
+@media screen {
+  .dark body[data-nexus-dashboard],
+  .dark body[data-nexus-dashboard] *:not(:where([data-official-document] *, .report-card-paper *, .official-report-card *, .transcript-paper *)) {
+    scrollbar-color: #7699b0 #0e2033;
+    scrollbar-width: thin;
+  }
+  .dark body[data-nexus-dashboard] ::-webkit-scrollbar-track { background: #0e2033 !important; }
+  .dark body[data-nexus-dashboard] ::-webkit-scrollbar-thumb { background-color: #7699b0 !important; border-color: #0e2033 !important; border-radius: 10px; }
+  .dark body[data-nexus-dashboard] ::-webkit-scrollbar-thumb:hover { background-color: #aac8da !important; }
 }

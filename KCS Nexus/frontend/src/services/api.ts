@@ -244,7 +244,7 @@ export const authAPI = {
   avatar: (id: string) =>
     api.get('/auth/avatar/' + encodeURIComponent(id)+'?scope=nexus-personal-v2', { responseType: 'blob' }),
   updateProfile: (data: { firstName?: string; middleName?: string | null; lastName?: string; phone?: string; avatar?: string; bio?: string }) =>
-    api.put('/auth/profile', data),
+    api.put('/auth/profile', data, { timeout: 90_000 }),
   signature: () => api.get('/auth/signature'),
   updateSignature: (signatureImage: string) => api.put('/auth/signature', { signatureImage }),
   documentAssets: () => api.get('/auth/document-assets'),

@@ -1,10 +1,11 @@
+import { enhanceOfficialDocument } from '../utils/officialDocumentPresentation.js'
 import { request } from 'node:http'
 
 // Only a network-isolated renderer sees the document. It has no application secrets or database access.
 export function renderOfficialPdf(html: string): Promise<Buffer> {
   const socketPath = process.env.REPORT_PDF_RENDERER_SOCKET
   if (!socketPath) return Promise.reject(new Error('Official PDF renderer is not configured'))
-  const body = Buffer.from(JSON.stringify({ html }), 'utf8')
+  const body = Buffer.from(JSON.stringify({ html: enhanceOfficialDocument(html) }), 'utf8')
   return new Promise((resolve, reject) => {
     const req = request({ socketPath, path: '/render', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': body.length }, timeout: 60_000 }, res => {
       const chunks: Buffer[] = []
