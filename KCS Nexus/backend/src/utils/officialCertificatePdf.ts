@@ -62,12 +62,12 @@ export async function officialCertificatePdf(input: OfficialCertificateInput) {
   doc.rect(0, 0, width, height).fill("#FFFFFF");
   doc
     .lineWidth(2)
-    .strokeColor("#0D5D99")
+    .strokeColor("#183D54")
     .rect(22, 22, width - 44, height - 44)
     .stroke();
   doc
     .lineWidth(1)
-    .strokeColor("#D6A62A")
+    .strokeColor("#C5A35D")
     .rect(32, 32, width - 64, height - 64)
     .stroke();
   doc
@@ -85,11 +85,11 @@ export async function officialCertificatePdf(input: OfficialCertificateInput) {
       align: "center",
     });
   doc
-    .fillColor("#053665")
+    .fillColor("#173D54")
     .fontSize(23)
     .text(title, 45, 159, { width: width - 90, align: "center" });
   doc
-    .strokeColor("#D6A62A")
+    .strokeColor("#C5A35D")
     .lineWidth(2)
     .moveTo(190, 194)
     .lineTo(width - 190, 194)
@@ -108,7 +108,7 @@ export async function officialCertificatePdf(input: OfficialCertificateInput) {
       { width: width - 130, align: "center" },
     );
   doc
-    .fillColor("#073B70")
+    .fillColor("#173D54")
     .font("Helvetica-Bold")
     .fontSize(input.studentName.length > 48 ? 21 : 27)
     .text(input.studentName, 65, 240, { width: width - 130, align: "center" });
@@ -171,7 +171,7 @@ export async function officialCertificatePdf(input: OfficialCertificateInput) {
     doc
       .font("Helvetica-Bold")
       .fontSize(8)
-      .fillColor("#173D60")
+      .fillColor("#173D54")
       .text(input.includeAuthentication ? entry?.name || "" : "", x, 461, {
         width: 180,
         align: "center",
