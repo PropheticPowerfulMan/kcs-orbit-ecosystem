@@ -1,3 +1,4 @@
+import {rememberNexusReturn} from "./utils/nexusReturn";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { createHashRouter, Navigate, RouterProvider, useNavigate, useSearchParams } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
@@ -31,6 +32,7 @@ const InstitutionalSso = () => {
   const attempt = useRef<{ticket:string; promise:Promise<void>} | null>(null);
   useEffect(() => {
     if (loading) return;
+    rememberNexusReturn(new URL(window.location.href).searchParams.get("nexusReturn")||params.get("nexusReturn"));
     if (!ticket) {
       setError("The secure launch ticket is missing. Open EduPlanner again from Nexus.");
       return;

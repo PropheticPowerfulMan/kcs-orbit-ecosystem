@@ -1,4 +1,4 @@
-import {hasPrincipalWorkspaceAccess} from '../utils/staffWorkspace.js'
+import {hasPrincipalWorkspaceAccess,hasSeniorWorkspaceAccess} from '../utils/staffWorkspace.js'
 import { reportCardVisibility } from '../utils/reportCardVisibility.js'
 import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
 import {coursePeriodStates} from '../services/courseTeachingPeriods.service.js'
@@ -185,6 +185,19 @@ academicRecordsRouter.get('/report-card-analytics/verify', asyncHandler(async (r
 }))
 
 academicRecordsRouter.use(authenticate)
+// ST consultation is a route-scoped, fresh capability check, never an admin role.
+// Explicitly restrict both methods and routes so this context cannot authorize edits.
+academicRecordsRouter.use(asyncHandler(async(req:AuthenticatedRequest,_res,next)=>{
+ if(req.get('X-Nexus-Academic-Consultation')==='senior'){
+  const account=await prisma.user.findUnique({where:{id:req.user!.sub},select:{role:true,permissions:true}})
+  if(!hasSeniorWorkspaceAccess(account))throw new ApiError(403,'ST_ACADEMIC_CONSULTATION_NOT_AUTHORIZED')
+  const readable=/^\/(?:student-registry|review|report-cards|official-signatures|report-cards\/[^/]+\/print-document|transcripts\/[^/]+(?:\/document)?)\/?$/.test(req.path)
+  if(!['GET','HEAD'].includes(req.method)||!readable)throw new ApiError(403,'ST_ACADEMIC_RECORDS_READ_ONLY')
+  req.academicConsultation='senior'
+  req.user={...req.user!,role:'staff',staffWorkspaceAllowed:true}
+ }
+ next()
+}))
 // Principal administration is consultative for academic records. Teacher workspace
 // retains its own homeroom/course permissions and SuperAdmin retains approval.
 academicRecordsRouter.use(asyncHandler(async(req:AuthenticatedRequest,_res,next)=>{
@@ -984,7 +997,7 @@ academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHand
    await tx.notification.createMany({data:linked.map(({parent})=>({userId:parent.id,title:subject,message:parentBody(parent),type:'MESSAGE',link:'/portal/parent/grades'}))})
    const emailTargets=[...new Map(linked.flatMap(({parent})=>(familyEmails.get(parent.id)??[]).map(target=>[target.email,target] as const))).values()]
    if(!emailTargets.length)throw new ApiError(409,'No valid registered family email is available for a selected report card. No delivery was queued.')
-   await tx.correspondenceLog.createMany({data:emailTargets.map(target=>({channel:'EMAIL',status:'QUEUED',subject,body:personalizeParentCorrespondence(body,target.name,payload.language,batchId+':'+card.id+':'+target.email),senderId:actorId,recipientName:target.name,recipientEmail:target.email,recipientPhone:target.phone,studentId:card.studentId,reportCardId:card.id,metadata:{reportCardReceiptVersion:1,receiptDocumentId:pdf.documentId,receiptFingerprint:pdf.fingerprint,mailQueueVersion:1,internalMessageId:ids.get(target.parentId)!,recipientId:target.parentId,relationship:target.relationship,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH',language:payload.language}}))})
+   await tx.correspondenceLog.createMany({data:emailTargets.map(target=>({channel:'EMAIL',status:'QUEUED',subject,body:personalizeParentCorrespondence(body,target.name,payload.language,batchId+':'+card.id+':'+target.email),senderId:actorId,recipientName:target.name,recipientEmail:target.email,recipientPhone:target.phone,studentId:card.studentId,reportCardId:card.id,metadata:{reportCardReceiptVersion:2,receiptDocumentId:pdf.documentId,receiptFingerprint:pdf.fingerprint,reportCardAttachmentName:pdf.filename,reportCardAttachmentBytes:pdf.buffer.length,reportCardAttachmentSha256:createHash('sha256').update(pdf.buffer).digest('hex'),mailQueueVersion:1,internalMessageId:ids.get(target.parentId)!,recipientId:target.parentId,relationship:target.relationship,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH',language:payload.language}}))})
 
    recipients+=emailTargets.length
    await tx.reportCard.update({where:{id:card.id},data:{publicationStatus:'EMAILED',emailedAt:new Date(),portalPostedAt:card.portalPostedAt??new Date()}})
@@ -1070,7 +1083,7 @@ academicRecordsRouter.get('/transcripts/:studentId/document',requireRoles('admin
  const data=await authorizedTranscript(req,res),preview=!data.rows.length
  // Keep administrative previews available before official results are approved.
  // A preview is never issued and cannot bypass release or parent-delivery controls.
- if(preview&&req.user!.sub!=='configured-superadmin'&&req.user!.role!=='admin')throw new ApiError(409,'No approved or verified Grade 9–12 academic records are available for this learner.')
+ if(preview&&req.user!.sub!=='configured-superadmin'&&req.user!.role!=='admin'&&req.academicConsultation!=='senior')throw new ApiError(409,'No approved or verified Grade 9–12 academic records are available for this learner.')
  const document=await officialTranscriptDocument(data)
  if(req.user!.sub==='configured-superadmin'||req.user!.role!=='admin')await prisma.auditLog.create({data:{actorId:await databaseActorId(req.user!.sub),action:preview?'TRANSCRIPT_PREVIEW_GENERATED':'TRANSCRIPT_VERIFICATION_ISSUED',targetType:preview?'TranscriptPreview':'OfficialTranscript',targetId:document.documentId,metadata:{fingerprint:document.fingerprint,studentId:data.student.id,studentNumber:data.student.studentNumber,studentName:data.student.name,sourceVersion:data.sourceVersion,language:'en',preview}}})
  res.setHeader('Cache-Control','private, no-store');return success(res,document,preview?'Administrative transcript preview prepared — no official results on file':'Official English transcript prepared')

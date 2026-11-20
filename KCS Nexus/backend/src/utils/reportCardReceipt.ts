@@ -3,8 +3,11 @@ export type ReceiptDelivery = { id: string; reportCardId: string | null; recipie
 export const receiptMetadata = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 export function reportCardReceiptToken(row: ReceiptDelivery, secret: string) {
   const m = receiptMetadata(row.metadata)
-  if (!row.reportCardId || !row.recipientEmail || m.reportCardReceiptVersion !== 1 || typeof m.receiptDocumentId !== 'string' || typeof m.receiptFingerprint !== 'string') return null
-  return createHmac('sha256', secret).update(JSON.stringify(['kcs-report-card-receipt-v1', row.id, row.reportCardId, row.recipientEmail.toLowerCase(), m.receiptDocumentId, m.receiptFingerprint])).digest('hex')
+  if (!row.reportCardId || !row.recipientEmail || ![1,2].includes(Number(m.reportCardReceiptVersion)) || typeof m.receiptDocumentId !== 'string' || typeof m.receiptFingerprint !== 'string') return null
+  const version=Number(m.reportCardReceiptVersion)
+  if(version===2&&(typeof m.reportCardAttachmentSha256!=='string'||!/^[a-f0-9]{64}$/.test(m.reportCardAttachmentSha256)))return null
+  const claims=['kcs-report-card-receipt-v'+version,row.id,row.reportCardId,row.recipientEmail.toLowerCase(),m.receiptDocumentId,m.receiptFingerprint,...(version===2?[m.reportCardAttachmentSha256]:[])]
+  return createHmac('sha256', secret).update(JSON.stringify(claims)).digest('hex')
 }
 export function verifyReportCardReceipt(row: ReceiptDelivery, token: unknown, secret: string) {
   const expected = reportCardReceiptToken(row, secret)

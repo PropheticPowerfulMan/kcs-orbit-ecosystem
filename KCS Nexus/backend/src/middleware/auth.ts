@@ -17,6 +17,7 @@ type AuthPayload = {
 
 export type AuthenticatedRequest = Request & {
   user?: AuthPayload
+  academicConsultation?: 'senior'
 }
 
 export const authenticate = async (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {

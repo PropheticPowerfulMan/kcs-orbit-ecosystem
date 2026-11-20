@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto'
 import {combineTeachingSlots,type Position} from '../utils/teachingPresenceProof.js'
+import {teachingGpsRequired,declaredTeachingPresence} from '../utils/teachingGpsPolicy.js'
 import {attachPresenceProofs,consumePresenceChallenge,proofId} from './teachingPresenceProof.service.js'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
@@ -236,14 +237,17 @@ export async function markTeachingTime(userId:string,locator:Locator,action:'ENT
       const open=await tx.teachingSession.findFirst({where:{teacherUserId:userId,checkInAt:{not:null},checkOutAt:null,schoolDate:row.schoolDate}})
       if(open && open.id!==previous?.id)throw new ApiError(409,'TEACHING_OTHER_SESSION_OPEN')
     } else if(!previous?.checkInAt)throw new ApiError(409,'TEACHING_ENTRY_REQUIRED')
-    if(!location)throw new ApiError(400,'TEACHING_LOCATION_REQUIRED')
-    const evidence=await consumePresenceChallenge(tx,userId,locator,action,location.token,location.position,now)
+    const requireGps=teachingGpsRequired()
+    if(requireGps&&!location)throw new ApiError(400,'TEACHING_LOCATION_REQUIRED')
+    const evidence=requireGps&&location
+     ? await consumePresenceChallenge(tx,userId,locator,action,location.token,location.position,now)
+     : declaredTeachingPresence(now)
     const saved=await tx.teachingSession.upsert({
       where:{courseReference_scheduleKey_schoolDate:{courseReference:row.courseReference,scheduleKey:row.scheduleKey,schoolDate:row.schoolDate}},
       create:{...createSnapshot(row),checkInAt:now,...(note?{teacherNote:note}:{})},
       update:{...(action==='ENTRY'?{checkInAt:now}:{checkOutAt:now}),...(note?{teacherNote:note}:{})},
     })
-    await tx.auditLog.create({data:{id:proofId(saved.id,action),actorId:userId,action:'TEACHING_LOCATION_ACCEPTED',targetType:'TeachingSession',targetId:saved.id,metadata:evidence}})
+    await tx.auditLog.create({data:{id:proofId(saved.id,action),actorId:userId,action:requireGps?'TEACHING_LOCATION_ACCEPTED':'TEACHING_PRESENCE_DECLARED',targetType:'TeachingSession',targetId:saved.id,metadata:evidence}})
     await tx.auditLog.create({data:{actorId:userId,action:'TEACHING_SESSION_'+action,targetType:'TeachingSession',targetId:saved.id,metadata:{schoolTimezone:TEACHING_TIMEZONE,serverUtc:now.toISOString(),scheduledStart:row.expectedStartAt.toISOString(),scheduledEnd:row.expectedEndAt.toISOString()}}})
     return saved
   },{maxWait:10000,timeout:20000})

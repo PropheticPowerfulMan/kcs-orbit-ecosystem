@@ -63,7 +63,6 @@ export const Login = () => {
     };
   }, []);
 
-  if (currentUser) return <Navigate to="/" replace />;
 
   const selectedUser = activeUsers.find((user) => user.email === email);
 
@@ -164,6 +163,8 @@ export const Login = () => {
   };
 
   const patchSignup = <K extends keyof SignUpProfileInput>(key: K, value: SignUpProfileInput[K]) => setSignup((current) => ({ ...current, [key]: value }));
+
+  if (currentUser) return <Navigate to="/" replace />;
 
   return (
     <main className="login-edupay theme-dark-panel grid min-h-screen place-items-center overflow-hidden bg-[#030d14] px-4 py-8 text-[#e7faff]">

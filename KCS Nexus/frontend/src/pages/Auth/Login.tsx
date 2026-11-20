@@ -1,3 +1,4 @@
+import {loginErrorMessage} from '@/utils/loginErrorMessage'
 import {portalHome} from '@/utils/accountScope'
 import {useEffect,useMemo,useState} from 'react'
 import {Link,useNavigate} from 'react-router-dom'
@@ -23,18 +24,7 @@ export default function LoginPage(){
  const loginSchema=useMemo(()=>z.object({email:z.string().min(1,language==='fr'?'E-mail ou code d’accès requis':'Email or access code is required'),password:z.string().min(6,language==='fr'?'Le mot de passe doit contenir au moins 6 caractères':'Password must contain at least 6 characters'),twoFactorCode:z.string().regex(/^\d{6}$/,language==='fr'?'Saisissez le code à 6 chiffres':'Enter the 6-digit code').optional()}),[language])
  const form=useForm<LoginFormValues>({resolver:zodResolver(loginSchema),defaultValues:{email:'',password:''}})
  useEffect(()=>{const token=new URLSearchParams(window.location.search).get('resetToken')||'';if(token){setResetToken(token);setRecoveryOpen(true)}},[])
- const loginError=(error:any)=>{
-  const message=error?.response?.data?.message
-  const known:Record<string,string>={
-   'Two-factor authentication code required':tr('Saisissez votre code d’authentification à 6 chiffres.','Enter your 6-digit authentication code.'),
-   'Invalid two-factor authentication code':tr('Code d’authentification invalide. Réessayez avec le code actuel.','Invalid authentication code. Try again with the current code.'),
-   'Identifiant ou mot de passe incorrect.':tr('Identifiant ou mot de passe incorrect.','Incorrect identifier or password.'),
-  }
-  if(message)return known[message]||message
-  if(error?.code==='ERR_NETWORK'||error?.message==='Network Error')return tr('Connexion indisponible. Vérifiez votre connexion et réessayez.','Connection unavailable. Check your connection and try again.')
-  if(error?.code==='ECONNABORTED')return tr('Le service met trop de temps à répondre. Réessayez.','The service is taking too long to respond. Please try again.')
-  return error?.message||tr('Identifiant ou mot de passe incorrect.','Incorrect identifier or password.')
- }
+ const loginError=(error:any)=>loginErrorMessage(error,language)
  const onSubmit=async(values:LoginFormValues)=>{
   setLoading(true);setErrorMessage('')
   try{const response=await authAPI.login(values.email.trim(),values.password,values.twoFactorCode),data=response.data?.data

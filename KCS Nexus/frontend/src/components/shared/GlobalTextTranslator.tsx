@@ -113,7 +113,7 @@ const translateText = (value: string, language: string) => {
 const translateNode = (node: Node, language: string) => {
   if (node instanceof Text) {
     const parent = node.parentElement
-    if (!parent || parent.closest('[data-site-editor],[data-site-authored]') || ignoredTags.has(parent.tagName) || ignoredTextTags.has(parent.tagName) || parent.isContentEditable) return
+    if (!parent || parent.closest('[data-site-editor],[data-site-authored],[translate="no"],[data-no-translate]') || ignoredTags.has(parent.tagName) || ignoredTextTags.has(parent.tagName) || parent.isContentEditable) return
 
     const next = translateText(node.nodeValue ?? '', language)
     if (next !== node.nodeValue) {
@@ -122,7 +122,7 @@ const translateNode = (node: Node, language: string) => {
     return
   }
 
-  if (!(node instanceof HTMLElement) || node.closest('[data-site-editor],[data-site-authored]') || ignoredTags.has(node.tagName) || node.isContentEditable) {
+  if (!(node instanceof HTMLElement) || node.closest('[data-site-editor],[data-site-authored],[translate="no"],[data-no-translate]') || ignoredTags.has(node.tagName) || node.isContentEditable) {
     return
   }
 

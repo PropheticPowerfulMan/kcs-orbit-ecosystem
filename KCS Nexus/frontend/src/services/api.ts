@@ -120,6 +120,7 @@ api.interceptors.request.use(
     // Capture URL context before a refresh awaits; retries keep the original request's scope.
     if (!config.headers.has('X-Nexus-Workspace')) {
       const path = window.location.pathname
+      if (/^\/portal\/senior(?:\/|$)/.test(path) && (config.url ?? '').startsWith('/academic-records/')) config.headers.set('X-Nexus-Academic-Consultation', 'senior')
       const workspace = /^\/admin(?:\/|$)/.test(path) ? 'admin' : /^\/portal\/staff(?:\/|$)/.test(path) ? 'staff' : /^\/portal\/teacher(?:\/|$)/.test(path) ? 'teacher' : ''
       if (workspace) config.headers.set('X-Nexus-Workspace', workspace)
     }
@@ -284,7 +285,7 @@ export const studentsAPI = {
   getMyChildren: () => api.get('/students/me/children', { timeout: 30_000 }),
   getMyOverview: () => api.get('/students/me/overview'),
   getById: (id: string) => api.get(`/students/${id}`),
-  create: (data: object) => api.post('/students', data),
+  create: (data: object, config?: object) => api.post('/students', data, config),
   getGrades: (id: string) => api.get(`/students/${id}/grades`),
   getAssignments: (id: string) => api.get(`/students/${id}/assignments`),
   getTimetable: (id: string) => api.get(`/students/${id}/timetable`),
@@ -295,7 +296,7 @@ export const studentsAPI = {
   startInteractiveAssignment: (submissionId: string) => api.post(`/students/me/assignments/${submissionId}/start`),
   submitInteractiveAssignment: (submissionId: string, answers: Array<{ questionId: string; answer: unknown }>) => api.post(`/students/me/assignments/${submissionId}/submit-quiz`, { answers }, { timeout: 60_000 }),
   submitMyAssignment: (submissionId: string, fileName: string) => api.patch(`/students/me/assignments/${submissionId}/submit`, { fileName }),
-  update: (id: string, data: object) => api.put(`/students/${id}`, data),
+  update: (id: string, data: object, config?: object) => api.put(`/students/${id}`, data, config),
   delete: (id: string, data: { confirmation: 'ARCHIVER'; reason: string }) => api.delete(`/students/${id}`, { data }),
 }
 
@@ -311,7 +312,7 @@ export const registryAPI = {
   }),
 
   createEntity: (entityType: 'parent' | 'student' | 'teacher', data: object) => api.post(`/registry/entities/${entityType}`, data),
-  updateEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, data: object, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.patch(`/registry/entities/${entityType}/${identifier}`, data, { params: { identifierType } }),
+  updateEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, data: object, identifierType: 'orbitId' | 'externalId' = 'orbitId', config?: object) => api.patch(`/registry/entities/${entityType}/${identifier}`, data, { ...config, params: { identifierType } }),
   resetAccess: (entityType: 'parent' | 'student' | 'teacher', identifier: string) => api.post(`/registry/entities/${entityType}/${encodeURIComponent(identifier)}/reset-access`),
   parentAccessStatuses: () => api.get('/registry/parents/access-statuses'),
   setParentAccess: (identifier: string, blocked: boolean, reason?: string) => api.patch('/registry/parents/' + encodeURIComponent(identifier) + '/account-access', { blocked, reason }),
@@ -591,12 +592,18 @@ export const disciplineAPI = {
 }
 
 
+const preserveNexusReturn=<T extends {data:{data:{url:string}}}>(response:T):T=>{
+ const destination=new URL(response.data.data.url,window.location.origin)
+ destination.searchParams.set('nexusReturn',window.location.pathname)
+ response.data.data.url=destination.toString()
+ return response
+}
 export const academyAPI = {
-  launch: () => api.post<{ data: { url: string } }>("/academy/launch"),
+  launch: () => api.post<{ data: { url: string } }>("/academy/launch").then(preserveNexusReturn),
 }
 
 export const lessonPlanAPI = {
-  launch: () => api.post<{ data: { url: string } }>("/lesson-plan/launch"),
+  launch: () => api.post<{ data: { url: string } }>("/lesson-plan/launch").then(preserveNexusReturn),
 }
 
 export const academicCalendarAPI = {

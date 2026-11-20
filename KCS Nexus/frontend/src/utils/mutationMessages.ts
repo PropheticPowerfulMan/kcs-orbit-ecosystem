@@ -1,4 +1,10 @@
 const pairs: Array<[string, string]> = [
+  ['Les accès ont été enregistrés sans modifier le rôle principal ni les identifiants.','Workspace access saved without changing the primary role or credentials'],
+  ['Les informations ont été enregistrées dans Orbit et synchronisées dans Nexus.','Shared entity updated through Orbit and synchronized in Nexus'],
+  ['Le parent a été retiré des registres actifs et son dossier a été archivé.','Shared entity deleted through Orbit'],
+  ['Les informations de l’élève ont été mises à jour.','Student updated successfully'],
+  ['L’élève a été retiré des registres actifs et son dossier a été archivé.','Student removed from active registers and archived'],
+
   ['Entrée d’archive supprimée. Les preuves académiques restent conservées.', 'Archived learner record removed; academic evidence remains preserved'],
   ['Suspension officielle enregistrée et synchronisée avec les présences.', 'Official suspension scheduled and synchronized with attendance'],
   ['Suspension annulée.', 'Suspension cancelled'],

@@ -1,0 +1,72 @@
+
+/* Scoped to portal navigation: public site navigation and workspace content stay unchanged. */
+#nexus-desktop-sidebar,#nexus-sidebar-drawer{--rail-ink:#264b61;--rail-muted:#627c8c;--rail-line:#c5d8e5;--rail-surface:#e8f1f6;background:radial-gradient(ellipse at 0 0,#cde4f05e,transparent 48%),linear-gradient(165deg,#edf4f8,#e2edf4 70%,#d9e9f3)!important;border-color:var(--rail-line)!important;box-shadow:8px 0 36px #1239570b}
+.dark #nexus-desktop-sidebar,.dark #nexus-sidebar-drawer{--rail-ink:#d9e9f5;--rail-muted:#9ab4c8;--rail-line:#304a62;--rail-surface:#12283b;background:radial-gradient(ellipse at 0 0,#1e5a783d,transparent 50%),linear-gradient(165deg,#132b40,#0e2033)!important}
+#nexus-desktop-sidebar>div:first-child{position:relative;padding:18px 15px 14px;border-bottom-color:var(--rail-line)}
+#nexus-desktop-sidebar>div:first-child:before,#nexus-sidebar-drawer:before{content:"";position:absolute;left:18px;right:18px;top:0;height:3px;border-radius:0 0 8px 8px;background:linear-gradient(90deg,#0f829f,#d6b356 60%,transparent)}
+.nexus-sidebar-profile{padding:13px 14px!important;border-color:var(--rail-line)!important}
+.nexus-sidebar-profile>div{border-radius:17px!important;padding:11px!important;border-color:var(--rail-line)!important;background:linear-gradient(120deg,#ffffff90,#edf7fb66)!important;box-shadow:0 4px 18px #164b6908}
+.dark .nexus-sidebar-profile>div{background:linear-gradient(120deg,#23425d66,#152d4555)!important}
+.nexus-sidebar-profile img{aspect-ratio:1;object-fit:cover;border-radius:50%;flex-shrink:0}
+.nexus-menu-finder{flex:0 0 auto;padding:14px 15px 5px}
+.nexus-menu-caption{display:flex;justify-content:space-between;gap:10px;margin-bottom:9px;font-size:9px;letter-spacing:.13em;text-transform:uppercase;font-weight:800;color:var(--rail-muted)}
+.nexus-menu-caption>span:last-child{letter-spacing:0;font-variant-numeric:tabular-nums}
+.nexus-menu-search{display:flex;align-items:center;gap:8px;height:39px;padding:0 10px;border:1px solid var(--rail-line);border-radius:12px;color:var(--rail-muted);background:#f5f9fc9c;transition:border-color .15s,box-shadow .15s}
+.dark .nexus-menu-search{background:#0a1d2c99}
+.nexus-menu-search:focus-within{border-color:#2691ad;box-shadow:0 0 0 3px #229cbd18}
+.nexus-menu-search input[type=search]{min-width:0;width:100%;height:100%;border:0!important;border-radius:0;background:transparent!important;box-shadow:none!important;padding:0!important;font-size:12px;font-weight:500;line-height:1.4;color:var(--rail-ink)!important;outline:0!important}
+.nexus-menu-search input::placeholder{color:var(--rail-muted)!important;opacity:1}
+.nexus-menu-search input::-webkit-search-cancel-button{display:none}
+.nexus-menu-search button{flex-shrink:0;display:grid;place-items:center;width:25px;height:28px;border-radius:7px;color:var(--rail-ink);background:var(--rail-surface)}
+#nexus-desktop-sidebar nav,#nexus-sidebar-drawer nav{padding:8px 10px 12px;scrollbar-width:thin;scrollbar-color:#8cacbd55 transparent;overscroll-behavior:contain}
+#nexus-desktop-sidebar nav .sidebar-link,#nexus-sidebar-drawer nav .sidebar-link{position:relative;display:flex;gap:10px;min-height:45px;padding:7px 10px;border:1px solid transparent;border-radius:13px!important;background:transparent!important;color:var(--rail-ink)!important;font-size:12px;font-weight:600;line-height:1.4;box-shadow:none!important;transition:background .16s,color .16s,border-color .16s,box-shadow .16s}
+#nexus-desktop-sidebar nav .sidebar-link:hover,#nexus-sidebar-drawer nav .sidebar-link:hover{background:#d5e7f2!important;border-color:#b8d2e3;color:#123d58!important}
+.dark #nexus-desktop-sidebar nav .sidebar-link:hover,.dark #nexus-sidebar-drawer nav .sidebar-link:hover{background:#213e58!important;border-color:#416783;color:#eff8ff!important}
+.nexus-menu-icon{display:grid;place-items:center;flex:0 0 29px;width:29px;height:29px;border-radius:9px;background:#c4dce94a;color:inherit;transition:background .16s}
+.dark .nexus-menu-icon{background:#a3c9e20d}
+#nexus-desktop-sidebar nav .sidebar-link.active,#nexus-sidebar-drawer nav .sidebar-link.active{background:linear-gradient(115deg,#105c7b,#164771)!important;color:#fff!important;border-color:#316985;box-shadow:0 5px 15px #14496b26!important;font-weight:750}
+#nexus-desktop-sidebar nav .sidebar-link.active:before,#nexus-sidebar-drawer nav .sidebar-link.active:before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 4px 4px 0;background:#e9c66c}
+#nexus-desktop-sidebar nav .sidebar-link.active :is(span,svg),#nexus-sidebar-drawer nav .sidebar-link.active :is(span,svg){color:#fff!important}
+#nexus-desktop-sidebar nav .sidebar-link.active .nexus-menu-icon,#nexus-sidebar-drawer nav .sidebar-link.active .nexus-menu-icon{background:#ffffff15}
+.nexus-sidebar-tools{border-color:var(--rail-line)!important;background:linear-gradient(180deg,#d3e6f110,#bdd9e41c)}
+.nexus-sidebar-tools .sidebar-link{font-size:11px!important;color:var(--rail-ink);min-height:39px;border-radius:11px}
+.nexus-sidebar-tools .sidebar-link:hover{background:#c8e1ee!important;color:#103e59!important}
+.dark .nexus-sidebar-tools .sidebar-link:hover{background:#274762!important;color:#f3faff!important}
+.nexus-sidebar-tools [role=separator]{background:#d7eae5!important;border-color:#b0cec8!important;color:#215e54!important;font-size:9px!important;line-height:1.5!important}
+.dark .nexus-sidebar-tools [role=separator]{background:#173e3b!important;border-color:#355e59!important;color:#a4d9cd!important}
+#nexus-desktop-sidebar :is(a,button):focus-visible,#nexus-sidebar-drawer :is(a,button):focus-visible{outline:2px solid #b58a2f;outline-offset:2px}
+.nexus-menu-empty{display:grid;justify-items:center;gap:10px;padding:24px 10px;text-align:center;font-size:12px;color:var(--rail-muted)}
+.nexus-menu-empty button{border:1px solid var(--rail-line);border-radius:9px;padding:8px;color:var(--rail-ink)}
+#nexus-desktop-sidebar[data-collapsed=true] .nexus-sidebar-profile{padding:10px 7px!important}
+#nexus-desktop-sidebar[data-collapsed=true] .nexus-sidebar-profile>div{padding:6px!important;border-radius:15px!important}
+#nexus-desktop-sidebar[data-collapsed=true] nav .sidebar-link{padding:7px 0;justify-content:center}
+#nexus-desktop-sidebar[data-collapsed=true] .nexus-menu-icon{width:34px;flex-basis:34px;height:34px}
+#nexus-desktop-sidebar [data-nexus-sidebar-collapse]{right:3px;top:46%;width:23px;height:35px;border-radius:10px 0 0 10px;border-color:var(--rail-line);background:var(--rail-surface);color:var(--rail-ink)}
+.nexus-sidebar-topbar{background:linear-gradient(120deg,#eaf4f9f5,#dcebf4f5)!important;border-color:#b6d1e1!important;box-shadow:0 8px 28px #173e6014!important;border-radius:20px!important;backdrop-filter:blur(18px)}
+.dark .nexus-sidebar-topbar{background:linear-gradient(120deg,#16334af5,#102538f5)!important;border-color:#355671!important}
+#nexus-sidebar-drawer{height:100%;max-height:100%;width:min(390px,100%);border-radius:23px!important;border-color:var(--rail-line)!important;box-shadow:16px 20px 70px #03152655!important}
+.nexus-sidebar-drawer-profile{padding:10px!important;background:transparent!important;border-color:var(--rail-line)!important}
+.nexus-sidebar-drawer-profile>div:last-child{padding:10px!important;border-radius:16px!important;border-color:var(--rail-line)!important;background:#f0f7fb8c!important}
+.dark .nexus-sidebar-drawer-profile>div:last-child{background:#23415c77!important}
+#nexus-sidebar-drawer .nexus-menu-finder{padding-top:10px}
+#nexus-sidebar-drawer .nexus-menu-search{height:42px}
+#nexus-sidebar-drawer nav{flex:1;min-height:100px}
+#nexus-sidebar-drawer .nexus-mobile-menu-actions{max-height:32%;padding:10px;gap:7px}
+#nexus-sidebar-drawer .nexus-mobile-action{min-height:42px!important;border-radius:11px!important;padding:8px 9px!important;font-size:10.5px!important;line-height:1.45;color:var(--rail-ink)!important;border:1px solid var(--rail-line)!important;background:#eff6fa90!important}
+.dark #nexus-sidebar-drawer .nexus-mobile-action{background:#18354b!important}
+#nexus-sidebar-drawer .nexus-mobile-action-danger{color:#a1223f!important;background:#f8e7ec!important;border-color:#ecc3ce!important}
+.dark #nexus-sidebar-drawer .nexus-mobile-action-danger{color:#ffc4d1!important;background:#422536!important;border-color:#664054!important}
+@media(max-width:1023px) and (min-width:600px){#nexus-sidebar-drawer{width:390px!important}#nexus-sidebar-drawer nav .sidebar-link{min-height:48px;font-size:13px}#nexus-sidebar-drawer .nexus-menu-search{height:44px}}
+@media(max-height:520px){.nexus-sidebar-drawer-profile>div:first-child{display:none}.nexus-sidebar-drawer-profile img,.nexus-sidebar-drawer-profile .h-12{width:34px;height:34px;min-width:34px;min-height:34px}.nexus-sidebar-drawer-profile{padding:6px!important}.nexus-sidebar-drawer-profile>div:last-child{padding:6px!important}#nexus-sidebar-drawer .nexus-menu-caption{display:none}#nexus-sidebar-drawer .nexus-menu-finder{padding:5px 10px}#nexus-sidebar-drawer .nexus-menu-search{height:34px}#nexus-sidebar-drawer nav{min-height:58px}#nexus-sidebar-drawer .nexus-mobile-menu-actions{max-height:27%}#nexus-sidebar-drawer nav .sidebar-link{min-height:42px}}
+@media(prefers-reduced-motion:reduce){#nexus-desktop-sidebar *,#nexus-sidebar-drawer *{transition:none!important;scroll-behavior:auto!important}}
+
+#nexus-desktop-sidebar .nexus-sidebar-profile p:first-child,#nexus-sidebar-drawer .nexus-sidebar-drawer-profile p:first-child{color:var(--rail-ink)!important;font-size:12.5px}
+#nexus-desktop-sidebar .nexus-sidebar-profile p:last-child,#nexus-sidebar-drawer .nexus-sidebar-drawer-profile p:last-child{color:var(--rail-muted)!important;font-size:10.5px}
+
+#nexus-sidebar-drawer .nexus-mobile-menu-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;align-content:start;overflow-y:auto}
+#nexus-sidebar-drawer .nexus-sidebar-tools>div:first-child{grid-column:1/-1;margin-bottom:0;padding:7px 9px!important;border-radius:10px;font-size:9px;line-height:1.45}
+#nexus-sidebar-drawer .nexus-mobile-action{min-height:43px!important;justify-content:flex-start;gap:8px}
+#nexus-sidebar-drawer .nexus-mobile-action span{display:block!important;white-space:normal!important;text-overflow:clip!important;overflow:visible!important;line-height:1.4;overflow-wrap:anywhere}
+#nexus-sidebar-drawer .nexus-mobile-action svg{width:16px;height:16px;flex-shrink:0}
+#nexus-desktop-sidebar .nexus-menu-search input[type=search],#nexus-sidebar-drawer .nexus-menu-search input[type=search]{border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;outline:0!important;min-height:0!important;max-height:100%;margin:0!important;padding:0!important;color:var(--rail-ink)!important}
+@media(max-width:599px){#nexus-sidebar-drawer .nexus-menu-search input[type=search]{font-size:16px!important}}

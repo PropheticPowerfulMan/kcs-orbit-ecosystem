@@ -8,7 +8,7 @@ export type TeachingStats = {
  earlyExits:number;actualMinutes:number;punctuality95:[number,number]|null
 }
 export type CourseChoice={id:string;name:string;code:string;className:string;teacherUserId:string;teacherName:string;scheduleCount:number}
-export type PresenceProof={status:'PENDING'|'VERIFIED'|'REJECTED';revision:number;distanceMeters:number;accuracyMeters:number;recordedAt:string;note?:string}
+export type PresenceProof={status:'PENDING'|'VERIFIED'|'REJECTED';revision:number;distanceMeters?:number;accuracyMeters?:number;gpsChecked?:boolean;method?:string;recordedAt:string;note?:string}
 export type TeachingSession = {
  presenceProof?:{entry:PresenceProof|null;exit:PresenceProof|null};
  id:string|null;courseReference:string;scheduleKey:string;schoolDate:string;academicYear:string;semester:number;term:string;

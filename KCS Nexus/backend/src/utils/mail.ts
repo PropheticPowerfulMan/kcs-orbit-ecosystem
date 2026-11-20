@@ -15,7 +15,7 @@ type MailPayload = {
 }
 
 export type MailResult =
-  | { sent: true; provider: 'smtp' }
+  | { sent: true; provider: 'smtp'; messageId?:string; acceptedRecipients?:string[] }
   | { sent: false; reason: 'SMTP_NOT_CONFIGURED' | 'SMTP_SEND_FAILED'; providerDetail?: string }
 
 const LOGO_URL = 'https://kinshasachristianschool.org/icons/nexus-192.png'
@@ -58,8 +58,8 @@ export const sendSchoolMail = async ({ to = env.SCHOOL_EMAIL, replyTo = env.SMTP
   const normalizedText = text.normalize('NFC')
   const normalizedHtml = html?.normalize('NFC')
   try {
-    await transporter.sendMail({ from: env.SMTP_FROM || env.SMTP_USER, to, replyTo, subject: normalizedSubject, text: normalizedText, html: branded ? kcsBrandedEmailHtml(normalizedSubject, normalizedText, normalizedHtml, language) : normalizedHtml, attachments, textEncoding: 'base64', headers: { 'Content-Language': language } })
-    return { sent: true as const, provider: 'smtp' as const }
+    const info = await transporter.sendMail({ from: env.SMTP_FROM || env.SMTP_USER, to, replyTo, subject: normalizedSubject, text: normalizedText, html: branded ? kcsBrandedEmailHtml(normalizedSubject, normalizedText, normalizedHtml, language) : normalizedHtml, attachments, textEncoding: 'base64', headers: { 'Content-Language': language } })
+    return { sent: true as const, provider: 'smtp' as const, messageId:typeof info.messageId==='string'?info.messageId:undefined, acceptedRecipients:(info.accepted??[]).map((address:any)=>typeof address==='string'?address:String(address?.address??'')).filter(Boolean) }
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Unknown SMTP error'
     console.error('[mail] Delivery failed', { to, detail })

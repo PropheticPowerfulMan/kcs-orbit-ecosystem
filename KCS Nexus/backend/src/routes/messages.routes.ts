@@ -1,3 +1,4 @@
+import {Prisma} from '@prisma/client'
 import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
 import { queueMessageBatch } from '../services/messageBatch.js'
 import { Router } from 'express'
@@ -15,7 +16,8 @@ export const messagesRouter = Router()
 const trackingPixel = Buffer.from('R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=', 'base64')
 messagesRouter.get('/tracking/email/:id.gif', asyncHandler(async (req, res) => {
   const id = getRouteParam(req.params.id)
-  await prisma.correspondenceLog.updateMany({ where: { id, channel: 'EMAIL', status: { in: ['SENT', 'DELIVERED'] } }, data: { status: 'DELIVERED', deliveredAt: new Date() } })
+  await prisma.correspondenceLog.updateMany({ where: { id, channel: 'EMAIL', reportCardId:null, status: { in: ['SENT', 'DELIVERED'] } }, data: { status: 'DELIVERED', deliveredAt: new Date() } })
+  await prisma.$executeRaw(Prisma.sql`UPDATE "CorrespondenceLog" SET metadata=coalesce(metadata,'{}'::jsonb)||jsonb_build_object('reportCardEmailOpenedAt',coalesce(metadata->>'reportCardEmailOpenedAt',${new Date().toISOString()})) WHERE id=${id} AND channel='EMAIL' AND "reportCardId" IS NOT NULL AND status IN ('SENT','DELIVERED')`)
   res.setHeader('Content-Type', 'image/gif')
   res.setHeader('Content-Length', String(trackingPixel.length))
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')

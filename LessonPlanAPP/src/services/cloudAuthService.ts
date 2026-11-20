@@ -47,7 +47,7 @@ const supabaseUrl = (configuredSupabaseUrl || "").replace(/\/rest\/v1\/?$/, "").
 
 const authUrl = (path: string) => `${supabaseUrl}/auth/v1/${path}`;
 const restUrl = (path: string) => `${supabaseUrl}/rest/v1/${path}`;
-const productionAppUrl = configuredPublicAppUrl || "https://propheticpowerfulman.github.io/LessonPlanPowerfullyDone/";
+const productionAppUrl = configuredPublicAppUrl || "https://kinshasachristianschool.org/lesson-plan/";
 
 const baseHeaders = (token = supabaseAnonKey) => ({
   apikey: supabaseAnonKey || "",

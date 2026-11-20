@@ -1,3 +1,4 @@
+import {directoryNameParts} from '../utils/directory-name-parts';
 import { prisma } from "../db";
 import { pickPreferredExternalId } from "@ecosystem/shared-contracts";
 import { resolveSharedStudentClassName } from "./student-class-assignment";
@@ -343,9 +344,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
     parents: parents.map((parent) => {
       const externalIds = parentExternalIds.get(parent.id) || [];
       const parts = splitFullName(parent.fullName);
-      const firstName = normalizeText(parent.firstName) || parts.firstName;
-      const middleName = normalizeText(parent.middleName) || parts.middleName;
-      const lastName = normalizeText(parent.lastName) || parts.lastName;
+      const {firstName,middleName,lastName}=directoryNameParts(parent,parts);
       return {
         id: parent.id,
         displayId: pickEntityDisplayId(externalIds, "parent", parent.id),
@@ -370,9 +369,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
     teachers: teachers.map((teacher) => {
       const externalIds = teacherExternalIds.get(teacher.id) || [];
       const parts = splitFullName(teacher.fullName);
-      const firstName = normalizeText(teacher.firstName) || parts.firstName;
-      const middleName = normalizeText(teacher.middleName) || parts.middleName;
-      const lastName = normalizeText(teacher.lastName) || parts.lastName;
+      const {firstName,middleName,lastName}=directoryNameParts(teacher,parts);
       return {
         id: teacher.id,
         displayId: pickEntityDisplayId(externalIds, "teacher", teacher.employeeId || teacher.id),

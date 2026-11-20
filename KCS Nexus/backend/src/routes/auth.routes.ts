@@ -221,7 +221,7 @@ async function ensureAccountNotLocked(user: PrismaUser) {
   if (!user.loginLockedUntil) return
   if (user.loginLockedUntil > new Date()) {
     const remainingMinutes = Math.max(1, Math.ceil((user.loginLockedUntil.getTime() - Date.now()) / 60_000))
-    throw new ApiError(423, `Compte temporairement verrouillÃ©. RÃ©essayez dans ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}. / Account temporarily locked. Try again in ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}.`)
+    throw new ApiError(423, `Compte temporairement verrouillé. Réessayez dans ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}. / Account temporarily locked. Try again in ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}.`)
   }
   await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginLockedUntil: null } })
 }
@@ -507,7 +507,7 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
       const federationGracePeriodMs = 30 * 60 * 1000
       const identityWasJustVerified = isFederated && Date.now() - user.updatedAt.getTime() < federationGracePeriodMs
       if (identityWasJustVerified) return user
-      if (isFederated && requiresDirectoryIdentity) throw new ApiError(410, 'Cette identitÃ© a Ã©tÃ© supprimÃ©e ou dÃ©sactivÃ©e dans lâ€™Ã©cosystÃ¨me.')
+      if (isFederated && requiresDirectoryIdentity) throw new ApiError(410, 'Cette identité a été supprimée ou désactivée dans l’écosystème.')
       return user
     }
 
