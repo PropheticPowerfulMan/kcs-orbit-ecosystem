@@ -2823,13 +2823,13 @@ const TeacherDashboardHome = () => {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+        <div data-teacher-schedule className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
             <Calendar size={18} className="text-kcs-blue-500" /> Daily And Weekly Schedule
           </h2>
           <div className="space-y-3">
             {todayClasses.map((item: any, index: number) => (
-              <div key={item.time} className={`rounded-xl border p-4 ${index === 0 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20'}`}>
+              <div key={item.time} data-teacher-schedule-item className={`rounded-xl border p-4 ${index === 0 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20'}`}>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold text-gray-400 dark:text-gray-500">{item.time}</p>
                   <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">{item.students} students</span>

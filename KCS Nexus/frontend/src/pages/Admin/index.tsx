@@ -13,6 +13,7 @@ import ParentCommunicationPanel from './ParentCommunicationPanel'
 import EmployeesPanel from './EmployeesPanel'
 import DateSelect from '@/components/shared/DateSelect'
 import PhotoCaptureField from '@/components/shared/PhotoCaptureField'
+import { usePhotoPreparationStore } from '@/store/photoPreparationStore'
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -287,7 +288,7 @@ const splitPersonName = (value = '') => {
   }
 }
 
-const registryMutationOptions = {headers:{'x-silent-feedback':'true'}}
+const registryMutationOptions = {timeout:90_000,headers:{'x-silent-feedback':'true'}}
 const notifyRegistryOutcome = (successful:boolean,message:string) => window.dispatchEvent(new CustomEvent('ecosystem:mutation-'+(successful?'success':'error'),{detail:{message}}))
 
 const createAdminStudentEditForm = (student: AdminStudentRecord | null): AdminStudentEditForm => ({
@@ -1631,6 +1632,7 @@ const AdminSectionView = ({
   const [editingStudent, setEditingStudent] = useState<AdminStudentRecord | null>(null)
   const [studentEditForm, setStudentEditForm] = useState<AdminStudentEditForm>(() => createAdminStudentEditForm(null))
   const [savingStudentEdit, setSavingStudentEdit] = useState(false)
+  const preparingPhotos = usePhotoPreparationStore(state => Object.keys(state.pending).length > 0)
   const [studentClassSections, setStudentClassSections] = useState<Array<{grade:string;section:string}>>([])
   const [studentSectionsError, setStudentSectionsError] = useState(false)
   useEffect(() => {
@@ -1873,6 +1875,7 @@ const AdminSectionView = ({
   }, [setOfficialRoster, shouldLoadRoster])
 
   const registerOfficialStudent = async () => {
+    if (preparingPhotos) return
     setFamilyCredentials(null)
     setStudentNotice('')
     const parentName = [newFamily.parentLastName, newFamily.parentMiddleName, newFamily.parentFirstName].filter(Boolean).join(' ').trim()
@@ -2040,7 +2043,7 @@ const AdminSectionView = ({
   }
 
   const saveEditedStudent = async () => {
-    if (!editingStudent || savingStudentEdit) return
+    if (!editingStudent || savingStudentEdit || preparingPhotos) return
     const fail=(message:string)=>{setStudentNotice(message);notifyRegistryOutcome(false,message)}
 
     const normalizedName = `${studentEditForm.lastName} ${studentEditForm.middleName} ${studentEditForm.firstName}`.replace(/\s+/g, ' ').trim()
@@ -2077,6 +2080,10 @@ const AdminSectionView = ({
       }, registryMutationOptions)
       const canonical = response.data?.data?.canonicalEntity
       const profile = response.data?.data
+      if (studentEditForm.photoData !== (editingStudent.photoData ?? '')) {
+        const savedPhoto = canonical && Object.prototype.hasOwnProperty.call(canonical, 'photoData') ? canonical.photoData : profile?.officialAvatar ?? profile?.photoData
+        if ((savedPhoto ?? '') !== (studentEditForm.photoData ?? '')) throw new Error(tr('La réponse du serveur ne confirme pas la photo. Votre saisie reste ouverte : vérifiez la connexion puis réessayez.', 'The server response did not confirm the photograph. Your form remains open: check the connection and retry.'))
+      }
       const updatedStudent: AdminStudentRecord = profile?.user && profile?.grade ? apiProfileToRosterRecord(profile) : { ...editingStudent, name: normalizedName, firstName:studentEditForm.firstName.trim(), middleName:studentEditForm.middleName.trim(), lastName:studentEditForm.lastName.trim(), email: canonical?.email ?? studentEditForm.email.trim(), studentNumber: canonical?.studentNumber ?? studentEditForm.studentNumber.trim(), grade: studentEditForm.grade, section: studentEditForm.section, status: canonical?.status ?? studentEditForm.status, dateOfBirth: studentEditForm.dateOfBirth || null, photoData: studentEditForm.photoData ?? editingStudent.photoData }
       ++rosterRequestRef.current
       setOfficialRoster(current => { const next=current.map(student=>student.id===editingStudent.id?updatedStudent:student);saveRoster(next);return next })
@@ -2156,7 +2163,7 @@ const AdminSectionView = ({
   }
 
   const saveEditedParent = async () => {
-    if (!editingParent || savingParentEdit) return
+    if (!editingParent || savingParentEdit || preparingPhotos) return
     const fail=(message:string)=>{setParentNotice(message);notifyRegistryOutcome(false,message)}
 
     const normalizedName = `${parentEditForm.lastName} ${parentEditForm.middleName} ${parentEditForm.firstName}`.replace(/\s+/g, ' ').trim()
@@ -2752,6 +2759,7 @@ const AdminSectionView = ({
                   <div className="mt-3">
                     <PhotoCaptureField
                       label={tr('Photo du parent','Parent photograph')}
+                      disabled={savingParentEdit}
                       value={parentEditForm.photoData}
                       onChange={(photoData) => setParentEditForm((current) => ({ ...current, photoData }))}
                       onError={setParentNotice}
@@ -2815,7 +2823,7 @@ const AdminSectionView = ({
                       <article key={student.id} className="rounded-2xl border border-kcs-blue-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Enfant lié {index + 1}</p><p className="mt-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{[student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ') || student.studentNumber}</p></div><button type="button" onClick={() => setParentEditStudents((current) => current.filter((item) => item.id !== student.id))} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-200">{tr('Retirer de cette famille','Unlink from family')}</button></div>
                         <div className="grid gap-3 md:grid-cols-2">
-                          <div className="md:col-span-2"><PhotoCaptureField label={`Photo de l’enfant ${index + 1}`} value={student.photoData || ''} onChange={(photoData) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
+                          <div className="md:col-span-2"><PhotoCaptureField label={`Photo de l’enfant ${index + 1}`} disabled={savingParentEdit} value={student.photoData || ''} onChange={(photoData) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
                           <input value={student.lastName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, lastName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève *" required />
                           <input value={student.middleName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Postnom de l’élève','Learner middle name')} />
                           <input value={student.firstName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, firstName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève *" required />
@@ -2832,7 +2840,7 @@ const AdminSectionView = ({
                       <div className="mt-4 space-y-4">{parentNewStudents.map((student, index) => <article key={`parent-new-student-${index}`} className="rounded-xl border border-emerald-200 bg-white p-4 dark:border-emerald-800 dark:bg-kcs-blue-900">
                         <div className="mb-3 flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">Nouvel élève {index + 1}</p><button type="button" onClick={() => setParentNewStudents((current) => current.filter((_item, itemIndex) => itemIndex !== index))} className="text-xs font-bold text-red-700 dark:text-red-300">{tr('Retirer','Remove')}</button></div>
                         <div className="grid gap-3 md:grid-cols-2">
-                          <div className="md:col-span-2"><PhotoCaptureField label={`Photo du nouvel élève ${index + 1}`} value={student.photoData} onChange={(photoData) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
+                          <div className="md:col-span-2"><PhotoCaptureField label={`Photo du nouvel élève ${index + 1}`} disabled={savingParentEdit} value={student.photoData} onChange={(photoData) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
                           <input value={student.lastName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, lastName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève *" required />
                           <input value={student.middleName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('Postnom de l’élève','Learner middle name')} />
                           <input value={student.firstName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, firstName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève *" required />
@@ -2850,7 +2858,7 @@ const AdminSectionView = ({
 
               <div className="registry-dialog-footer sticky bottom-0 z-20 flex shrink-0 flex-col-reverse gap-2 border-t border-gray-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:flex-row sm:justify-end sm:p-5">
                 <button type="button" onClick={() => setEditingParent(null)} className="registry-cancel rounded-xl border-2 border-slate-400 bg-white px-5 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500 dark:border-slate-300 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">{tr('Annuler','Cancel')}</button>
-                <button type="button" onClick={() => void saveEditedParent()} disabled={savingParentEdit} className="registry-save rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:text-kcs-blue-950 dark:hover:bg-emerald-400 dark:focus:ring-offset-kcs-blue-900">{savingParentEdit ? tr('Enregistrement…','Saving…') : tr('Enregistrer','Save changes')}</button>
+                <button type="button" onClick={() => void saveEditedParent()} disabled={savingParentEdit || preparingPhotos} className="registry-save rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:text-kcs-blue-950 dark:hover:bg-emerald-400 dark:focus:ring-offset-kcs-blue-900">{savingParentEdit ? tr('Enregistrement…','Saving…') : tr('Enregistrer','Save changes')}</button>
               </div>
             </section>
           </div>
@@ -2976,7 +2984,7 @@ const AdminSectionView = ({
               </div>
               </div>
               <div className="registry-dialog-footer">
-                <button type="submit" className={`${adminButton} registry-save w-full sm:w-auto`}><UserPlus size={16} className="inline" /> {tr("Enregistrer la famille","Save family")}</button>
+                <button type="submit" disabled={preparingPhotos} className={`${adminButton} registry-save w-full sm:w-auto`}><UserPlus size={16} className="inline" /> {tr("Enregistrer la famille","Save family")}</button>
                 <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">{tr("Élèves prêts : ","Learners ready: ")}{newFamily.students.filter((student) => student.lastName.trim() && student.firstName.trim()).length}</span>
               </div>
               {studentNotice && <p className="mt-3 rounded-xl bg-white p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">{studentNotice}</p>}
@@ -3113,6 +3121,7 @@ const AdminSectionView = ({
                   <div className="mt-3">
                     <PhotoCaptureField
                       label={tr('Photo de l’élève','Learner photograph')}
+                      disabled={savingStudentEdit}
                       value={studentEditForm.photoData ?? ''}
                       onChange={(photoData) => setStudentEditForm((current) => ({ ...current, photoData }))}
                       onError={setStudentNotice}
@@ -3191,7 +3200,7 @@ const AdminSectionView = ({
               </div>
 
               <div className="registry-dialog-footer sticky bottom-0 z-20 flex shrink-0 flex-col-reverse gap-2 border-t border-sky-200 bg-white/95 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:flex-row sm:justify-end sm:p-5">
-                <button type="button" className="registry-save rounded-xl border border-kcs-blue-900 bg-kcs-blue-800 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-kcs-blue-900/25 hover:bg-kcs-blue-950 disabled:opacity-60" onClick={() => void saveEditedStudent()} disabled={savingStudentEdit}>{savingStudentEdit ? tr('Enregistrement…','Saving…') : tr('Enregistrer les modifications','Save changes')}</button>
+                <button type="button" className="registry-save rounded-xl border border-kcs-blue-900 bg-kcs-blue-800 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-kcs-blue-900/25 hover:bg-kcs-blue-950 disabled:opacity-60" onClick={() => void saveEditedStudent()} disabled={savingStudentEdit || preparingPhotos}>{savingStudentEdit ? tr('Enregistrement…','Saving…') : tr('Enregistrer les modifications','Save changes')}</button>
                 <button type="button" className="registry-cancel rounded-xl border-2 border-amber-500 bg-amber-100 px-5 py-3 text-sm font-bold text-amber-950 shadow-sm hover:bg-amber-200 dark:border-amber-300 dark:bg-amber-400 dark:text-kcs-blue-950 dark:hover:bg-amber-300" onClick={() => setEditingStudent(null)}>{tr('Annuler','Cancel')}</button>
               </div>
             </section>

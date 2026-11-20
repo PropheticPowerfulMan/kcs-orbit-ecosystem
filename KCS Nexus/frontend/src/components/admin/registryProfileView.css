@@ -46,3 +46,17 @@
 @media(max-height:520px){.registry-view-heading{padding:8px 14px}.registry-view-heading p,.registry-view-eyebrow,.registry-view-actions>span{display:none}.registry-view-heading h2{font-size:18px;margin:0}.registry-view-nav{padding:6px 14px}.registry-view-actions{padding:7px 14px}}
 
 .registry-view-body.registry-dialog-body>*+*{margin-top:0}
+
+/* Explicit viewport/grid sizing also works where dvh/svh or persistent native scrollbars are unavailable. */
+[data-entity-dialog].registry-view-overlay{--registry-view-pad:16px;width:100%!important;max-width:none!important;top:var(--registry-edit-top,0px)!important;bottom:auto!important;height:var(--registry-edit-height,100vh)!important;max-height:var(--registry-edit-height,100vh)!important;padding:var(--registry-view-pad)!important;box-sizing:border-box}
+[data-entity-dialog].registry-view-overlay>.registry-view-window.registry-dialog-window{display:grid!important;grid-template-rows:auto auto minmax(0,1fr) auto!important;height:calc(var(--registry-edit-height,100vh) - 2 * var(--registry-view-pad))!important;max-height:calc(var(--registry-edit-height,100vh) - 2 * var(--registry-view-pad))!important;min-width:0!important;min-height:0!important;overflow:hidden!important}
+.registry-view-content{position:relative;min-width:0;min-height:0;overflow:hidden}
+[data-entity-dialog] .registry-view-content>.registry-view-body.registry-dialog-body{display:flex!important;flex-direction:column!important;height:100%!important;max-height:100%!important;min-height:0!important;box-sizing:border-box;overflow-y:scroll!important;overflow-x:hidden!important;touch-action:pan-y;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-right:34px!important}
+[data-entity-dialog] .registry-view-content>.registry-view-body::-webkit-scrollbar{display:none;width:0}
+.registry-view-scroll-rail{position:absolute;inset:8px 5px 8px auto;width:18px;border:1px solid #bed1de;border-radius:12px;background:#d9e7ef;touch-action:none;user-select:none;cursor:pointer;outline-offset:2px}
+.registry-view-scroll-rail[hidden]{display:none!important}
+.registry-view-scroll-rail>span{position:absolute;left:4px;right:4px;top:0;border-radius:10px;background:#377c99;pointer-events:auto}
+.registry-view-scroll-rail:hover>span,.registry-view-scroll-rail:focus-visible>span{background:#176684}
+.registry-view-scroll-rail:focus-visible{outline:2px solid #2389a8}
+.dark .registry-view-scroll-rail{background:#0e2033;border-color:#304a62}.dark .registry-view-scroll-rail>span{background:#8bbbd0}.dark .registry-view-scroll-rail:hover>span,.dark .registry-view-scroll-rail:focus-visible>span{background:#b2dce9}
+@media(max-width:640px),(max-height:520px){[data-entity-dialog].registry-view-overlay{--registry-view-pad:8px}.registry-view-scroll-rail{right:4px;width:18px}}

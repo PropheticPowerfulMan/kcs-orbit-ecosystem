@@ -1,3 +1,4 @@
+import { enhanceOfficialDocument } from './officialDocumentPresentation'
 import { api } from '@/services/api'
 
 type PreviewOptions = { filename: string; language?: 'fr' | 'en'; autoPrint?: boolean; onError?: (message: string) => void; onClose?: () => void }
@@ -39,7 +40,7 @@ export async function showOfficialDocument(win: Window, html: string, options: P
   // Older generators included inline print scripts; controls now own the print lifecycle.
   const night = document.documentElement.classList.contains('dark')
   const cleaned = html.replace(/<script\b[^>]*>[\s\S]*?(?:<\/script\s*>|<\\\/script\s*>)/gi, '')
-  win.document.open(); win.document.write(cleaned); win.document.close()
+  win.document.open(); win.document.write(enhanceOfficialDocument(cleaned)); win.document.close()
   win.document.title = fileName(options.filename).replace(/\.pdf$/i, '')
   const style = win.document.createElement('style')
   style.dataset.kcsDocumentControls = ''

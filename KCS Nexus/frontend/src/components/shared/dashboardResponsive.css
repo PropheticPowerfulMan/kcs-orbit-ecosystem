@@ -1,0 +1,72 @@
+/* Dashboard screen layout only. Official documents retain their independent print layout. */
+@media screen and (max-width: 767px) {
+  body[data-nexus-dashboard] { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+  body[data-nexus-dashboard] :is(#root .portal-shell, [data-gradebook-focus], [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback]) {
+    font-size:13px; line-height:1.5;
+  }
+  body[data-nexus-dashboard] :is(#root .portal-shell, [data-gradebook-focus], [data-nexus-dialog-panel], [data-entity-dialog], [data-mutation-feedback])
+  :is(h1,h2,h3,h4,p,span,label,small,button,a):not(:where([data-official-document] *, .report-card-paper *, .report-card-document *, .official-report-card *, .transcript-paper *, [data-report-card-document] *)) {
+    overflow-wrap:anywhere;
+  }
+  body[data-nexus-dashboard] :is(#root .portal-shell, [data-gradebook-focus], [data-nexus-dialog-panel], [data-entity-dialog]) h1:not(:where([data-official-document] *, .report-card-paper *, .report-card-document *, .official-report-card *, .transcript-paper *)) {
+    font-size:clamp(19px,5.3vw,22px)!important; line-height:1.25!important;
+  }
+  body[data-nexus-dashboard] :is(#root .portal-shell, [data-gradebook-focus], [data-nexus-dialog-panel], [data-entity-dialog]) h2:not(:where([data-official-document] *, .report-card-paper *, .report-card-document *, .official-report-card *, .transcript-paper *)) {
+    font-size:18px!important; line-height:1.3!important;
+  }
+  body[data-nexus-dashboard] :is(#root .portal-shell, [data-gradebook-focus], [data-nexus-dialog-panel], [data-entity-dialog]) h3:not(:where([data-official-document] *, .report-card-paper *, .report-card-document *, .official-report-card *, .transcript-paper *)) {
+    font-size:15px!important; line-height:1.35!important;
+  }
+  body[data-nexus-dashboard] :is(#root .portal-shell, [data-gradebook-focus], [data-nexus-dialog-panel], [data-entity-dialog]) .text-sm:not(:where([data-official-document] *, .report-card-paper *, .report-card-document *, .official-report-card *, .transcript-paper *)) { font-size:12px!important; line-height:1.5; }
+  body[data-nexus-dashboard] :is(#root .portal-shell, [data-gradebook-focus], [data-nexus-dialog-panel], [data-entity-dialog]) .text-xs:not(:where([data-official-document] *, .report-card-paper *, .report-card-document *, .official-report-card *, .transcript-paper *)) { font-size:11px!important; line-height:1.45!important; }
+  body[data-nexus-dashboard] :is(.portal-shell > main, [data-portal-workspace], [data-admin-workspace], [data-gradebook-focus]) { min-width:0; max-width:100%; }
+  body[data-nexus-dashboard] .portal-shell :is(.grid, .flex) > :is(div,section,article,form,fieldset,label) { min-width:0; }
+  body[data-nexus-dashboard] :is([data-portal-workspace], [data-admin-workspace], [data-gradebook-focus]) :is(input,select,textarea):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file]):not([data-grade-row]) {
+    min-width:0; max-width:100%; box-sizing:border-box; font-size:16px!important;
+  }
+  body[data-nexus-dashboard] :is([data-portal-workspace], [data-admin-workspace]) :is(input,select):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file]):not([data-grade-row]) { min-height:42px; }
+  body[data-nexus-dashboard] .nexus-workspace-heading { padding:16px!important; gap:11px; border-radius:17px; align-items:flex-start; }
+  body[data-nexus-dashboard] .nexus-workspace-heading-icon { width:38px; height:38px; border-radius:12px; }
+  body[data-nexus-dashboard] .nexus-workspace-heading > div { min-width:0; flex-basis:calc(100% - 50px); }
+  body[data-nexus-dashboard] .nexus-workspace-heading p { font-size:12px!important; line-height:1.55; }
+  body[data-nexus-dashboard] :is(.nexus-workspace-card, [data-admin-card]):not(:where([data-official-document] *, .report-card-paper *, .report-card-document *, .official-report-card *, .transcript-paper *)) { border-radius:17px; }
+  body[data-nexus-dashboard] .nexus-workspace-card:is(.p-5,.p-6) { padding:14px; }
+  body[data-nexus-dashboard] .portal-dashboard-topbar { padding:12px 14px!important; }
+  body[data-nexus-dashboard] .portal-dashboard-topbar label { min-width:0; width:100%; }
+  body[data-nexus-dashboard] .portal-dashboard-topbar :is(select,input) { width:100%; max-width:100%; }
+  body[data-nexus-dashboard] [data-account-identity] > .flex { gap:12px; align-items:flex-start; }
+  body[data-nexus-dashboard] [data-account-identity-avatar] { width:64px; height:64px; }
+  body[data-nexus-dashboard] [data-account-identity] > .flex h2 { white-space:normal; overflow-wrap:anywhere; }
+  body[data-nexus-dashboard] [data-account-identity-detail] { gap:10px; padding:11px; }
+  body[data-nexus-dashboard] [data-account-identity-detail] > div { min-width:0; }
+  body[data-nexus-dashboard] [data-account-identity-detail] p { overflow-wrap:anywhere; }
+  body[data-nexus-dashboard] :is([data-portal-workspace], [data-admin-workspace]) :is(div,section):has(>table) { max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; }
+  body[data-nexus-dashboard] :is([data-portal-workspace], [data-admin-workspace]) :is(.overflow-x-auto,.overflow-auto) { max-width:100%; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; }
+  body[data-nexus-dashboard] [data-gradebook-focus] { width:100%; max-width:100vw; height:100dvh; max-height:100dvh; font-size:12px; }
+  body[data-nexus-dashboard] [data-gradebook-focus] .nexus-gradebook-focus-heading { gap:8px; padding:10px 12px; }
+  body[data-nexus-dashboard] [data-gradebook-focus] .nexus-gradebook-focus-heading > div:first-child { flex:1 1 180px; }
+  body[data-nexus-dashboard] [data-gradebook-focus] .nexus-gradebook-focus-heading > div:last-child { margin-left:auto; }
+  body[data-nexus-dashboard] [data-gradebook-focus] .nexus-gradebook-focus-heading :is(h3,p) { white-space:normal; }
+  body[data-nexus-dashboard] [data-gradebook-toolbar] { max-height:34dvh; overflow-y:auto; flex-shrink:0; padding:10px!important; gap:9px; }
+  body[data-nexus-dashboard] [data-gradebook-toolbar] > .flex { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:7px; width:100%; }
+  body[data-nexus-dashboard] [data-gradebook-toolbar] button { min-height:38px; padding:8px!important; justify-content:center; font-size:11px!important; white-space:normal; }
+  body[data-nexus-dashboard] [data-gradebook-toolbar] label { min-width:0; max-width:100%; }
+  body[data-nexus-dashboard] [data-gradebook-toolbar] label :is(select,input) { width:100%; max-width:100%; }
+  body[data-nexus-dashboard] [data-gradebook-focus] [data-gradebook-periods] { max-height:28dvh; overflow-y:auto; }
+  body[data-nexus-dashboard] [data-gradebook-focus] table { font-size:11px; }
+  body[data-nexus-dashboard] [data-gradebook-focus] [data-grade-row] { width:58px; min-height:34px; font-size:13px; }
+  body[data-nexus-dashboard] [data-kcs-gradebook] td button { min-height:30px!important; }
+  body[data-nexus-dashboard] [data-gradebook-focus] table :is(th:first-child,td:first-child) { width:150px; min-width:150px; max-width:150px; overflow-wrap:anywhere; }
+}
+@media screen and (min-width:768px) and (max-width:1023px) {
+  body[data-nexus-dashboard] .nexus-workspace-heading { padding:20px; gap:14px; }
+  body[data-nexus-dashboard] .portal-shell .grid > :is(section,article,div,label) { min-width:0; }
+}
+
+@media screen and (max-width:767px) {
+  body[data-nexus-dashboard] .portal-dashboard-topbar:has(.portal-inbox-action) { position:relative; }
+  body[data-nexus-dashboard] .portal-dashboard-topbar:has(.portal-inbox-action) > .flex { gap:8px; }
+  body[data-nexus-dashboard] .portal-dashboard-topbar:has(.portal-inbox-action) p { font-size:11px!important; line-height:1.45; }
+  body[data-nexus-dashboard] .portal-dashboard-topbar:has(.portal-inbox-action) > .flex > .flex:last-child { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
+  body[data-nexus-dashboard] .portal-dashboard-topbar:has(.portal-inbox-action) :is(a,button) { min-height:36px;padding:7px!important; }
+}
