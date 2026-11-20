@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto'
 import { deliveryRecipientUnavailable } from './deliveryRecipientAccess.js'
 import { reportCardReceiptUrl } from '../utils/reportCardReceipt.js'
 import { env } from '../config/env.js'
@@ -87,6 +88,9 @@ export async function processOutboundMailQueue() {
     }) : null
     const attachmentData = message?.attachmentData ?? message?.sharedAttachment?.data
     if (row.reportCardId && (!attachmentData?.length || message?.attachmentMime !== 'application/pdf')) { await prisma.correspondenceLog.update({where:{id:row.id},data:{status:'FAILED',failureReason:'REPORT_CARD_PDF_ATTACHMENT_MISSING'}}); continue }
+    const attachmentHash=attachmentData?.length?createHash('sha256').update(attachmentData).digest('hex'):null
+    const expectedHash=(metadata as Record<string,unknown>).reportCardAttachmentSha256
+    if(row.reportCardId&&expectedHash&&expectedHash!==attachmentHash){await prisma.correspondenceLog.update({where:{id:row.id},data:{status:'FAILED',failureReason:'REPORT_CARD_PDF_INTEGRITY_MISMATCH'}});continue}
     const language = metadata.language === 'en' ? 'en' : 'fr'
     const attachmentNote = message?.attachmentName ? (language === 'fr' ? `\n\nDocument joint : ${message.attachmentName}. Disponible aussi dans votre boîte Nexus.` : `\n\nAttached document: ${message.attachmentName}. Also available in your Nexus inbox.`) : ''
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] || character))
@@ -110,7 +114,7 @@ export async function processOutboundMailQueue() {
       await prisma.$transaction(async tx => {
         await tx.$queryRaw(Prisma.sql`SELECT id FROM "CorrespondenceLog" WHERE id = ${row.id} FOR UPDATE`)
         const latest = await tx.correspondenceLog.findUniqueOrThrow({ where: {id:row.id} })
-        await tx.correspondenceLog.update({ where:{id:row.id}, data:{ status:latest.status === 'DELIVERED' ? 'DELIVERED' : 'SENT', sentAt:new Date(), failureReason:null, metadata:{ ...metadata, ...queueMetadata(latest.metadata), leaseId:null, leaseUntil:null, attempts, lastAttemptAt:now.toISOString(), nextAttemptAt:null } as Prisma.InputJsonValue } })
+        await tx.correspondenceLog.update({ where:{id:row.id}, data:{ status:latest.status === 'DELIVERED' ? 'DELIVERED' : 'SENT', sentAt:new Date(), failureReason:null, metadata:{ ...metadata, ...queueMetadata(latest.metadata), leaseId:null, leaseUntil:null, attempts, smtpAcceptedAt:new Date().toISOString(), smtpMessageId:result.messageId??null, smtpAcceptedRecipients:result.acceptedRecipients??[], ...(row.reportCardId?{reportCardAttachmentName:message?.attachmentName??null,reportCardAttachmentBytes:attachmentData?.length??null,reportCardAttachmentSha256:attachmentHash}:{}), lastAttemptAt:now.toISOString(), nextAttemptAt:null } as Prisma.InputJsonValue } })
       })
       continue
     }

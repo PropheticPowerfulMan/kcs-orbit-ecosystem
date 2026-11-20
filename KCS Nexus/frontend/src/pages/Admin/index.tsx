@@ -1,3 +1,4 @@
+import {ParentProfileView,LearnerProfileView} from '@/components/admin/RegistryProfileView'
 import { adminDashboardText, adminDashboardMonth } from '@/utils/adminDashboardLanguage'
 import '@/components/admin/adminOverview.css'
 import { confirmPortalAction, promptPortalAction } from '@/utils/portalActionDialogs'
@@ -14,7 +15,7 @@ import DateSelect from '@/components/shared/DateSelect'
 import PhotoCaptureField from '@/components/shared/PhotoCaptureField'
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowUpRight, BookOpen, Brain, Eye, Pencil, KeyRound,
@@ -98,6 +99,9 @@ const liveEventControls: any[] = []
 const adminRosterSeed: any[] = []
 
 type AdminStudentRecord = {
+  firstName?: string | null
+  middleName?: string | null
+  lastName?: string | null
   id: string
   localProfileId?: string | null
   name: string
@@ -138,6 +142,9 @@ type FamilyContactDraft = {
 }
 
 type AdminParentRecord = {
+  firstName?: string | null
+  middleName?: string | null
+  lastName?: string | null
   id: string
   displayId?: string
   name: string
@@ -280,10 +287,13 @@ const splitPersonName = (value = '') => {
   }
 }
 
+const registryMutationOptions = {headers:{'x-silent-feedback':'true'}}
+const notifyRegistryOutcome = (successful:boolean,message:string) => window.dispatchEvent(new CustomEvent('ecosystem:mutation-'+(successful?'success':'error'),{detail:{message}}))
+
 const createAdminStudentEditForm = (student: AdminStudentRecord | null): AdminStudentEditForm => ({
-  firstName: splitPersonName(student?.name).firstName,
-  middleName: splitPersonName(student?.name).middleName,
-  lastName: splitPersonName(student?.name).lastName,
+  firstName: student?.firstName !== undefined ? student.firstName ?? '' : splitPersonName(student?.name).firstName,
+  middleName: student?.middleName !== undefined ? student.middleName ?? '' : splitPersonName(student?.name).middleName,
+  lastName: student?.lastName !== undefined ? student.lastName ?? '' : splitPersonName(student?.name).lastName,
   studentNumber: student?.studentNumber ?? '',
   email: student?.email ?? '',
   grade: student?.grade ?? 'Grade 1',
@@ -366,9 +376,9 @@ const ensureFamilyContactDrafts = (contacts?: FamilyContactDraft[]): FamilyConta
 }
 
 const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParentEditForm => ({
-  firstName: splitPersonName(parent?.name).firstName,
-  middleName: splitPersonName(parent?.name).middleName,
-  lastName: splitPersonName(parent?.name).lastName,
+  firstName: parent?.firstName !== undefined ? parent.firstName ?? '' : splitPersonName(parent?.name).firstName,
+  middleName: parent?.middleName !== undefined ? parent.middleName ?? '' : splitPersonName(parent?.name).middleName,
+  lastName: parent?.lastName !== undefined ? parent.lastName ?? '' : splitPersonName(parent?.name).lastName,
   email: parent?.email === 'Email non renseigne' ? '' : (parent?.email ?? ''),
   phone: parent?.phone === 'Telephone non renseigne' ? '' : (parent?.phone ?? ''),
   physicalAddress: editablePhysicalAddress(parent?.physicalAddress),
@@ -546,6 +556,9 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     id: profile.id,
     localProfileId: profile.localProfileId ?? null,
     name: fullName,
+    firstName: profile.user?.firstName,
+    middleName: profile.user?.middleName,
+    lastName: profile.user?.lastName,
     studentNumber: profile.studentNumber,
     email: profile.user?.email ?? '',
     dateOfBirth: profile.dateOfBirth ?? null,
@@ -553,8 +566,8 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     grade: normalizeSchoolLevel(profile.grade) ?? profile.grade,
     section: profile.section ?? '',
     parent: parent ? [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') : 'Parent record pending',
-    parentEmail: parent?.email ?? `${fullName.toLowerCase().replace(/\W+/g, '.')}@family.kcs.test`,
-    parentPhone: parent?.phone ?? '+243 810 000 000',
+    parentEmail: parent?.email ?? '',
+    parentPhone: parent?.phone ?? '',
     status: profile.status === 'active' ? 'Active' : profile.status,
     gpa: profile.gpa == null ? null : Number(profile.gpa),
     attendance: profile.attendanceRate == null ? null : Number(profile.attendanceRate),
@@ -912,6 +925,9 @@ const buildAdminParentRecordsFromDirectory = (
 
     return {
       id: parent.id,
+      firstName: parent.firstName,
+      middleName: parent.middleName,
+      lastName: parent.lastName,
       displayId,
       name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ').trim()
         || parent.fullName || 'Parent record pending',
@@ -1550,6 +1566,7 @@ const AdminSectionView = ({
   admissionRequests: AdminAdmissionRequest[]
   setAdmissionRequests: Dispatch<SetStateAction<AdminAdmissionRequest[]>>
 }) => {
+  const profileNavigate = useNavigate()
   const language = useUIStore((state) => state.language)
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const [selectedStudent, setSelectedStudent] = useState<AdminStudentRecord | null>(officialRoster[0] ?? null)
@@ -1643,6 +1660,11 @@ const AdminSectionView = ({
     familyContacts: [createFamilyContactDraft('MOTHER'), createFamilyContactDraft('RELATIVE'), createFamilyContactDraft('HOUSEHOLD_AGENT')],
     students: [createAdminStudentDraft()],
   })
+
+  useEffect(()=>{
+    if(sharedDirectory)setSelectedParent(current=>current?(buildAdminParentRecordsFromDirectory(sharedDirectory,officialRoster).find(parent=>parent.id===current.id)??current):null)
+    setViewingStudent(current=>current?(officialRoster.find(student=>student.id===current.id)??current):null)
+  },[sharedDirectory,officialRoster])
 
   useRegistryDialogFocus(Boolean(editingParent || editingStudent || selectedParent || viewingStudent || showCreateStudent))
 
@@ -2018,21 +2040,22 @@ const AdminSectionView = ({
   }
 
   const saveEditedStudent = async () => {
-    if (!editingStudent) return
+    if (!editingStudent || savingStudentEdit) return
+    const fail=(message:string)=>{setStudentNotice(message);notifyRegistryOutcome(false,message)}
 
     const normalizedName = `${studentEditForm.lastName} ${studentEditForm.middleName} ${studentEditForm.firstName}`.replace(/\s+/g, ' ').trim()
     if (!studentEditForm.firstName.trim() || !studentEditForm.lastName.trim()) {
-      setStudentNotice('Le prénom et le nom de l’élève sont obligatoires pour enregistrer les modifications.')
+      fail('Le prénom et le nom de l’élève sont obligatoires pour enregistrer les modifications.')
       return
     }
 
     if (!studentEditForm.studentNumber.trim()) {
-      setStudentNotice('Le numéro d’élève est obligatoire pour empêcher les doublons.')
+      fail('Le numéro d’élève est obligatoire pour empêcher les doublons.')
       return
     }
 
     if (!studentEditForm.email.trim()) {
-      setStudentNotice("L’adresse e-mail institutionnelle de l’élève est obligatoire pour garantir son identité et la propagation de son compte dans l’écosystème.")
+      fail("L’adresse e-mail institutionnelle de l’élève est obligatoire pour garantir son identité et la propagation de son compte dans l’écosystème.")
       return
     }
 
@@ -2051,10 +2074,10 @@ const AdminSectionView = ({
         ...(studentEditForm.photoData !== (editingStudent.photoData ?? '')
           ? { photoData: studentEditForm.photoData ?? '' }
           : {}),
-      })
+      }, registryMutationOptions)
       const canonical = response.data?.data?.canonicalEntity
       const profile = response.data?.data
-      const updatedStudent: AdminStudentRecord = profile?.user && profile?.grade ? apiProfileToRosterRecord(profile) : { ...editingStudent, name: normalizedName, email: canonical?.email ?? studentEditForm.email.trim(), studentNumber: canonical?.studentNumber ?? studentEditForm.studentNumber.trim(), grade: studentEditForm.grade, section: studentEditForm.section, status: canonical?.status ?? studentEditForm.status, dateOfBirth: studentEditForm.dateOfBirth || null, photoData: studentEditForm.photoData ?? editingStudent.photoData }
+      const updatedStudent: AdminStudentRecord = profile?.user && profile?.grade ? apiProfileToRosterRecord(profile) : { ...editingStudent, name: normalizedName, firstName:studentEditForm.firstName.trim(), middleName:studentEditForm.middleName.trim(), lastName:studentEditForm.lastName.trim(), email: canonical?.email ?? studentEditForm.email.trim(), studentNumber: canonical?.studentNumber ?? studentEditForm.studentNumber.trim(), grade: studentEditForm.grade, section: studentEditForm.section, status: canonical?.status ?? studentEditForm.status, dateOfBirth: studentEditForm.dateOfBirth || null, photoData: studentEditForm.photoData ?? editingStudent.photoData }
       ++rosterRequestRef.current
       setOfficialRoster(current => { const next=current.map(student=>student.id===editingStudent.id?updatedStudent:student);saveRoster(next);return next })
       refreshRegistryAfterCommit()
@@ -2068,18 +2091,9 @@ const AdminSectionView = ({
       const delivery = response.data?.data?.notificationDelivery
       const successMessage = response.data?.message || `${normalizedName} a été mis à jour avec succès.`
       setStudentNotice(successMessage)
-      setDetailDialog({
-        title: 'Modification enregistrée',
-        subtitle: normalizedName,
-        details: [
-          ['Résultat', successMessage],
-          ['Dashboard', delivery?.dashboard ? 'Message ajouté aux tableaux de bord concernés' : 'Notification interne en attente'],
-          ['E-mail', delivery?.email?.queued ? 'E-mail placé dans la file d’envoi' : delivery?.email?.sent ? 'E-mail envoyé' : `Non envoyé (${delivery?.email?.reason || 'configuration indisponible'})`],
-          ['SMS', delivery?.sms?.queued ? 'SMS placé dans la file d’envoi' : delivery?.sms?.sent ? 'SMS envoyé' : `Non envoyé (${delivery?.sms?.reason || 'configuration indisponible'})`],
-        ],
-      })
+      notifyRegistryOutcome(true,successMessage)
     } catch (error) {
-      setStudentNotice(extractStudentApiMessage(error, 'Impossible de modifier cet élève pour le moment.'))
+      fail(extractStudentApiMessage(error, 'Impossible de modifier cet élève pour le moment.'))
     } finally {
       setSavingStudentEdit(false)
     }
@@ -2102,6 +2116,8 @@ const AdminSectionView = ({
       rosterRequestRef.current += 1
       setOfficialRoster(rows => { const next = rows.filter(row => row.id !== student.id); saveRoster(next); return next })
       setSelectedStudent(null)
+      setViewingStudent(current=>current?.id===student.id?null:current)
+      setEditingStudent(current=>current?.id===student.id?null:current)
       refreshRegistryAfterCommit()
       setStudentNotice(response.data?.message || `${student.name} a été retiré des registres actifs et archivé.`)
     } catch (error) {
@@ -2110,7 +2126,25 @@ const AdminSectionView = ({
     }
   }
 
-  const openEditParent = (parent: AdminParentRecord) => {
+  const openEditParent = async (candidate: AdminParentRecord) => {
+    let parent=candidate
+    // A cached roster may display a family before the canonical directory arrives.
+    // Never submit its email grouping key as an Orbit identity.
+    if(!sharedDirectoryRef.current?.parents?.some(row=>row.id===candidate.id)){
+      try{
+        const response=await registryAPI.getDirectory(true,true,true)
+        const directory=response.data?.data as SharedDirectoryPayload
+        const matches=buildAdminParentRecordsFromDirectory(directory,officialRoster).filter(row=>
+          row.id===candidate.id||row.displayId===candidate.id||
+          (candidate.id===candidate.email.trim().toLowerCase()&&row.email.toLowerCase()===candidate.email.toLowerCase()))
+        if(matches.length!==1)throw new Error('Official parent identity is unavailable')
+        parent=matches[0]
+        sharedDirectoryRef.current=directory;setSharedDirectory(directory)
+      }catch{
+        const message=tr('Le dossier officiel du parent n’est pas encore disponible. Actualisez le registre avant de modifier ses informations.','The official parent record is not available yet. Refresh the registry before editing.')
+        setParentNotice(message);notifyRegistryOutcome(false,message);return
+      }
+    }
     setSelectedParent(null)
     setEditingParent(parent)
     setParentEditForm(createAdminParentEditForm(parent))
@@ -2122,45 +2156,46 @@ const AdminSectionView = ({
   }
 
   const saveEditedParent = async () => {
-    if (!editingParent) return
+    if (!editingParent || savingParentEdit) return
+    const fail=(message:string)=>{setParentNotice(message);notifyRegistryOutcome(false,message)}
 
     const normalizedName = `${parentEditForm.lastName} ${parentEditForm.middleName} ${parentEditForm.firstName}`.replace(/\s+/g, ' ').trim()
     if (!parentEditForm.firstName.trim() || !parentEditForm.lastName.trim()) {
-      setParentNotice('Le prénom et le nom du parent sont obligatoires pour enregistrer les modifications.')
+      fail('Le prénom et le nom du parent sont obligatoires pour enregistrer les modifications.')
       return
     }
 
     const invalidLinkedStudent = parentEditStudents.find((student) => !student.firstName.trim() || !student.lastName.trim() || !student.studentNumber.trim())
     if (invalidLinkedStudent) {
-      setParentNotice('Chaque enfant lié doit avoir un nom, un prénom et un identifiant avant toute modification.')
+      fail('Chaque enfant lié doit avoir un nom, un prénom et un identifiant avant toute modification.')
       return
     }
     if (!parentEditForm.email.trim()) {
-      setParentNotice("L’adresse e-mail institutionnelle du parent est obligatoire pour garantir son identité et la propagation de son compte dans l’écosystème.")
+      fail("L’adresse e-mail institutionnelle du parent est obligatoire pour garantir son identité et la propagation de son compte dans l’écosystème.")
       return
     }
     const linkedStudentWithoutEmail = parentEditStudents.find((student) => !student.email.trim())
     if (linkedStudentWithoutEmail) {
-      setParentNotice("Chaque enfant modifié doit conserver une adresse e-mail institutionnelle afin que son identité reste cohérente dans tout l’écosystème.")
+      fail("Chaque enfant modifié doit conserver une adresse e-mail institutionnelle afin que son identité reste cohérente dans tout l’écosystème.")
       return
     }
     const readyNewStudents = parentNewStudents.filter((student) => student.firstName.trim() || student.lastName.trim())
     if (readyNewStudents.some((student) => !student.firstName.trim() || !student.lastName.trim() || !student.dateOfBirth)) {
-      setParentNotice('Complétez le nom, le prénom et la date de naissance de chaque nouvel enfant avant toute modification.')
+      fail('Complétez le nom, le prénom et la date de naissance de chaque nouvel enfant avant toute modification.')
       return
     }
     if (readyNewStudents.length > 0 && !parentEditForm.email.trim()) {
-      setParentNotice('L’e-mail du parent est requis pour créer et transmettre les accès du nouvel enfant.')
+      fail('L’e-mail du parent est requis pour créer et transmettre les accès du nouvel enfant.')
       return
     }
     const additionalEmails = [...new Set((parentEditForm.additionalEmails ?? []).map(email => email.trim().toLowerCase()).filter(Boolean))].filter(email => email !== parentEditForm.email.trim().toLowerCase())
     if (additionalEmails.some(email => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email))) {
-      setParentNotice(tr('Vérifiez les adresses e-mail supplémentaires. Aucune modification n’a été envoyée.', 'Check the additional email addresses. No change was submitted.'))
+      fail(tr('Vérifiez les adresses e-mail supplémentaires. Aucune modification n’a été envoyée.', 'Check the additional email addresses. No change was submitted.'))
       return
     }
     const preparedFamilyContacts = prepareFamilyContactsForSave(parentEditForm.familyContacts)
     if (preparedFamilyContacts.error) {
-      setParentNotice(preparedFamilyContacts.error)
+      fail(preparedFamilyContacts.error)
       return
     }
     const normalizedParentAddress = editablePhysicalAddress(parentEditForm.physicalAddress)
@@ -2201,7 +2236,7 @@ const AdminSectionView = ({
     })
     const changedStudentWithoutEmail = changedStudentPlans.find((plan) => !String(plan.update.email ?? '').trim())
     if (changedStudentWithoutEmail) {
-      setParentNotice("Chaque enfant modifié doit avoir une adresse e-mail institutionnelle avant l’enregistrement.")
+      fail("Chaque enfant modifié doit avoir une adresse e-mail institutionnelle avant l’enregistrement.")
       return
     }
 
@@ -2214,7 +2249,7 @@ const AdminSectionView = ({
       directoryAtSave = directoryResponse?.data?.data as SharedDirectoryPayload
       if (!directoryAtSave || !Array.isArray(directoryAtSave.parents)) throw new Error('Réponse du registre officiel incomplète.')
     } catch (error) {
-      setParentNotice(`Enregistrement bloqué avant toute modification : le registre officiel actualisé est indisponible. ${extractStudentApiMessage(error, 'Réessayez lorsque la connexion est stable.')}`)
+      fail(`Enregistrement bloqué avant toute modification : le registre officiel actualisé est indisponible. ${extractStudentApiMessage(error, 'Réessayez lorsque la connexion est stable.')}`)
       setSavingParentEdit(false)
       return
     }
@@ -2225,7 +2260,7 @@ const AdminSectionView = ({
       || parent.externalIds?.some((link) => link.externalId === editingParent.id),
     )
     if (!freshParent) {
-      setParentNotice('Enregistrement bloqué avant toute modification : ce parent n’a pas été retrouvé dans le registre officiel actualisé. Actualisez la page puis réessayez.')
+      fail('Enregistrement bloqué avant toute modification : ce parent n’a pas été retrouvé dans le registre officiel actualisé. Actualisez la page puis réessayez.')
       setSavingParentEdit(false)
       return
     }
@@ -2237,18 +2272,23 @@ const AdminSectionView = ({
     const freshStudentIdSet = new Set(freshParent.studentIds ?? [])
     const concurrentlyDetachedIds = [...retainedIds].filter((id) => initiallyLinkedIds.has(id) && !freshStudentIdSet.has(id))
     if (concurrentlyDetachedIds.length > 0) {
-      setParentNotice(`Enregistrement bloqué : ${concurrentlyDetachedIds.length} enfant(s) ont été détachés de cette famille depuis l’ouverture de la fenêtre. Fermez-la, actualisez le registre et recommencez afin de ne pas annuler une modification plus récente.`)
+      fail(`Enregistrement bloqué : ${concurrentlyDetachedIds.length} enfant(s) ont été détachés de cette famille depuis l’ouverture de la fenêtre. Fermez-la, actualisez le registre et recommencez afin de ne pas annuler une modification plus récente.`)
       setSavingParentEdit(false)
       return
     }
     const updatedPlans: typeof changedStudentPlans = []
+    const savedStudentRecords = new Map<string, AdminStudentRecord>()
     let createdStudentIds: string[] = []
     let parentCommitted = false
 
     try {
       for (const plan of changedStudentPlans) {
-        await studentsAPI.update(plan.id, plan.update)
+        const childResponse=await studentsAPI.update(plan.id, plan.update, registryMutationOptions)
         updatedPlans.push(plan)
+        const profile=childResponse.data?.data
+        const original=officialRoster.find(student=>student.id===plan.id)
+        if(profile?.user&&profile?.grade)savedStudentRecords.set(plan.id,apiProfileToRosterRecord(profile))
+        else if(original)savedStudentRecords.set(plan.id,{...original,...plan.update,name:[plan.update.lastName,plan.update.middleName,plan.update.firstName].filter(Boolean).join(' ')})
       }
 
       if (readyNewStudents.length > 0) {
@@ -2272,7 +2312,7 @@ const AdminSectionView = ({
             dateOfBirth: student.dateOfBirth,
             photoData: student.photoData || undefined,
           })),
-        })
+        }, registryMutationOptions)
         const createdStudents = creation.data?.data?.students
         createdStudentIds = Array.isArray(createdStudents) ? createdStudents.map((student: any) => student.id).filter(Boolean) : []
         if (creation.data?.data?.temporaryCredentials) setFamilyCredentials(creation.data.data.temporaryCredentials)
@@ -2291,26 +2331,32 @@ const AdminSectionView = ({
         additionalEmails,
         familyContacts: preparedFamilyContacts.contacts,
         ...(parentEditForm.photoData !== (editingParent.photoData ?? '') ? { photoData: parentEditForm.photoData } : {}),
-      }, editingParent.identifierType)
+      }, editingParent.identifierType, registryMutationOptions)
       parentCommitted = true
 
       const canonical = response.data?.data?.canonicalEntity ?? response.data?.data?.entity
       const nextDirectory = commitParentDirectory({ ...freshParent, ...canonical, id: editingParent.id, additionalEmails, familyContacts: preparedFamilyContacts.contacts, firstName: parentEditForm.firstName.trim(), middleName: parentEditForm.middleName.trim() || null, lastName: parentEditForm.lastName.trim(), email: parentEditForm.email.trim(), phone: parentEditForm.phone.trim() })
-      const refreshedParents = buildAdminParentRecordsFromDirectory(nextDirectory, officialRoster)
+      const updatedRoster=officialRoster.map(student=>savedStudentRecords.get(student.id)??student)
+      if(savedStudentRecords.size){rosterRequestRef.current+=1;setOfficialRoster(updatedRoster);saveRoster(updatedRoster)}
+      const refreshedParents = buildAdminParentRecordsFromDirectory(nextDirectory, updatedRoster)
       const updatedParent = refreshedParents.find((parent) => parent.id === editingParent.id || parent.displayId === editingParent.id) ?? null
       setEditingParent(null)
       refreshRegistryAfterCommit()
       if (updatedParent) setSelectedParent(updatedParent)
-      setParentNotice(response.data?.message || `${normalizedName} a été mis à jour avec succès.`)
+      const resultMessage=response.data?.message || `${normalizedName} a été mis à jour avec succès.`
+      setParentNotice(resultMessage)
+      notifyRegistryOutcome(true,resultMessage)
     } catch (error) {
       if (parentCommitted) {
-        setParentNotice(`Les modifications ont été enregistrées, mais le rafraîchissement de l’écran a échoué. Ne soumettez pas de nouveau le formulaire ; utilisez Actualiser. ${extractStudentApiMessage(error, '')}`.trim())
+        const warning=`Les modifications ont été enregistrées, mais le rafraîchissement de l’écran a échoué. Ne soumettez pas de nouveau le formulaire ; utilisez Actualiser. ${extractStudentApiMessage(error, '')}`.trim()
+        setParentNotice(warning)
+        notifyRegistryOutcome(true,warning)
       } else {
         const rollbackFailures: string[] = []
         const nonReversibleEmailAdds: string[] = []
         for (const plan of [...updatedPlans].reverse()) {
           try {
-            await studentsAPI.update(plan.id, plan.rollback)
+            await studentsAPI.update(plan.id, plan.rollback, registryMutationOptions)
             if (plan.emailAddedWithoutOriginal) nonReversibleEmailAdds.push(plan.id)
           } catch {
             rollbackFailures.push(plan.id)
@@ -2329,14 +2375,14 @@ const AdminSectionView = ({
         const creationWarning = readyNewStudents.length > 0
           ? ' Si la connexion a été interrompue pendant la création d’un enfant, actualisez le registre avant de recommencer afin d’éviter un doublon.'
           : ''
-        setParentNotice(`${extractStudentApiMessage(error, 'Impossible de modifier ce parent pour le moment.')}${rollbackMessage}${emailRollbackWarning}${creationWarning}`)
+        fail(`${extractStudentApiMessage(error, 'Impossible de modifier ce parent pour le moment.')}${rollbackMessage}${emailRollbackWarning}${creationWarning}`)
       }
     } finally {
       setSavingParentEdit(false)
     }
   }
   const deleteParentRecord = async (parent: AdminParentRecord) => {
-    const confirmed = await confirmPortalAction(`Supprimer ${parent.name} du registre parent ?`)
+    const confirmed = await confirmPortalAction(tr(`Retirer ${parent.name} des registres actifs et archiver son dossier ? Les dossiers des enfants sont conservés.`,`Remove ${parent.name} from active registries and archive the record? Learner records are preserved.`))
     if (!confirmed) return
 
     try {
@@ -2677,75 +2723,12 @@ const AdminSectionView = ({
           </div>
         </div>
 
-        {selectedParent && createPortal((
-          <div data-entity-dialog="parent-view" className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche parent">
-            <section className="registry-dialog-window max-h-[92vh] w-full max-w-none lg:w-[80vw] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
-              <div className="registry-dialog-heading mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Consultation','Profile overview')}</p>
-                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{tr('Dossier parent','Parent profile')}</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Identité du responsable et parcours des enfants liés.','Guardian information and linked learners.')}</p>
-                </div>
-                <button type="button" onClick={() => setSelectedParent(null)} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
-                  <X size={16} />
-                  {tr('Fermer','Close')}
-                </button>
-              </div>
-
-              <div className="registry-dialog-body"><RegistryRecordBanner kind="parent" mode="view" name={selectedParent.name} photo={selectedParent.photoData} detail={selectedParent.email} badge={selectedParent.studentCount+tr(" enfant(s) lié(s)"," linked learner(s)")}/>
-              <div className="mb-4 flex flex-wrap gap-2">
-                <button type="button" onClick={() => openEditParent(selectedParent)} className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20">{tr('Modifier','Edit')}</button>
-                <button type="button" onClick={() => deleteParentRecord(selectedParent)} className="rounded-xl border border-red-100 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20">{tr('Supprimer','Delete')}</button>
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
-                <aside className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/55">
-                  <ProfilePhoto src={selectedParent.photoData} name={selectedParent.name} />
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Responsable','Guardian')}</p>
-                  <h4 className="mt-2 font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedParent.name}</h4>
-                  <div className="mt-5 space-y-3">
-                    {[
-                      [tr('ID parent','Parent ID'), selectedParent.displayId || selectedParent.id],
-                      ['Email', selectedParent.email],
-                      ['Telephone', selectedParent.phone],
-                      [tr('Adresse physique','Home address'), selectedParent.physicalAddress],
-                      ['Enfants', String(selectedParent.studentCount)],
-                      [tr('Statut','Status'), selectedParent.status],
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-                        <p className="mt-2 break-words text-sm font-semibold text-kcs-blue-900 dark:text-white">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </aside>
-
-                <div className="space-y-3">
-                  {selectedParent.students.map((student) => (
-                    <div key={student.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex items-start gap-3">
-                          <ProfilePhoto src={student.photoData} name={student.name} size="small" />
-                          <div>
-                          <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
-                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{student.studentNumber ?? 'ID non renseigne'} - {formatClassName(student.grade, student.section) || 'Non assignee'}</p>
-                          </div>
-                        </div>
-                        <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${pillTone(getStudentRisk(student))}`}>{getStudentRisk(student)}</span>
-                      </div>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                        <div className="rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70"><p className="text-xs text-gray-400">{tr('Presence','Attendance')}</p><p className={`font-bold ${scoreTone(student.attendance, 'attendance')}`}>{student.attendance}%</p></div>
-                        <div className="rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70"><p className="text-xs text-gray-400">GPA</p><p className={`font-bold ${scoreTone(student.gpa, 'gpa')}`}>{student.gpa}</p></div>
-                        <div className="rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70"><p className="text-xs text-gray-400">Discipline</p><p className="font-bold text-kcs-blue-900 dark:text-white">{student.discipline}</p></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              </div>
-            </section>
-          </div>
-        ), document.body)}
+        {selectedParent && createPortal(<ParentProfileView
+          parent={{...selectedParent,...createAdminParentEditForm(selectedParent),familyContacts:selectedParent.familyContacts}}
+          learners={selectedParent.students.map(student=>({...student,...createAdminStudentEditForm(student)}))}
+          actions={{onClose:()=>setSelectedParent(null),onEdit:()=>openEditParent(selectedParent),onDelete:()=>void deleteParentRecord(selectedParent)}}
+          onLearner={learner=>{const record=selectedParent.students.find(student=>student.id===learner.id);if(record){setSelectedParent(null);setViewingStudent(record);profileNavigate('/admin/students')}}}
+        />,document.body)}
 
         {editingParent && createPortal((
           <div data-entity-dialog="parent-edit" className="fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto overscroll-contain bg-kcs-blue-950/80 px-2 pb-2 pt-2 backdrop-blur-md sm:px-5 sm:pb-5 sm:pt-5" role="dialog" aria-modal="true" aria-label="Modifier parent">
@@ -3106,134 +3089,10 @@ const AdminSectionView = ({
           </div>
         </div>
 
-        {viewingStudent && createPortal((
-          <div data-entity-dialog="student-view" className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche élève">
-            <section className="registry-dialog-window max-h-[92vh] w-full max-w-none lg:w-[80vw] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
-              <div className="registry-dialog-heading mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Consultation','Profile overview')}</p>
-                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{tr('Dossier de l’élève','Learner profile')}</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Une vue complète de l’identité, de la famille et du suivi scolaire.','A complete view of identity, family and school follow-up.')}</p>
-                </div>
-                <button type="button" onClick={() => setViewingStudent(null)} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
-                  <X size={16} />
-                  {tr('Fermer','Close')}
-                </button>
-              </div>
-
-              <div className="registry-dialog-body"><RegistryRecordBanner kind="student" mode="view" name={viewingStudent.name} photo={viewingStudent.photoData} detail={viewingStudent.studentNumber} badge={formatClassName(viewingStudent.grade,viewingStudent.section)}/>
-              <div className="registry-profile-layout">
-                <div className="grid gap-3 md:grid-cols-2">
-                  {[
-                    [tr('ID élève','Student ID'), viewingStudent.studentNumber ?? 'Non renseigné'],
-                    [tr('Nom complet','Full name'), viewingStudent.name],
-                    [tr('E-mail scolaire','School email'), viewingStudent.email || 'Non renseigné'],
-                    [tr('Date de naissance','Date of birth'), viewingStudent.dateOfBirth
-                      ? new Date(viewingStudent.dateOfBirth).toLocaleDateString('fr-FR', { timeZone: 'UTC' })
-                      : 'Non renseignée'],
-                    ['Classe', formatClassName(viewingStudent.grade, viewingStudent.section) || 'Non assignée'],
-                    [tr('Statut','Status'), viewingStudent.status],
-                    [tr('Parent titulaire','Primary guardian'), viewingStudent.parent || 'Aucun parent lié'],
-                    [tr('Email parent','Parent email'), viewingStudent.parentEmail || 'Non renseigné'],
-                    [tr('Téléphone parent','Parent phone'), viewingStudent.parentPhone || 'Non renseigné'],
-                    [tr('Conseiller','Advisor'), viewingStudent.advisor ?? selectedInsight?.advisor ?? 'Non assigné'],
-                    [tr('Présence','Attendance'), viewingStudent.attendance == null ? 'Aucune présence enregistrée' : `${viewingStudent.attendance}%`],
-                    ['GPA', String(viewingStudent.gpa)],
-                    ['Discipline', viewingStudent.discipline],
-                    [tr('Suivi','Follow-up'), getStudentRisk(viewingStudent)],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{label}</p>
-                      <p className="mt-2 break-words text-sm font-semibold text-kcs-blue-900 dark:text-white">{value}</p>
-                    </div>
-                  ))}
-                  <section className="md:col-span-2 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50/70 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Tous les parents responsables','All responsible guardians')}</p>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      {(viewingStudent.responsibleParents?.length ? viewingStudent.responsibleParents : [{
-                        id: 'primary-parent',
-                        name: viewingStudent.parent || 'Aucun parent lié',
-                        email: viewingStudent.parentEmail || '',
-                        phone: viewingStudent.parentPhone || '',
-                        relationship: 'Parent titulaire',
-                      }]).map((parent, index) => (
-                        <article key={parent.id || index} className="min-w-0 rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
-                          <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">{index === 0 ? 'Parent titulaire' : parent.relationship}</p>
-                          <p className="mt-2 break-words font-semibold text-kcs-blue-900 dark:text-white">{parent.name}</p>
-                          <p className="mt-1 break-all text-xs text-gray-500 dark:text-gray-300">{parent.email || 'Email non renseigné'}</p>
-                          <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{parent.phone || 'Téléphone non renseigné'}</p>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                  <section className="md:col-span-2 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Contacts familiaux complémentaires','Additional family contacts')}</p>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{(viewingStudent.familyContacts ?? []).length ? viewingStudent.familyContacts!.map((contact, index) => (
-                      <article key={contact.kind + index} className="min-w-0 rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
-                        <p className="break-words font-bold text-kcs-blue-950 dark:text-white">{[contact.lastName, contact.middleName, contact.firstName].filter(Boolean).join(' ')}</p>
-                        <p className="mt-1 text-xs text-kcs-blue-600 dark:text-kcs-blue-200">{contact.relationship || contact.role || contact.kind}</p>
-                        <p className="mt-2 break-all text-xs text-gray-500 dark:text-gray-300">{contact.email || 'Email non renseigné'}</p>
-                        <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{contact.phone || 'Téléphone non renseigné'}</p>
-                        {contact.physicalAddress ? <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{contact.physicalAddress}</p> : null}
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {contact.authorizedPickup ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Retrait autorisé</span> : null}
-                          {contact.emergencyContact ? <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Contact d’urgence</span> : null}
-                        </div>
-                      </article>
-                    )) : <p className="text-sm text-gray-500">{tr('Aucun contact complémentaire enregistré.','No additional contacts recorded.')}</p>}</div>
-                  </section>
-                </div>
-
-                <aside className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/55">
-                  <ProfilePhoto src={viewingStudent.photoData} name={viewingStudent.name} />
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Résumé','Profile summary')}</p>
-                      <h4 className="mt-2 font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{viewingStudent.name}</h4>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{viewingStudent.studentNumber ?? 'ID non renseigné'}</p>
-                    </div>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${pillTone(getStudentRisk(viewingStudent))}`}>{getStudentRisk(viewingStudent)}</span>
-                  </div>
-
-                  <div className="mt-5 space-y-3">
-                    <div className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{tr('Famille','Family')}</p>
-                      <p className="mt-2 font-semibold text-kcs-blue-900 dark:text-white">{viewingStudent.parent || 'Aucun parent lié'}</p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{viewingStudent.parentEmail || 'Email non renseigné'}</p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{viewingStudent.parentPhone || 'Téléphone non renseigné'}</p>
-                    </div>
-                    <div className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{tr('Classe','Class')}</p>
-                      <p className="mt-2 font-semibold text-kcs-blue-900 dark:text-white">{formatClassName(viewingStudent.grade, viewingStudent.section) || 'Non assignée'}</p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{getDivisionForGrade(viewingStudent.grade).title}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl bg-white p-4 text-center dark:bg-kcs-blue-900/70">
-                        <p className={`font-display text-xl font-bold ${viewingStudent.attendance == null ? 'text-gray-400' : scoreTone(viewingStudent.attendance, 'attendance')}`}>{viewingStudent.attendance == null ? '—' : `${viewingStudent.attendance}%`}</p>
-                        <p className="mt-1 text-xs text-gray-400">{tr('Présence','Attendance')}</p>
-                      </div>
-                      <div className="rounded-xl bg-white p-4 text-center dark:bg-kcs-blue-900/70">
-                        <p className={`font-display text-xl font-bold ${scoreTone(viewingStudent.gpa, 'gpa')}`}>{viewingStudent.gpa}</p>
-                        <p className="mt-1 text-xs text-gray-400">GPA</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <button type="button" className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800" onClick={() => setViewingStudent(null)}>{tr('Retour à la liste','Back to directory')}</button>
-                    <button type="button" className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${viewingStudent.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(viewingStudent)}>{tr('Modifier','Edit')}</button>
-                    <button type="button" className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => {
-                      const target = viewingStudent
-                      setViewingStudent(null)
-                      deleteOfficialStudent(target)
-                    }}>{tr('Supprimer','Delete')}</button>
-                  </div>
-                </aside>
-              </div>
-              </div>
-            </section>
-          </div>
-        ), document.body)}
+        {viewingStudent && createPortal(<LearnerProfileView
+          student={{...viewingStudent,...createAdminStudentEditForm(viewingStudent)}}
+          actions={{onClose:()=>setViewingStudent(null),onEdit:()=>openEditStudent(viewingStudent),onDelete:()=>void deleteOfficialStudent(viewingStudent)}}
+        />,document.body)}
 
         {editingStudent && createPortal((
           <div data-entity-dialog="student-edit" className="fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto overscroll-contain bg-kcs-blue-950/80 px-2 pb-2 pt-2 backdrop-blur-md sm:px-5 sm:pb-5 sm:pt-5" role="dialog" aria-modal="true" aria-label="Modifier élève">

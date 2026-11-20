@@ -1,3 +1,4 @@
+import {institutionalLogin} from './institutionalLogin.mjs';
 import "dotenv/config";
 import http from "node:http";
 import nodemailer from "nodemailer";
@@ -183,45 +184,30 @@ const ecosystemLogin = async (body) => {
     error.status = 400;
     throw error;
   }
-  if(!identifier.includes("@")){
-    const admin=requireSupabaseAdmin();
-    let local=null;
-    for(let page=1;page<=10;page++){const {data,error}=await admin.auth.admin.listUsers({page,perPage:1000});if(error)throw error;local=data.users.find(u=>String(u.app_metadata?.kcs_nexus_identity?.accessCode||"").toUpperCase()===identifier.toUpperCase());if(local||data.users.length<1000)break}
-    if(local){const {data,error}=await supabasePublic.auth.signInWithPassword({email:local.email,password});if(error||!data.session){const denied=new Error("Incorrect Lesson Plan password.");denied.status=401;throw denied}return data.session}
-  }
-  if(identifier.includes("@")){
-    const {data}=await supabasePublic.auth.signInWithPassword({email:identifier.toLowerCase(),password});
-    if(data.session)return data.session;
-    const existing=await findAuthUserByEmail(identifier.toLowerCase());
-    if(existing){const denied=new Error("Incorrect Lesson Plan password.");denied.status=401;throw denied}
-  }
-  const nexusResponse = await fetch(new URL("/api/auth/login", nexusApiUrl), {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-kcs-client": "KCS_LESSON_PLAN" },
-    body: JSON.stringify({ identifier, password }),
-    signal: AbortSignal.timeout(12000)
-  });
-  const nexusBody = await nexusResponse.json().catch(() => null);
-  if (!nexusResponse.ok || !nexusBody?.data?.user) {
-    const error = new Error(nexusBody?.message || "Incorrect institutional identifier or password.");
-    error.status = nexusResponse.status === 403 ? 403 : 401;
-    throw error;
-  }
-  const email=String(nexusBody.data.user.email||"").trim().toLowerCase();
-  const existing=await findAuthUserByEmail(email);
-  if(existing){
-    const {data,error}=await supabasePublic.auth.signInWithPassword({email,password});
-    if(error||!data.session){const denied=new Error("Use your current Lesson Plan password. Other application passwords are not accepted.");denied.status=401;throw denied}
-    return data.session;
-  }
-  await ensureSupabaseProfile(nexusBody.data.user);
-  const created=await findAuthUserByEmail(email);
-  if(!created)throw new Error("Lesson Plan account was not provisioned.");
-  const {error}=await requireSupabaseAdmin().auth.admin.updateUserById(created.id,{password});
-  if(error)throw error;
-  const {data,error:loginError}=await supabasePublic.auth.signInWithPassword({email,password});
-  if(loginError||!data.session)throw loginError||new Error("Lesson Plan sign-in failed.");
-  return data.session;
+  return institutionalLogin({identifier,password},{
+    findLocal:async(value)=>{
+      if(value.includes('@'))return findAuthUserByEmail(value.toLowerCase())
+      const admin=requireSupabaseAdmin()
+      for(let page=1;page<=10;page++){
+        const {data,error}=await admin.auth.admin.listUsers({page,perPage:1000});if(error)throw error
+        const local=data.users.find(user=>String(user.app_metadata?.kcs_nexus_identity?.accessCode||'').toUpperCase()===value.toUpperCase())
+        if(local)return local;if(data.users.length<1000)return null
+      }
+      return null
+    },
+    signInLocal:async(email,password)=>{const {data}=await supabasePublic.auth.signInWithPassword({email,password});return data.session||null},
+    verifyInstitutional:async(identifier,password)=>{
+      const response=await fetch(new URL('/api/auth/login',nexusApiUrl),{
+        method:'POST',headers:{'content-type':'application/json','x-kcs-client':'KCS_LESSON_PLAN'},
+        body:JSON.stringify({identifier,password}),signal:AbortSignal.timeout(12000)
+      })
+      const payload=await response.json().catch(()=>null)
+      if(!response.ok||!payload?.data?.user)throw Object.assign(new Error(payload?.message||'Incorrect institutional identifier or password.'),{status:[403,423,428,429].includes(response.status)?response.status:401})
+      return payload.data.user
+    },
+    ensureProfile:ensureSupabaseProfile,
+    createSession:createSupabaseSession
+  })
 };
 
 const ecosystemSso = async (body) => {

@@ -1,6 +1,7 @@
+import {eduplannerNexusReturn} from "../utils/nexusReturn";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { FormEvent, useState } from "react";
-import { CalendarDays, Download, Eye, EyeOff, FileText, Languages, LogOut, Mail, MessageSquare, Moon, Plus, Search, ShieldCheck, Sun, UserRound } from "lucide-react";
+import { ArrowLeft, CalendarDays, Download, Eye, EyeOff, FileText, Languages, LogOut, Mail, MessageSquare, Moon, Plus, Search, ShieldCheck, Sun, UserRound } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useLessons } from "../hooks/useLessons";
@@ -123,7 +124,7 @@ export const AppLayout = () => {
               Communication
             </NavLink>
           </nav>
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2"><a href={eduplannerNexusReturn(currentUser.role)} data-nexus-return className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-primary/35 bg-primary/10 px-3 py-2 text-xs font-bold text-foreground transition hover:bg-primary/20 dark:border-cyan-300/30 dark:bg-cyan-800/30 dark:text-cyan-100"><ArrowLeft size={15}/>{language==="fr"?"Retour à Nexus AI":"Back to Nexus AI"}</a>
             <div className="order-4 flex w-full min-w-0 items-center gap-2 rounded-md border border-border bg-card/90 px-3 py-2 shadow-sm dark:bg-[#061520]/90 sm:w-auto sm:min-w-[240px] lg:order-none">
               {currentUser.photoUrl ? <img src={currentUser.photoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <UserRound size={16} className="shrink-0 text-cyan-200" />}
               <div className="min-w-0">

@@ -15,3 +15,12 @@ test('receipt URL keeps the signed bearer token out of its HTTP path and query',
  assert.equal(reportCardReceiptToken({...row,reportCardId:null},'synthetic-test-secret'),null)
  assert.equal(reportCardReceiptToken({...row,metadata:{}},'synthetic-test-secret'),null)
 })
+
+test('new receipt signatures include the exact attached PDF hash and retain old links',()=>{
+ const updated={...row,metadata:{...row.metadata,reportCardReceiptVersion:2,reportCardAttachmentSha256:'a'.repeat(64)}}
+ const token=reportCardReceiptToken(updated,'synthetic-test-secret')!
+ assert.equal(verifyReportCardReceipt(updated,token,'synthetic-test-secret'),true)
+ assert.equal(verifyReportCardReceipt({...updated,metadata:{...updated.metadata,reportCardAttachmentSha256:'b'.repeat(64)}},token,'synthetic-test-secret'),false)
+ assert.equal(reportCardReceiptToken({...updated,metadata:{...updated.metadata,reportCardAttachmentSha256:''}},'synthetic-test-secret'),null)
+ assert.equal(verifyReportCardReceipt(row,reportCardReceiptToken(row,'synthetic-test-secret'),'synthetic-test-secret'),true)
+})

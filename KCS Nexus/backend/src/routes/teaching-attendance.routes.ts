@@ -1,3 +1,4 @@
+import {teachingGpsRequired} from '../utils/teachingGpsPolicy.js'
 import {campusPolicy,saveCampusPolicy,issuePresenceChallenge,verifyTeachingPresence} from '../services/teachingPresenceProof.service.js'
 import {resolvePlanned} from '../services/teachingAttendance.service.js'
 import {teachingScheduleEditor,publishTeachingSchedule} from '../services/teachingSchedule.service.js'
@@ -36,7 +37,7 @@ async function principalActor(req:AuthenticatedRequest) {
 }
 teachingAttendanceRouter.get('/clock',requireRoles('teacher','admin'),asyncHandler(async(_req,res)=>{
   const now=await teachingServerTime()
-  return success(res,{serverUtc:now.toISOString(),schoolDate:dayOfSchool(now),schoolTimezone:TEACHING_TIMEZONE,authority:'PostgreSQL clock_timestamp'})
+  return success(res,{serverUtc:now.toISOString(),schoolDate:dayOfSchool(now),schoolTimezone:TEACHING_TIMEZONE,authority:'PostgreSQL clock_timestamp',gpsRequired:teachingGpsRequired()})
 }))
 teachingAttendanceRouter.get('/mine',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
   const query=filters.parse(req.query),today=dayOfSchool(await teachingServerTime())
@@ -48,7 +49,7 @@ teachingAttendanceRouter.get('/principal',asyncHandler(async(req:AuthenticatedRe
   return success(res,await teachingBoard({...query,from:query.from||today,to:query.to||query.from||today}))
 }))
 teachingAttendanceRouter.post('/mark',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
-  const body=locator.extend({action:z.enum(['ENTRY','EXIT']),location:z.object({token:z.string().regex(/^[a-f0-9]{64}$/),position:z.object({latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),accuracy:z.number().min(0).max(10000)}).strict()}).strict(),note:z.string().trim().max(1000).optional()}).strict().parse(req.body)
+  const body=locator.extend({action:z.enum(['ENTRY','EXIT']),location:z.object({token:z.string().regex(/^[a-f0-9]{64}$/),position:z.object({latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),accuracy:z.number().min(0).max(10000)}).strict()}).strict().optional(),note:z.string().trim().max(1000).optional()}).strict().parse(req.body)
   const saved=await markTeachingTime(req.user!.sub,body,body.action,body.note,body.location)
   return success(res,saved,body.action==='ENTRY'?'TEACHING_ENTRY_SAVED':'TEACHING_EXIT_SAVED')
 }))

@@ -1,3 +1,4 @@
+import './portalSidebar.css'
 import {isMediaAccount,canUseStaffWorkspace,canUsePrincipalWorkspace,canUseSeniorWorkspace,workspaceRole} from '@/utils/accountScope'
 import {loadPersonalAvatar} from '@/utils/personalAvatarCache'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -6,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, BookOpen, FileText, Calendar, Brain,
-  Users, Settings, Bell, ChevronLeft, ChevronRight,
+  Users, Settings, Bell, ChevronLeft, ChevronRight, Search,
   Clock3, GraduationCap, BarChart3, MessageSquare, LogOut,
   Shield, Home, UserCheck, UserPlus, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Ban, Archive, Moon, Sun, Globe, BookOpenCheck, GripHorizontal, SlidersHorizontal
 } from 'lucide-react'
@@ -131,6 +132,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const mobileSidebarRef = useRef<HTMLElement>(null)
   const desktopNavigationRef = useRef<HTMLElement>(null)
   const mobileSidebarButtonRef = useRef<HTMLButtonElement>(null)
+  const [menuQuery,setMenuQuery]=useState('')
   const [avatarLoadVersion, setAvatarLoadVersion] = useState(0)
   const [desktopActionHeight, setDesktopActionHeight] = useState(() => {
     const saved = Number(localStorage.getItem('kcs-nexus-sidebar-action-height'))
@@ -151,7 +153,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
 
   useEffect(() => {
     setSidebarOpen(false)
-  }, [location.pathname, setSidebarOpen])
+    setMenuQuery('')
+  }, [location.pathname, language, user?.id, setSidebarOpen])
 
   useEffect(() => {
     if (!user?.id) return
@@ -252,6 +255,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
    {to:'/portal/senior/applications',label:language==='fr'?'Candidatures universitaires':'University applications',icon:GraduationCap},
    {to:'/portal/senior/roadmap',label:language==='fr'?'Échéances et rendez-vous':'Deadlines & meetings',icon:Calendar},
    {to:'/portal/senior/reports',label:language==='fr'?'Rapports d’accompagnement':'Guidance reports',icon:BarChart3},
+   {to:'/portal/senior/report-cards',label:language==='fr'?'Bulletins · lecture':'Report cards · view',icon:FileSpreadsheet},
+   {to:'/portal/senior/transcripts',label:language==='fr'?'Transcripts · lecture':'Transcripts · view',icon:FileText},
    {to:'/portal/senior/handbook',label:language==='fr'?'Manuel de l’école':'School Handbook',icon:BookOpen},
    {to:'/portal/senior/settings',label:t('portalNav.settings'),icon:Settings},
   ]:mediaAccount?[
@@ -303,16 +308,24 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     parent: t('roles.parent'),
   }[activeRole]
 
+  const menuWords=menuQuery.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().split(/\s+/).filter(Boolean)
+  const visibleNavItems=navItemsWithBadges.filter(item=>menuWords.every(word=>item.label.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(word)))
+  const menuText=(fr:string,en:string)=>language==='fr'?fr:en
   const renderNavigation = (isMobile = false) => (
     <>
+      {(isMobile||!sidebarCollapsed)&&<div className="nexus-menu-finder" translate="no">
+        <div className="nexus-menu-caption"><span>{menuText('Votre espace','Your workspace')}</span><span>{visibleNavItems.length} / {navItemsWithBadges.length}</span></div>
+        <div className="nexus-menu-search"><Search size={16} aria-hidden="true"/><input type="search" value={menuQuery} onChange={event=>setMenuQuery(event.target.value)} placeholder={menuText('Trouver une rubrique…','Find a section…')} aria-label={menuText('Rechercher dans le menu','Search menu')} autoComplete="off"/>{menuQuery&&<button type="button" onClick={()=>setMenuQuery('')} aria-label={menuText('Effacer la recherche du menu','Clear menu search')}><X size={14}/></button>}</div>
+      </div>}
       <nav
+        aria-label={menuText('Navigation du tableau de bord','Dashboard navigation')}
         ref={isMobile ? undefined : desktopNavigationRef}
         onScroll={isMobile ? undefined : (event) => {
           sessionStorage.setItem('kcs-nexus-desktop-sidebar-scroll', String(event.currentTarget.scrollTop))
         }}
         className={isMobile ? 'min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2' : 'min-h-0 flex-1 space-y-1 overflow-y-auto p-3'}
       >
-        {navItemsWithBadges.map(({ to, label, icon: Icon, badge }, index) => (
+        {visibleNavItems.map(({ to, label, icon: Icon, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -324,11 +337,11 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
               }
             }}
             className={({ isActive }) =>
-              `sidebar-link ${to === '/admin/academic-visibility' ? '!py-2.5 ring-1 ring-inset ring-indigo-300/20 shadow-sm transition-all duration-200 hover:ring-sky-300/40' : ''} ${isMobile ? 'sidebar-link-mobile' : ''} ${isActive ? 'active' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''} ${!isMobile && index === 0 ? 'sticky top-0 z-10 bg-white/95 shadow-sm backdrop-blur dark:bg-kcs-blue-950/95' : ''}`
+              `sidebar-link ${to === '/admin/academic-visibility' ? '!py-2.5 ring-1 ring-inset ring-indigo-300/20 shadow-sm transition-all duration-200 hover:ring-sky-300/40' : ''} ${isMobile ? 'sidebar-link-mobile' : ''} ${isActive ? 'active' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''}`
             }
-            title={!isMobile && sidebarCollapsed ? label : undefined}
+            title={label}
           >
-            {to === '/admin/academic-visibility' ? <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-400/25 to-sky-300/20 ring-1 ring-indigo-200/20"><Icon size={18} strokeWidth={2.25} className="text-current"/></span> : <Icon size={18} className="flex-shrink-0" />}
+            <span className="nexus-menu-icon"><Icon size={18} strokeWidth={1.8}/></span>
             {(isMobile || !sidebarCollapsed) && (
               <span className="min-w-0 flex-1 truncate">{label}{to === '/admin/academic-visibility' && <small className="mt-0.5 block truncate text-[10px] font-medium leading-tight opacity-75">{language === 'fr' ? 'Contrôle des accès académiques' : 'Academic access controls'}</small>}</span>
             )}
@@ -339,10 +352,11 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             )}
           </NavLink>
         ))}
+        {!visibleNavItems.length&&<div role="status" className="nexus-menu-empty" translate="no"><Search size={22}/><p>{menuText('Aucune rubrique trouvée.','No matching section.')}</p><button type="button" onClick={()=>setMenuQuery('')}>{menuText('Afficher tout le menu','Show all sections')}</button></div>}
       </nav>
 
       <div
-        className={isMobile ? 'nexus-mobile-menu-actions' : 'min-h-0 space-y-1 overflow-y-auto border-t border-gray-100 p-3 dark:border-kcs-blue-800'}
+        className={isMobile ? 'nexus-mobile-menu-actions nexus-sidebar-tools' : 'nexus-sidebar-tools min-h-0 space-y-1 overflow-y-auto border-t border-gray-100 p-3 dark:border-kcs-blue-800'}
         style={!isMobile ? { height: sidebarCollapsed ? 'auto' : desktopActionHeight, flex: sidebarCollapsed ? '0 0 auto' : `0 0 ${desktopActionHeight}px` } : undefined}
       >
         {!mediaAccount && (isMobile || !sidebarCollapsed) && (
@@ -363,16 +377,20 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Espace enseignant' : 'Teacher workspace'}</span>}
           </Link>
         )}
-        {!accessRoles.includes('teacher') && activeRole !== user.role && !['admin','staff'].includes(user.role) && (
+        {!accessRoles.includes('teacher') && (activeRole !== user.role || seniorWorkspace) && !['admin','staff'].includes(user.role) && (
           <Link to={'/portal/'+user.role} className={isMobile ? 'nexus-mobile-action' : 'sidebar-link w-full'}>
             <UserCheck size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Mon espace habituel':'My usual workspace'}</span>}
           </Link>
         )}
         {canUseSeniorWorkspace(user)&&!seniorWorkspace&&<Link to="/portal/senior" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title="Senior Teacher · ST"><GraduationCap size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Senior Teacher · ST':'Senior Teacher workspace'}</span>}</Link>}
-        {canUseStaffWorkspace(user) && activeRole !== 'staff' && activeRole !== 'admin' && (
-          <Link to={principalWorkspace ? '/admin' : '/portal/staff'} className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`} title={!isMobile && sidebarCollapsed ? (principalWorkspace ? (currentLanguage === 'fr' ? 'Espace Principal' : 'Principal workspace') : (currentLanguage === 'fr' ? 'Espace Staff' : 'Staff workspace')) : undefined}>
-            <Shield size={18} />
-            {(isMobile || !sidebarCollapsed) && <span>{principalWorkspace ? (currentLanguage === 'fr' ? 'Espace Principal' : 'Principal workspace') : (currentLanguage === 'fr' ? 'Espace Staff' : 'Staff workspace')}</span>}
+        {canUsePrincipalWorkspace(user) && !/^\/admin(?:\/|$)/.test(location.pathname) && (
+          <Link to="/admin" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title={currentLanguage==='fr'?'Espace Principal':'Principal workspace'}>
+            <Shield size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Principal':'Principal workspace'}</span>}
+          </Link>
+        )}
+        {canUseStaffWorkspace(user) && !/^\/portal\/staff(?:\/|$)/.test(location.pathname) && (
+          <Link to="/portal/staff" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title={currentLanguage==='fr'?'Espace Staff':'Staff workspace'}>
+            <UserCheck size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Staff':'Staff workspace'}</span>}
           </Link>
         )}
         {(accessRoles.includes('teacher') || user.role === 'admin') && (
@@ -445,7 +463,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   return (
     <>
       <div className="fixed inset-x-0 top-0 z-50 px-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] sm:px-4 lg:hidden">
-        <div className="nexus-mobile-dashboard-bar flex min-h-14 items-center justify-between gap-2 rounded-[24px] border px-2.5 py-2 sm:rounded-[28px] sm:px-3">
+        <div className="nexus-mobile-dashboard-bar nexus-sidebar-topbar flex min-h-14 items-center justify-between gap-2 rounded-[24px] border px-2.5 py-2 sm:rounded-[28px] sm:px-3">
         <Link to="/" onClick={() => setSidebarOpen(false)} className="flex min-w-0 flex-1 items-center gap-2.5">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white p-0.5 shadow-kcs ring-2 ring-kcs-blue-100 dark:ring-kcs-blue-800">
             <img src={schoolLogoSrc} alt="Kinshasa Christian School" className="h-full w-full rounded-full object-contain" />
@@ -481,6 +499,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           </button>
           <button
             ref={mobileSidebarButtonRef}
+            aria-expanded={sidebarOpen}
+            aria-controls="nexus-sidebar-drawer"
             onClick={toggleSidebar}
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-700 text-white shadow-kcs transition-colors hover:bg-kcs-blue-800 dark:bg-kcs-gold-600 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-500"
             aria-label={sidebarOpen ? t('common.close') : t('nav.portal')}
@@ -504,7 +524,12 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           >
             <motion.aside
               ref={mobileSidebarRef}
-              className="nexus-mobile-menu-panel nexus-glass-rail flex w-[min(calc(100vw-1.5rem),372px)] flex-col overflow-hidden rounded-[26px] border shadow-2xl shadow-kcs-blue-950/24"
+              id="nexus-sidebar-drawer"
+              data-nexus-sidebar="drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label={menuText('Menu de votre espace','Workspace menu')}
+              className="nexus-mobile-menu-panel nexus-sidebar-drawer nexus-glass-rail flex w-[min(calc(100vw-1.5rem),372px)] flex-col overflow-hidden rounded-[26px] border shadow-2xl shadow-kcs-blue-950/24"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
@@ -512,7 +537,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/42 p-3 backdrop-blur-xl dark:border-kcs-blue-800 dark:bg-kcs-blue-950/42">
+              <div className="nexus-sidebar-drawer-profile sticky top-0 z-10 border-b border-gray-100 bg-white/42 p-3 backdrop-blur-xl dark:border-kcs-blue-800 dark:bg-kcs-blue-950/42">
                 <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-kcs-blue-200 dark:bg-kcs-blue-700" aria-hidden="true" />
                 <div className="rounded-[24px] border border-white/70 bg-white/60 p-3 shadow-inner shadow-white/40 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/40 dark:shadow-none">
                 <div className="flex items-center gap-3">
@@ -543,7 +568,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
       </AnimatePresence>
 
       <motion.div
-        animate={{ width: sidebarCollapsed ? 72 : 260 }}
+        animate={{ width: sidebarCollapsed ? 80 : 272 }}
         initial={false}
         transition={{ duration: 0.3, ease: 'easeInOut' }}
         className="hidden shrink-0 lg:block"
@@ -553,11 +578,14 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
       <AnimatePresence initial={false}>
         {(
     <motion.aside
-      animate={{ width: sidebarCollapsed ? 72 : 260 }}
+      animate={{ width: sidebarCollapsed ? 80 : 272 }}
       initial={{ width: 0, opacity: 0 }}
       exit={{ width: 0, opacity: 0 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="nexus-glass-rail fixed inset-y-0 left-0 z-40 hidden h-dvh flex-col overflow-hidden border-r lg:flex"
+      id="nexus-desktop-sidebar"
+      data-nexus-sidebar="desktop"
+      data-collapsed={sidebarCollapsed}
+      className="nexus-sidebar-rail nexus-glass-rail fixed inset-y-0 left-0 z-40 hidden h-dvh flex-col overflow-hidden border-r lg:flex"
     >
       {/* Logo */}
       <div className={`${sidebarCollapsed ? 'px-3 py-4' : 'p-4'} border-b border-gray-100 dark:border-kcs-blue-800`}>
@@ -602,7 +630,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
       </div>
 
       {/* User Profile */}
-      <div className={`border-b border-white/60 p-4 dark:border-white/10 ${sidebarCollapsed ? 'items-center' : ''}`}>
+      <div className={`nexus-sidebar-profile border-b border-white/60 p-4 dark:border-white/10 ${sidebarCollapsed ? 'items-center' : ''}`}>
         <div className={`flex items-center gap-3 rounded-[22px] border border-white/60 bg-white/50 p-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/30 ${sidebarCollapsed ? 'justify-center' : ''}`}>
           {user.avatar ? <img src={user.avatar} alt={[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')} className="h-10 w-10 min-h-10 min-w-10 flex-none aspect-square rounded-full object-cover" onError={handleAvatarError}/> : <div className={`h-10 w-10 min-h-10 min-w-10 flex-none aspect-square rounded-full ${roleColor} flex items-center justify-center text-white font-bold text-sm`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
           <AnimatePresence>
@@ -630,6 +658,9 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
       {/* Collapse Toggle */}
       <button
         onClick={toggleSidebarCollapse}
+        data-nexus-sidebar-collapse
+        aria-expanded={!sidebarCollapsed}
+        aria-label={menuText(sidebarCollapsed?'Déployer le menu':'Réduire le menu',sidebarCollapsed?'Expand menu':'Collapse menu')}
         className="absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-6 bg-white dark:bg-kcs-blue-800 border border-gray-200 dark:border-kcs-blue-700 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-kcs-blue-600 dark:hover:text-kcs-blue-300 transition-all duration-200 shadow-sm z-10"
       >
         {sidebarCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}

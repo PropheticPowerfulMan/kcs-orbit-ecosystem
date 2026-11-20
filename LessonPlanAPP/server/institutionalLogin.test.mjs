@@ -1,0 +1,11 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {institutionalLogin} from './institutionalLogin.mjs'
+const identity={id:'teacher-1',email:'teacher@example.invalid'},local={id:'local-1',email:identity.email,app_metadata:{kcs_nexus_identity:{id:identity.id,accessCode:'ACC-TEACHER1'}}}
+const input={identifier:'ACC-TEACHER1',password:'Synthetic password not production'}
+function setup(overrides={}){const calls=[];return{calls,deps:{findLocal:async()=>local,signInLocal:async()=>null,verifyInstitutional:async()=>{calls.push('verify');return identity},ensureProfile:async v=>calls.push('profile:'+v.id),createSession:async email=>{calls.push('session:'+email);return{user:{id:'local-1'}}},...overrides}}}
+test('institutional code opens the existing linked SSO account without resetting any password',async()=>{const {calls,deps}=setup();assert.equal((await institutionalLogin(input,deps)).user.id,'local-1');assert.deepEqual(calls,['verify','profile:teacher-1','session:teacher@example.invalid'])})
+test('existing independent local password remains valid without calling Nexus',async()=>{const {calls,deps}=setup({signInLocal:async()=>({user:{id:'local-1'}})});assert.equal((await institutionalLogin(input,deps)).user.id,'local-1');assert.deepEqual(calls,[])})
+test('wrong institutional credentials cannot create a session or alter an account',async()=>{const {calls,deps}=setup({verifyInstitutional:async()=>{throw Object.assign(new Error('Incorrect credentials'),{status:401})}});await assert.rejects(institutionalLogin(input,deps),/Incorrect credentials/);assert.deepEqual(calls,[])})
+test('institutional fallback cannot claim an unrelated or legacy local identity',async()=>{for(const entry of [{...local,app_metadata:{}},{...local,app_metadata:{kcs_nexus_identity:{id:'other-user'}}}]){const {calls,deps}=setup({findLocal:async()=>entry});await assert.rejects(institutionalLogin(input,deps),/own password/);assert.deepEqual(calls,['verify'])}})
+test('new institutional identity can provision safely without choosing a local password',async()=>{const {calls,deps}=setup({findLocal:async()=>null});await institutionalLogin(input,deps);assert.deepEqual(calls,['verify','profile:teacher-1','session:teacher@example.invalid'])})
