@@ -70,3 +70,99 @@
   body[data-nexus-dashboard] .portal-dashboard-topbar:has(.portal-inbox-action) > .flex > .flex:last-child { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
   body[data-nexus-dashboard] .portal-dashboard-topbar:has(.portal-inbox-action) :is(a,button) { min-height:36px;padding:7px!important; }
 }
+
+
+/* Phone refinement: compact information hierarchy, not smaller score entry or printed documents. */
+@media screen and (max-width:767px) {
+  body[data-nexus-dashboard] #root .portal-shell main h1:not(:where([data-official-document] *,[data-report-card-document] *,.report-card-paper *,.official-report-card *,.transcript-paper *)) { font-size:19px!important;line-height:1.25!important; }
+  body[data-nexus-dashboard] #root .portal-shell main h2:not(:where([data-official-document] *,[data-report-card-document] *,.report-card-paper *,.official-report-card *,.transcript-paper *)) { font-size:17px!important;line-height:1.35!important; }
+  body[data-nexus-dashboard] #root .portal-shell main h3:not(:where([data-official-document] *,[data-report-card-document] *,.report-card-paper *,.official-report-card *,.transcript-paper *)) { font-size:14px!important;line-height:1.4!important; }
+  body[data-nexus-dashboard] #root .portal-shell main :is(.text-4xl,.text-5xl):not(:where([data-official-document] *,[data-report-card-document] *,.report-card-paper *,.official-report-card *)) { font-size:27px!important;line-height:1.25; }
+  body[data-nexus-dashboard] #root .portal-shell main :is(.nexus-workspace-card,[data-admin-card]):is(.p-4,.p-5,.p-6,.p-8):not(:where([data-official-document],[data-official-document] *,[data-report-card-document] *,.report-card-paper *,.official-report-card *)) { padding:12px!important;border-radius:16px; }
+  body[data-nexus-dashboard] #root .portal-shell main [data-dashboard-stats]:not([hidden]):not(.hidden):not([style*="display: none"]):not([style*="display:none"]) { display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important; }
+  body[data-nexus-dashboard] #root .portal-shell main [data-dashboard-stats]>:last-child:nth-child(odd) { grid-column:1/-1; }
+  body[data-nexus-dashboard] #root .portal-shell main [data-dashboard-stats]>div { min-width:0;padding:12px!important;border-radius:15px; }
+  body[data-nexus-dashboard] #root .portal-shell main [data-dashboard-stats] :is(.text-2xl,.text-3xl) { font-size:24px!important;line-height:1.25!important; }
+  body[data-nexus-dashboard] #root .portal-shell main [data-dashboard-stats] .text-xs { font-size:10px!important;line-height:1.45;letter-spacing:.015em; }
+  body[data-nexus-dashboard] #root .portal-shell main [data-dashboard-stats] .mt-3 { margin-top:7px; }
+  body[data-nexus-dashboard] #root .portal-shell main [data-dashboard-stats]>div>svg { width:19px;height:19px; }
+  body[data-nexus-dashboard] #root .portal-shell main .teacher-home-metrics>div>div:first-child { width:30px;height:30px;border-radius:9px; }
+  body[data-nexus-dashboard] #root .portal-shell main .teacher-home-metrics>div>p:first-of-type { font-size:24px!important; }
+  body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading:has(>.nexus-workspace-heading-icon) { display:grid!important;grid-template-columns:34px minmax(0,1fr);gap:10px;padding:14px!important;border-radius:16px; }
+  body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading>.nexus-workspace-heading-icon { grid-column:1;grid-row:1;width:34px;height:34px;border-radius:11px; }
+  body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading>.nexus-workspace-heading-icon svg { width:19px;height:19px; }
+  body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading>div:nth-child(2) { grid-column:2;grid-row:1;min-width:0;flex-basis:auto; }
+  body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading>:nth-child(n+3) { grid-column:1/-1;max-width:100%;min-width:0; }
+  body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading p { font-size:11.5px!important;line-height:1.5;margin-top:4px; }
+  body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading .nexus-workspace-kicker { font-size:9px!important;letter-spacing:.1em; }
+  body[data-nexus-dashboard] #root .portal-shell main .portal-dashboard-topbar { position:relative!important;padding:11px 13px!important; }
+  body[data-nexus-dashboard] #root .portal-shell main .portal-dashboard-title+p { display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:11px!important;line-height:1.45; }
+  body[data-nexus-dashboard] #root .portal-shell main .portal-dashboard-topbar :is(.btn-primary,.btn-gold,button,a[href]) { min-height:40px;padding:8px 10px!important;gap:7px;font-size:11.5px!important;line-height:1.4; }
+  body[data-nexus-dashboard] #root .portal-shell main .portal-dashboard-topbar :is(button,a[href]) svg { width:16px;height:16px;flex-shrink:0; }
+  body[data-nexus-dashboard] #root .portal-shell .published-calendar-strip { margin-bottom:12px;border-radius:13px; }
+  body[data-nexus-dashboard] #root .portal-shell .published-calendar-strip summary { display:grid;grid-template-columns:18px minmax(0,1fr) 16px;gap:4px 8px;align-items:center;padding:9px 11px;font-size:11px; }
+  body[data-nexus-dashboard] #root .portal-shell .published-calendar-strip summary>svg:first-child { grid-column:1;grid-row:1; }
+  body[data-nexus-dashboard] #root .portal-shell .published-calendar-strip summary>span:first-of-type { grid-column:2;grid-row:1;min-width:0; }
+  body[data-nexus-dashboard] #root .portal-shell .published-calendar-dates { grid-column:2;grid-row:2;width:auto;margin:0;font-size:10px;line-height:1.4; }
+  body[data-nexus-dashboard] #root .portal-shell .published-calendar-chevron { grid-column:3;grid-row:1/span 2;margin:0; }
+  body[data-nexus-dashboard] #root .portal-shell main :is(.overflow-x-auto,.overflow-auto) { min-width:0; }
+  body[data-nexus-dashboard] #root .portal-shell main table:not(:where([data-kcs-gradebook] *,[data-official-document] *,[data-report-card-document] *,.report-card-paper *,.official-report-card *)) { font-size:11px; }
+  body[data-nexus-dashboard] #root .portal-shell main table:not(:where([data-kcs-gradebook] *,[data-official-document] *,[data-report-card-document] *,.report-card-paper *,.official-report-card *)) :is(th,td) { padding:8px 7px;line-height:1.45; }
+  body[data-nexus-dashboard] [data-account-identity-detail] { padding:10px;gap:9px; }
+  body[data-nexus-dashboard] [data-account-identity-detail] p:first-child { font-size:10px!important;line-height:1.4; }
+  body[data-nexus-dashboard] [data-account-identity-detail] p:last-child { font-size:12px!important;line-height:1.5; }
+  /* The ST hero uses a full-width title instead of squeezing it between icon and refresh. */
+  body[data-nexus-dashboard] #root .st-container { padding:12px!important;gap:12px; }
+  body[data-nexus-dashboard] #root .st-hero { display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px 10px;padding:13px; }
+  body[data-nexus-dashboard] #root .st-hero>.min-w-0 { display:contents; }
+  body[data-nexus-dashboard] #root .st-hero-icon { grid-column:1;grid-row:1;width:30px;height:30px;border-radius:10px; }
+  body[data-nexus-dashboard] #root .st-hero-icon svg { width:19px;height:19px; }
+  body[data-nexus-dashboard] #root .st-hero .st-kicker { grid-column:2;grid-row:1;align-self:center;font-size:9px;letter-spacing:.12em; }
+  body[data-nexus-dashboard] #root .st-hero :is(h1,p) { grid-column:1/-1;margin:0!important; }
+  body[data-nexus-dashboard] #root .st-hero p { font-size:11.5px;line-height:1.5; }
+  body[data-nexus-dashboard] #root .st-hero>.st-btn { grid-column:1/-1;justify-self:start; }
+  body[data-nexus-dashboard] #root .st-card { padding:12px;border-radius:15px; }
+  body[data-nexus-dashboard] #root .st-metric { padding:12px; }
+  body[data-nexus-dashboard] #root .st-metric strong { font-size:24px; }
+  /* Portaled edit forms must remain readable and avoid automatic iPhone zoom. */
+  body[data-nexus-dashboard] :is(#root [data-entity-dialog],[data-entity-dialog]) :is(input,select,textarea):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=hidden]) { font-size:16px!important;min-height:42px; }
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-dialog-heading { padding:12px 14px!important;gap:8px; }
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-dialog-footer { padding:10px 12px!important;padding-bottom:max(10px,env(safe-area-inset-bottom))!important;gap:8px; }
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-record-banner { padding:13px!important;gap:12px;margin-bottom:14px!important; }
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-record-portrait { width:60px;height:72px;flex-basis:60px; }
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-record-identity h2 { font-size:17px!important; }
+}
+@media screen and (max-width:479px) {
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-view-fields { grid-template-columns:1fr;gap:9px; }
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-view-fields>div { display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.25fr);gap:9px;align-items:start; }
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-view-fields dt { margin:0;font-size:10px;line-height:1.5; }
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-view-fields dd { font-size:12px;line-height:1.5; }
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-view-card { padding:12px; }
+  body[data-nexus-dashboard] [data-entity-dialog] .registry-view-contacts>article,body[data-nexus-dashboard] [data-entity-dialog] .registry-view-learners>article { padding:12px; }
+}
+@media screen and (max-height:480px) and (max-width:1023px) {
+ body[data-nexus-dashboard] [data-gradebook-focus] .nexus-gradebook-focus-heading { padding:7px 10px; }
+ body[data-nexus-dashboard] [data-gradebook-focus] [data-gradebook-toolbar] { max-height:32dvh;overflow-y:auto; }
+}
+
+@media screen and (max-width:767px) {
+ body[data-nexus-dashboard] #root .portal-shell main :is(input,select,textarea):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=hidden]):not([data-grade-row]):not([data-gradebook-cell]):not(:where([data-official-document] *,[data-report-card-document] *,.report-card-paper *,.official-report-card *)) { font-size:16px!important;min-width:0;max-width:100%; }
+}
+
+@media screen and (max-width:640px) {
+  /* Keep the close control compact even when shared mobile typography has ID specificity. */
+  body[data-nexus-dashboard] :is(#root [data-entity-dialog],[data-entity-dialog]) .registry-dialog-heading>button { width:36px!important;height:36px!important;min-height:36px!important;min-width:36px!important;padding:0!important;gap:0!important;font-size:0!important; }
+  body[data-nexus-dashboard] :is(#root [data-entity-dialog],[data-entity-dialog]) .registry-dialog-heading>button svg { display:none!important; }
+  body[data-nexus-dashboard] :is(#root [data-entity-dialog],[data-entity-dialog]) .registry-dialog-heading>button:after { content:'\00d7';font-size:23px!important;line-height:1; }
+}
+
+@media screen and (max-width:767px) {
+  body[data-nexus-dashboard] #root .portal-shell main [data-dashboard-stats]:is([hidden],.hidden,[style*="display: none"],[style*="display:none"]) { display:none!important; }
+}
+
+@media screen and (max-width:767px) {
+  body[data-nexus-dashboard] #root [data-kcs-gradebook] input[data-grade-row],
+  body[data-nexus-dashboard] :is(#root [data-gradebook-focus],[data-gradebook-focus]) input[data-grade-row] { font-size:13px!important; }
+  body[data-nexus-dashboard] #root [data-administrative-header]>.flex>div:last-child { flex-wrap:wrap; }
+  body[data-nexus-dashboard] #root [data-administrative-header] a[href] { flex-shrink:0;white-space:nowrap;overflow-wrap:normal!important; }
+}

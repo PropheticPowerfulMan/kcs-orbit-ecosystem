@@ -1,3 +1,4 @@
+import { printAdminInstitutionalReport } from '@/utils/adminInstitutionalReportPrint'
 import {ParentProfileView,LearnerProfileView} from '@/components/admin/RegistryProfileView'
 import { adminDashboardText, adminDashboardMonth } from '@/utils/adminDashboardLanguage'
 import '@/components/admin/adminOverview.css'
@@ -1397,17 +1398,18 @@ const exportAdminReport = (
     return
   }
 
-  const html = buildAdminReportDocument(title, period.label, rows, category, cadence, language)
-
   if (format === 'excel') {
-    downloadExportFile(`${filename}.xls`, html, 'application/vnd.ms-excel;charset=utf-8')
+    const html = buildAdminReportDocument(title, period.label, rows, category, cadence, language)
+    downloadExportFile(filename + '.xls', html, 'application/vnd.ms-excel;charset=utf-8')
     return
   }
 
-  const printWindow = window.open('', '_blank', 'width=1100,height=800')
-  if (!printWindow) return
-  printWindow.document.write(html)
-  printWindow.document.close()
+  const author = useAuthStore.getState().user
+  void printAdminInstitutionalReport({
+    title: categoryLabel + ' - ' + cadenceLabel, period: period.label, category: categoryLabel, cadence: cadenceLabel,
+    language, rows, filename,
+    author: [author?.lastName, author?.middleName, author?.firstName].filter(Boolean).join(' ') || tr('Superadministration','Super Administration'),
+  })
 }
 
 const MainTeacherAssignmentPanel = () => {
@@ -3450,7 +3452,7 @@ const AdminSectionView = ({
           {liveExportNotice ? <p className="mt-4 rounded-xl border border-cyan-200 bg-white/80 p-3 text-sm font-semibold text-kcs-blue-900 dark:border-cyan-700 dark:bg-kcs-blue-950 dark:text-white" role="status">{liveExportNotice}</p> : null}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div data-dashboard-stats className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {reportStats.map((item) => {
             const Icon = item.icon
             return (
@@ -3726,7 +3728,7 @@ const AdminDashboard = () => {
           <section data-admin-overview className="space-y-4">
             <nav role="tablist" aria-label={language==='fr'?'Rubriques du tableau de bord':'Dashboard sections'} className="admin-overview-tabs">{([['overview',language==='fr'?'Vue d’ensemble':'Overview'],['operations',language==='fr'?'Études et opérations':'Academics and operations'],['governance',language==='fr'?'Pilotage et contrôles':'Governance and controls'],['community',language==='fr'?'Vie de la communauté':'Community']] as const).map(([key,label])=><button type="button" key={key} role="tab" id={'admin-tab-'+key} aria-controls={'admin-panel-'+key} aria-selected={dashboardTab===key} tabIndex={dashboardTab===key?0:-1} onClick={()=>setDashboardTab(key)} onKeyDown={event=>{const tabs=Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]')),index=tabs.indexOf(event.currentTarget);let next=-1;if(event.key==='ArrowRight')next=(index+1)%tabs.length;if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;if(event.key==='Home')next=0;if(event.key==='End')next=tabs.length-1;if(next>=0){event.preventDefault();tabs[next].click();tabs[next].focus()}}}><span className="admin-tab-dot" aria-hidden="true"/>{label}</button>)}</nav>
             <div id="admin-panel-overview" role="tabpanel" aria-labelledby="admin-tab-overview" hidden={dashboardTab!=='overview'} className="space-y-4">
-          <div className="admin-summary-metrics grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div data-dashboard-stats className="admin-summary-metrics grid grid-cols-2 gap-3 lg:grid-cols-4">
             {[
               { label: 'Official Registry', value: String(dashboardDirectory?.counts?.students ?? officialRoster.length), icon: GraduationCap, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300', sub: 'students controlled by Super Admin' },
               { label: 'School Classes', value: String(new Set(officialRoster.map((student) => formatClassName(student.grade, student.section)).filter(Boolean)).size || dashboardOverview?.stats?.classes || 0), icon: BookOpen, tone: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300', sub: 'K3 to Grade 12' },
@@ -3756,7 +3758,7 @@ const AdminDashboard = () => {
           </div>
 
           <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">{language==='fr'?'Raccourcis institutionnels':'Institutional shortcuts'}</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{language==='fr'?'Communiquer et rendre compte':'Communications and reporting'}</h2></div><div className="grid grid-cols-3 gap-2"><button type="button" onClick={openEmailAction} className={`${adminButton} flex items-center justify-center gap-2`}><Mail size={16}/> {dt("Email")}</button><button type="button" onClick={openSmsAction} className={`${adminButton} flex items-center justify-center gap-2`}><Phone size={16}/> {dt("SMS")}</button><button type="button" onClick={() => { exportAdminReport('executive', 'weekly', 'pdf', officialRoster, admissionRequests); setDashboardAction('The official weekly Super Admin report was generated.') }} className={`${adminButton} flex items-center justify-center gap-2`}><FileSpreadsheet size={16}/> {dt("Report")}</button></div></div>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">{language==='fr'?'Raccourcis institutionnels':'Institutional shortcuts'}</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{language==='fr'?'Communiquer et rendre compte':'Communications and reporting'}</h2></div><div className="grid grid-cols-3 gap-2"><button type="button" onClick={openEmailAction} className={`${adminButton} flex items-center justify-center gap-2`}><Mail size={16}/> {dt("Email")}</button><button type="button" onClick={openSmsAction} className={`${adminButton} flex items-center justify-center gap-2`}><Phone size={16}/> {dt("SMS")}</button><button type="button" onClick={() => { exportAdminReport('executive', 'weekly', 'pdf', officialRoster, admissionRequests, language); setDashboardAction('The official weekly Super Admin report was generated.') }} className={`${adminButton} flex items-center justify-center gap-2`}><FileSpreadsheet size={16}/> {dt("Report")}</button></div></div>
             {dashboardAction && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{dt(dashboardAction)}</p>}
           </section>
 
@@ -4149,7 +4151,7 @@ const AdminDashboard = () => {
                   <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{dt("Workflow status")}</p><p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{reportCardControl.principalStatus ?? reportCardControl.status}</p></div>
                 </div>
                 <div className="mt-5 flex flex-wrap justify-end gap-2">
-                  <button type="button" onClick={() => { exportAdminReport('academic', 'monthly', 'pdf', officialRoster.filter((student) => student.name === reportCardControl.student), admissionRequests); setDashboardAction(`Academic document generated for ${reportCardControl.student}.`) }} className={adminButton}><Download size={16}/> {dt("Download")}</button>
+                  <button type="button" onClick={() => { exportAdminReport('academic', 'monthly', 'pdf', officialRoster.filter((student) => student.name === reportCardControl.student), admissionRequests, language); setDashboardAction(`Academic document generated for ${reportCardControl.student}.`) }} className={adminButton}><Download size={16}/> {dt("Download")}</button>
                   <button type="button" onClick={() => { setDashboardAction(`${reportCardControl.student}'s academic document was approved for publication.`); setReportCardControl(null) }} className={adminButton}><CheckCircle2 size={16}/> {dt("Approve and publish")}</button>
                 </div>
               </div>
