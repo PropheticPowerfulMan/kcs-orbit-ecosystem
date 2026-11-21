@@ -1,3 +1,4 @@
+import SchoolCalendarPdf from '@/components/shared/SchoolCalendarPdf'
 import {usePublishedAcademicCalendar} from '@/hooks/usePublishedAcademicCalendar'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link,useParams } from 'react-router-dom'
@@ -234,6 +235,7 @@ const NewsPage = () => {
       <section className="py-16 bg-white dark:bg-kcs-blue-950">
         <div className="container-custom">
           <aside className="public-calendar-shortcut mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-kcs-blue-900"><div><b className="text-sm text-sky-950 dark:text-sky-50">{language==='fr'?'Calendrier et année scolaire':'Calendar and school year'} · {(schoolYear?.name||'—')}</b><p className="text-xs text-slate-600 dark:text-slate-300">{language==='fr'?'Semestres, quarters et dates de référence dans un panneau repliable.':'Semesters, quarters and reference dates in a collapsible panel.'}</p></div><button type="button" aria-expanded={calendarExpanded} onClick={()=>setCalendarExpanded(value=>!value)} className="rounded-xl bg-sky-700 px-4 py-2.5 text-xs font-bold text-white">{calendarExpanded?(language==='fr'?'Masquer les repères':'Hide reference dates'):(language==='fr'?'Voir les repères scolaires':'View school dates')}</button></aside>
+          {schoolYear&&<SchoolCalendarPdf academicYear={schoolYear.name}/>}
           <AnimSection className="mb-12 public-calendar-reference" hidden={!calendarExpanded}>
             <motion.div variants={fadeUp} className="mb-6">
               <span className="badge-gold mb-3 inline-flex items-center gap-2 text-sm">

@@ -1153,6 +1153,9 @@ model StudentForumPost {
   title          String
   content        String
   category       String
+  audience       String                @default("SCHOOL")
+  classroomGrade String?
+  classroomSection String?
   status         String                @default("open")
   sentiment      String                @default("neutral")
   priority       String                @default("normal")
@@ -1166,6 +1169,7 @@ model StudentForumPost {
   likes          StudentForumLike[]
 
   @@index([category])
+  @@index([audience, classroomGrade, classroomSection, updatedAt], map: "StudentForumPost_classroom_updatedAt_idx")
   @@index([createdAt])
 }
 

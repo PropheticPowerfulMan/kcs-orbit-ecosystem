@@ -4,6 +4,11 @@ import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-d
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
 GlobalWorkerOptions.workerSrc = workerUrl
+export async function inspectSchoolPdf(file:File) {
+ const task=getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,useWasm:false,useSystemFonts:true})
+ try {const pdf=await task.promise;if(pdf.numPages<1)throw new Error('Empty PDF');return pdf.numPages}
+ finally {await task.destroy().catch(()=>undefined)}
+}
 /** Render locally: the site's anti-framing policy intentionally forbids PDF iframes. */
 export default function HandbookPdfReader({ src, initialPage = 1, title, language }: { src: string; initialPage?: number; title: string; language: string }) {
   const fr = language === 'fr', tr = (a: string, b: string) => fr ? a : b

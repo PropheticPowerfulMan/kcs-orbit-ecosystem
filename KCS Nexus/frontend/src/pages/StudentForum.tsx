@@ -1,3 +1,4 @@
+import './studentForumRooms.css'
 import { alertPortalMessage } from '@/utils/portalActionDialogs'
 import {ForumFeedHeading, ForumTopics, ForumGuidelines, ForumExpandable, forumCategoryLabel} from '@/components/shared/ForumPresentation'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
@@ -32,6 +33,9 @@ const StudentForumPage = () => {
   const { user } = useAuthStore()
   const language = useUIStore((state) => state.language)
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
+  const [audience,setAudience]=useState<'SCHOOL'|'CLASS'>('SCHOOL')
+  const [classroom,setClassroom]=useState<{grade:string;section:string}|null>(null)
+  const loadSequence=useRef(0)
   const [posts, setPosts] = useState<StudentForumPost[]>([])
   const [draft, setDraft] = useState({ title: '', category: 'Academics', content: '' })
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
@@ -51,16 +55,23 @@ const StudentForumPage = () => {
   const mapPosts = (records: any[]) => records.map((post: any) => ({ ...post, likeCount: Number(post.likeCount ?? 0), likedByMe: Boolean(post.likedByMe), author: `${post.author?.firstName ?? 'KCS'} ${post.author?.lastName?.[0] ?? ''}.`, comments: (post.comments ?? []).map((comment: any) => ({ ...comment, author: `${comment.author?.firstName ?? 'KCS'} ${comment.author?.lastName?.[0] ?? ''}.` })) }))
 
   const load = async () => {
+    const request=++loadSequence.current
     setLoading(true)
     setError('')
     let lastError: any
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const response = await studentForumAPI.getPosts()
+        const context=await studentForumAPI.getContext()
+        if(request!==loadSequence.current)return
+        setClassroom(context.data?.data?.classroom||null)
+        if(audience==='CLASS'&&!context.data?.data?.classroom){setAudience('SCHOOL');return}
+        const response = await studentForumAPI.getPosts(audience)
+        if(request!==loadSequence.current)return
         setPosts(mapPosts(Array.isArray(response.data?.data) ? response.data.data : []))
         setLoading(false)
         return
       } catch (reason: any) {
+        if(request!==loadSequence.current)return
         lastError = reason
         if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 700 * (attempt + 1)))
       }
@@ -69,7 +80,14 @@ const StudentForumPage = () => {
     setLoading(false)
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    setPosts([]);setCommentDrafts({});setCommentAttachments({});setRecordingFor('')
+    void load()
+    const update=()=>{if(!document.hidden)void load()}
+    window.addEventListener('focus',update)
+    const timer=window.setInterval(update,30000)
+    return()=>{loadSequence.current++;clearInterval(timer);window.removeEventListener('focus',update)}
+  }, [audience])
 
   const report = useMemo(() => {
     const urgent = posts.filter((post) => post.priority === 'urgent').length
@@ -95,7 +113,7 @@ const StudentForumPage = () => {
     setPublishing(true)
     setError('')
     try {
-      const response = await studentForumAPI.createPost({ ...draft, title, content, ...(attachment ? { attachmentType: attachment.type, attachmentData: attachment.data, attachmentName: attachment.name } : {}) })
+      const response = await studentForumAPI.createPost({ ...draft, title, content, audience, ...(attachment ? { attachmentType: attachment.type, attachmentData: attachment.data, attachmentName: attachment.name } : {}) })
       const created = response.data.data
       setPosts((current) => [{ ...created, likeCount: 0, likedByMe: false, author: `${user?.firstName ?? 'Student'} ${user?.lastName?.[0] ?? ''}.`.trim(), comments: [] }, ...current])
       setDraft({ title: '', category: 'Academics', content: '' })
@@ -187,6 +205,11 @@ const StudentForumPage = () => {
             <div className="relative max-w-3xl"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-cyan-300"><ShieldCheck size={16}/>{tr('Communauté étudiante KCS','KCS student community')}</p><h2 className="mt-2 font-display text-3xl font-black sm:text-4xl">{tr('Forum des élèves', 'Student Forum')}</h2><p className="mt-2 text-sm leading-6 text-kcs-blue-100">{tr('Un fil social sécurisé pour partager, collaborer et faire entendre la voix des élèves avec une modération bienveillante.', 'A secure social feed to share, collaborate, and amplify student voice with supportive moderation.')}</p></div>
             <div className="forum-metrics relative mt-6 grid max-w-xl grid-cols-3 gap-2 sm:gap-3"><StudentForumMetric value={posts.length} label={tr('Discussions','Discussions')}/><StudentForumMetric value={posts.reduce((sum,post)=>sum+post.comments.length,0)} label={tr('Réponses','Replies')}/><StudentForumMetric value={posts.reduce((sum,post)=>sum+post.likeCount,0)} label={tr('Réactions','Reactions')}/></div>
           </header>
+        <section className="student-forum-rooms xl:col-span-2" aria-label={tr('Espace de discussion','Discussion space')}>
+          <div><strong>{tr('Choisir votre forum','Choose your forum')}</strong><p>{tr('Échangez avec votre classe ou avec les élèves de toute l’école.','Connect with your class or with learners across the school.')}</p></div>
+          <div role="group" aria-label={tr('Audience du forum','Forum audience')}><button type="button" disabled={publishing||!classroom} aria-pressed={audience==='CLASS'} onClick={()=>{setAudience('CLASS');setQuery('');setCategoryFilter('ALL')}}><MessageCircle size={18}/><span>{tr('Ma classe','My class')}<small>{classroom?[classroom.grade,classroom.section].filter(Boolean).join(' '):tr('Classe non affectée','No class assigned')}</small></span></button><button type="button" disabled={publishing} aria-pressed={audience==='SCHOOL'} onClick={()=>{setAudience('SCHOOL');setQuery('');setCategoryFilter('ALL')}}><Globe2 size={18}/><span>{tr('Toute l’école','Whole school')}<small>{tr('Communauté des élèves KCS','KCS learner community')}</small></span></button></div>
+          <p role="status">{audience==='CLASS'?tr('Les discussions de cet espace sont réservées à votre classe et aux équipes pédagogiques autorisées.','Discussions here are limited to your class and authorized school teams.'):tr('Les discussions de cet espace sont visibles par les élèves de toute l’école.','Discussions here are visible to learners across the school.')}</p>
+        </section>
           {error && <div className="xl:col-span-2 flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100 sm:flex-row sm:items-center sm:justify-between" role="alert"><span>{error}</span><button type="button" onClick={() => void load()} className="rounded-xl bg-red-700 px-4 py-2 text-white">{tr('Actualiser','Refresh')}</button></div>}
           <div className="forum-sidebar space-y-6"><ForumGuidelines language={language}/>
             <ForumExpandable kind="composer" language={language}><form onSubmit={createPost} className="forum-composer min-w-0 rounded-3xl border border-kcs-blue-100 bg-white p-4 shadow-lg sm:p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/70">
