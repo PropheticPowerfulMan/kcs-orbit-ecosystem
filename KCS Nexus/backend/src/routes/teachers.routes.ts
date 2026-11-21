@@ -480,6 +480,21 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   const existing = requestedExisting ?? naturalExisting
   const isSubmissionPreflight = payload.description?.includes('verified before') === true
   if(!allowsTeacherCourseCredits(payload.credits,existing?.credits,isSubmissionPreflight))throw new ApiError(400,'Credit hours must be 1 or 2. Existing historical weights may only be preserved unchanged.')
+  if(isSubmissionPreflight){
+    if(!existing)throw new ApiError(409,'Save this course in My Courses before submitting its grades.')
+    const verified=await prisma.$transaction(async tx=>{
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM "Course" WHERE id = ${existing.id} FOR UPDATE`)
+      const official=await tx.course.findUnique({where:{id:existing.id},select:{id:true,name:true,code:true,grade:true,credits:true,teacherId:true,enrollments:{select:{studentId:true,student:{select:{studentNumber:true,user:{select:{orbitUserId:true}}}}}}}})
+      if(!official||official.teacherId!==teacher.id)throw new ApiError(403,'This official course belongs to another teacher')
+      const lookup=new Map<string,string>()
+      for(const row of official.enrollments)for(const key of [row.studentId,row.student.studentNumber,row.student.user.orbitUserId])if(key)lookup.set(key.trim().toLowerCase(),row.studentId)
+      const requested=new Set([...payload.studentIds,...payload.studentNumbers].map(key=>lookup.get(key.trim().toLowerCase())).filter((id):id is string=>Boolean(id)))
+      const expectedCount=payload.studentIds.length||new Set(payload.studentNumbers.map(key=>key.trim().toLowerCase())).size
+      if(requested.size!==expectedCount||requested.size!==official.enrollments.length||official.enrollments.some(row=>!requested.has(row.studentId)))throw new ApiError(409,'The course roster changed. Reload Gradebook from My Courses before submitting. No enrollment was changed.')
+      return {...official,enrollments:official.enrollments.map(({studentId})=>({studentId}))}
+    })
+    return success(res,verified,'Official course enrollment verified without modification')
+  }
   const normalizedStudentNumbers = [...new Set(payload.studentNumbers.map((value) => value.trim().toLowerCase()).filter(Boolean))]
   const uniqueStudentIds = [...new Set(payload.studentIds)]
   if (uniqueStudentIds.length || normalizedStudentNumbers.length) {

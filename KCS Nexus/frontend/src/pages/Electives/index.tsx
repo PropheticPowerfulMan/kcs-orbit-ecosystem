@@ -239,9 +239,9 @@ export default function ElectivesPage() {
   return (
     <div className="portal-shell elective-workspace flex">
       <PortalSidebar />
-      <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50 dark:bg-kcs-blue-950">
-        {teacherRole && <header className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4"><h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}, {user?.firstName}</h1><p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} · {tr('Cours électifs et accompagnement des élèves.', 'Elective courses and learner support.')}</p></header>}
-        <div className="p-4 pt-20 sm:p-6 sm:pt-20 lg:p-8 lg:pt-8">
+      <main data-portal-workspace="elective-selection" className="min-w-0 flex-1 overflow-y-auto bg-slate-50 dark:bg-kcs-blue-950">
+        {(teacherRole||student) && <header className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4"><h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}, {user?.firstName}</h1><p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} · {tr('Cours électifs et accompagnement des élèves.', 'Elective courses and learner support.')}</p></header>}
+        <div className="p-3 sm:p-6 lg:p-8">
         <div className="w-full max-w-none space-y-6">
           <header className="elective-hero">
             <div className="elective-hero-row">
@@ -316,6 +316,7 @@ export default function ElectivesPage() {
               ))}
             </ol>
           </header>
+          {student&&cycle&&<section className="elective-personal-pathway" data-elective-personal><span className="elective-personal-icon"><BookOpenCheck size={25}/></span><div><small>{tr('MON PARCOURS ÉLECTIF','MY ELECTIVE PATHWAY')}</small><h2>{tr('Des choix qui vous ressemblent','Make your pathway your own')}</h2><p>{data.eligible?tr('Classez vos préférences. Votre liste reste modifiable pendant la période autorisée.','Rank your preferences. You can update your list while the selection window is open.'):tr('Consultez les cours proposés. L’école active la sélection pour les classes concernées.','Explore the catalogue. The school opens selection for eligible classes.')}</p></div><strong><b>{new Set(choices.filter(Boolean)).size}</b><span>/ 6 {tr('choix','choices')}</span></strong><div className="elective-personal-progress" aria-label={tr('Préférences renseignées','Preferences entered')}><i style={{width:(new Set(choices.filter(Boolean)).size/6*100)+'%'}}/></div><nav aria-label={tr('Accès au catalogue et à mes choix','Catalogue and choices shortcuts')}><button type="button" onClick={()=>document.querySelector('[data-elective-catalog]')?.scrollIntoView({block:'start',behavior:'smooth'})}>{tr('Explorer les cours','Explore courses')}</button><button type="button" disabled={!data.eligible} onClick={()=>document.querySelector('[data-elective-choices]')?.scrollIntoView({block:'start',behavior:'smooth'})}>{tr('Mes six préférences','My six preferences')}</button></nav></section>}
           {message && (
             <p role="status" className="elective-notice">
               {message}
@@ -668,7 +669,7 @@ export default function ElectivesPage() {
                   </form>
                 </details>
               )}
-              <section className="rounded-3xl bg-white p-5 shadow dark:bg-kcs-blue-900 dark:text-white">
+              <section data-elective-catalog className="rounded-3xl bg-white p-5 shadow dark:bg-kcs-blue-900 dark:text-white">
                 <div className="elective-catalog-title">
                   <div>
                     <h2 className="text-xl font-black">
@@ -850,7 +851,7 @@ export default function ElectivesPage() {
                 </div>
               </section>
               {student && data.eligible && (
-                <section className="rounded-3xl bg-white p-5 shadow dark:bg-kcs-blue-900 dark:text-white">
+                <section data-elective-choices className="rounded-3xl bg-white p-5 shadow dark:bg-kcs-blue-900 dark:text-white">
                   <h2 className="text-xl font-black">
                     {tr("Mes six choix classés", "My six ranked choices")}
                   </h2>

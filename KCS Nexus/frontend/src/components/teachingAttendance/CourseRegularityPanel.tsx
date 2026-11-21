@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react'
+import {useEffect,useRef,useState} from 'react'
 import {Link} from 'react-router-dom'
 import {ChevronDown,ClipboardCheck,RefreshCw,Search} from 'lucide-react'
 import {teachingAttendanceAPI} from '@/services/api'
@@ -9,16 +9,17 @@ type Regularity={sessionCount:number;summary:PresenceSummary;students:Array<Pres
 export default function CourseRegularityPanel({courseId,academicYear,term}:{courseId:string;academicYear:string;term:string}){
  const fr=useUIStore(s=>s.language)==='fr',tr=(a:string,b:string)=>fr?a:b
  const [data,setData]=useState<Regularity|null>(null),[open,setOpen]=useState(false),[error,setError]=useState(''),[query,setQuery]=useState(''),[version,setVersion]=useState(0)
+ const loadedScope=useRef('')
  useEffect(()=>{
-  let active=true;setData(null);setError('')
+  let active=true;const scope=courseId+'::'+academicYear+'::'+term;if(loadedScope.current!==scope){setData(null);loadedScope.current=scope}setError('')
   if(courseId)teachingAttendanceAPI.regularity({courseId,academicYear,term}).then(r=>{if(active)setData(r.data.data)}).catch(e=>{if(active)setError(teachingError(e,fr))})
   return()=>{active=false}
  },[courseId,academicYear,term,version])
  useEffect(()=>{
-  const refresh=()=>{if(document.visibilityState==='visible')setVersion(n=>n+1)}
-  window.addEventListener('kcs-course-attendance-saved',refresh);document.addEventListener('visibilitychange',refresh)
+  const refresh=()=>{if(document.visibilityState==='visible'&&navigator.onLine)setVersion(n=>n+1)}
+  window.addEventListener('kcs-course-attendance-saved',refresh);document.addEventListener('visibilitychange',refresh);window.addEventListener('online',refresh)
   const interval=setInterval(refresh,20000)
-  return()=>{window.removeEventListener('kcs-course-attendance-saved',refresh);document.removeEventListener('visibilitychange',refresh);clearInterval(interval)}
+  return()=>{window.removeEventListener('kcs-course-attendance-saved',refresh);document.removeEventListener('visibilitychange',refresh);window.removeEventListener('online',refresh);clearInterval(interval)}
  },[])
 
  const rows=(data?.students||[]).filter(row=>(row.name+' '+row.studentNumber).toLocaleLowerCase().includes(query.toLocaleLowerCase()))

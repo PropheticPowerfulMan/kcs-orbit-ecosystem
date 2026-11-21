@@ -1,0 +1,92 @@
+/* Compact phone workspaces only. Document previews and print styles retain their own dimensions. */
+[data-gradebook-mobile-nav],[data-gradebook-details-toggle],[data-gradebook-tools-toggle],[data-mobile-workspace-nav]{display:none}
+@media screen and (max-width:767px){
+ body[data-nexus-dashboard] #root .portal-shell>main{font-size:12px;line-height:1.45}
+ body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading{margin-bottom:12px;padding:11px!important;border-radius:14px}
+ body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading h2{font-size:16px!important;line-height:1.3!important}
+ body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading .flex.w-full{gap:10px}
+ body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading .flex.items-start{gap:9px}
+ body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading :is(.h-12,.w-12){width:32px;height:32px;border-radius:10px}
+ body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading p{font-size:11px!important;line-height:1.4}
+ body[data-nexus-dashboard] #root .portal-shell main .portal-dashboard-topbar{padding:8px 11px!important}
+ body[data-nexus-dashboard] #root .portal-shell main .portal-dashboard-title{font-size:17px!important}
+ body[data-nexus-dashboard] #root .portal-shell main .portal-dashboard-title+p{-webkit-line-clamp:1;font-size:10.5px!important}
+ body[data-nexus-dashboard] #root .portal-shell main .portal-dashboard-topbar :is(.btn-primary,.btn-gold){min-height:34px;padding:6px 9px!important;font-size:11px!important}
+ body[data-nexus-dashboard] :is([data-portal-workspace],[data-admin-workspace])>.space-y-6>*+*{margin-top:12px}
+ body[data-nexus-dashboard] :is([data-portal-workspace],[data-admin-workspace]) .nexus-workspace-card{border-radius:14px}
+ body[data-nexus-dashboard] :is([data-portal-workspace],[data-admin-workspace]) .nexus-workspace-card:is(.p-5,.p-6){padding:11px!important}
+ body[data-nexus-dashboard] :is([data-portal-workspace],[data-admin-workspace]) .workspace-dashboard-tabs{display:flex;overflow-x:auto;scrollbar-width:thin;gap:4px;border-radius:12px;padding:4px}
+ body[data-nexus-dashboard] .workspace-dashboard-tabs button{min-width:max-content;min-height:36px;padding:7px 10px;font-size:11px;text-align:center;white-space:nowrap}
+ body[data-nexus-dashboard] [data-mobile-table-scroll]{max-width:100%;overflow:auto;max-height:65dvh;overscroll-behavior:contain}
+ body[data-nexus-dashboard] #root .portal-shell main table[data-mobile-table]{min-width:100%!important;width:max-content;font-size:11px;line-height:1.4}
+ body[data-nexus-dashboard] #root .portal-shell main table[data-mobile-table] :is(th,td){padding:7px 6px;max-width:210px;white-space:normal;overflow-wrap:normal}
+ body[data-nexus-dashboard] #root .portal-shell main table[data-mobile-table] th{font-size:10px}
+ body[data-nexus-dashboard] main[data-mobile-sections=true]{padding-bottom:76px}
+ [data-mobile-workspace-nav]{display:flex;position:fixed;z-index:45;bottom:max(9px,env(safe-area-inset-bottom));left:12px;right:12px;align-items:center;gap:8px;min-height:44px;padding:5px 8px;border:1px solid #a4c2d4;border-radius:15px;background:#e4f0f7f5;color:#164b64;box-shadow:0 5px 24px #062b4525;backdrop-filter:blur(14px)}
+ .dark [data-mobile-workspace-nav]{background:#132b40f5;border-color:#37536a;color:#d5e9f4}
+ [data-mobile-workspace-nav] label{flex:1;min-width:0}
+ [data-mobile-workspace-nav] select{width:100%;min-width:0;height:34px;padding:3px;background:transparent;border:0;color:inherit;font-size:16px;line-height:1.4}
+ [data-mobile-workspace-nav] option{color:#17384c;background:#e7f1f7}
+ .dark [data-mobile-workspace-nav] option{color:#e2f0f8;background:#132b40}
+ [data-mobile-workspace-nav] button{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:#cce1ed}
+ .dark [data-mobile-workspace-nav] button{background:#24435b}
+ body[data-nexus-dashboard] :is(h2,h3,h4,[data-gradebook-section]){scroll-margin-top:90px}
+ body[data-nexus-dashboard] #root [data-gradebook-mobile-nav]{display:block;padding:10px;border:1px solid #b9d1df;border-radius:14px;background:#e1eef6}
+ .dark body[data-nexus-dashboard] #root [data-gradebook-mobile-nav],body.dark [data-gradebook-mobile-nav]{background:#132b40;border-color:#36536a}
+ [data-gradebook-mobile-nav]>div:first-child{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.95fr);gap:8px}
+ [data-gradebook-mobile-nav] label{display:grid;gap:3px;min-width:0}
+ [data-gradebook-mobile-nav] label>span{font-size:10px;font-weight:800}
+ body[data-nexus-dashboard] #root [data-gradebook-mobile-nav] select{width:100%;max-width:100%;min-height:37px!important;padding:6px;border:1px solid #a9c6d9;border-radius:9px;background:#f0f7fb;color:#153f58;font-size:16px!important}
+ .dark body[data-nexus-dashboard] #root [data-gradebook-mobile-nav] select,body.dark [data-gradebook-mobile-nav] select{background:#1a354c;color:#e5f3fb;border-color:#416079}
+ [data-gradebook-mobile-nav]>div:last-child{display:flex;gap:5px;overflow-x:auto;padding-top:8px;scrollbar-width:thin}
+ [data-gradebook-mobile-nav] button{flex:0 0 auto;min-height:36px;padding:6px 9px;border:1px solid #9fbdcf;border-radius:9px;background:#f0f7fb;color:#15465e;font-size:11px;font-weight:750;white-space:nowrap}
+ [data-gradebook-mobile-nav] [data-gradebook-save]{background:#167268;color:white;border-color:#18796d}
+ .dark [data-gradebook-mobile-nav] button{background:#1a354c;color:#d5eaf6;border-color:#3d5b72}
+ [data-gradebook-mobile-nav] button:disabled{opacity:.5}
+ body[data-nexus-dashboard] #root .gradebook-mobile-surface{gap:12px}
+ body[data-nexus-dashboard] #root .gradebook-mobile-surface>*+*{margin-top:12px}
+ body[data-nexus-dashboard] #root [data-gradebook-periods][data-mobile-periods-open=false]:not([data-gradebook-focus] *){display:none!important}
+ [data-kcs-gradebook] [data-gradebook-section=task],[data-kcs-gradebook] [data-gradebook-section=weight]{scroll-margin-top:90px}
+ body[data-nexus-dashboard] #root .gradebook-mobile-surface>details{padding:10px}
+ body[data-nexus-dashboard] #root .gradebook-mobile-surface>details summary h4{font-size:12px}
+ body[data-nexus-dashboard] #root .gradebook-mobile-surface>details summary p{font-size:10px!important}
+ body[data-nexus-dashboard] :is(#root [data-kcs-gradebook],[data-gradebook-focus]) [data-gradebook-details-toggle]{display:inline-flex;align-items:center;min-height:30px;border:1px solid #9cb8ca;border-radius:8px;padding:4px 8px;margin-top:5px;font-size:10px;font-weight:750;color:inherit}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) table{min-width:100%!important;width:max-content;font-size:11px}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) table :is(th,td){padding:6px!important;min-width:92px!important;max-width:120px}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) table :is(th:first-child,td:first-child){width:120px!important;min-width:120px!important;max-width:120px!important}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) tbody td>div:has(>input[data-grade-row]){display:grid;gap:3px;justify-items:center}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) input[data-grade-row]{width:58px!important;min-height:32px;font-size:13px!important}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) td button{min-height:28px!important}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) thead th>span:last-child{flex-wrap:wrap;gap:2px}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) thead th button{min-height:28px;padding:2px;font-size:10px}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-details=false],[data-gradebook-focus][data-gradebook-details=false]) :is([data-gradebook-header-row],[data-gradebook-score-row])>:nth-last-child(-n+3){display:none}
+ body[data-nexus-dashboard] #root [data-gradebook-toolbar]{padding:10px!important;gap:8px}
+ body[data-nexus-dashboard] #root [data-gradebook-toolbar]>div:first-child>p{font-size:10px!important;line-height:1.4}
+ body[data-nexus-dashboard] .nexus-connection-notice{top:auto;bottom:max(9px,env(safe-area-inset-bottom));z-index:1390}
+ body[data-nexus-dashboard] .nexus-connection-notice>div{padding:9px 11px;font-size:11px;line-height:1.45;border-radius:13px}
+}
+@media(prefers-reduced-motion:reduce){[data-mobile-workspace-nav] *{scroll-behavior:auto!important;transition:none!important}}
+
+@media screen and (max-width:767px){
+ body[data-nexus-dashboard] #root [data-portal-workspace=teacher-grades] .nexus-workspace-heading [data-teacher-save-primary]{display:none}
+ body[data-nexus-dashboard] #root .nexus-workspace-heading p:not(.nexus-workspace-kicker){display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+ body[data-nexus-dashboard] #root [data-official-academic-cycle]{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:7px;padding:9px;font-size:10px;line-height:1.4}
+ body[data-nexus-dashboard] #root [data-official-academic-cycle] p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:10px!important}
+ body[data-nexus-dashboard] #root [data-official-academic-cycle] button{padding:6px;min-height:34px;font-size:10px}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) [data-gradebook-tools-toggle]{display:inline-flex;justify-content:center;align-items:center;min-height:34px;padding:6px 9px;border:1px solid #9bb9cb;border-radius:9px;font-size:11px;font-weight:750}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-tools=false],[data-gradebook-focus][data-gradebook-tools=false]) [data-gradebook-bulk-tools]{display:none!important}
+}
+@media screen{[data-gradebook-inline-periods][hidden]{display:none!important}}
+
+@media screen and (max-width:767px){
+ body[data-nexus-dashboard] #root .portal-shell>main:has(.gradebook-mobile-surface) .nexus-workspace-heading [data-teacher-save-primary]{display:none!important}
+ body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading p:not(.nexus-workspace-kicker){display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important}
+}
+
+@media screen and (max-width:767px){
+ body[data-nexus-dashboard] #root [data-gradebook-page-heading]{padding:12px!important}
+ body[data-nexus-dashboard] #root [data-gradebook-page-heading] [data-teacher-save-primary]{display:none!important}
+ body[data-nexus-dashboard] #root [data-gradebook-page-heading]>div{gap:0}
+ body[data-nexus-dashboard] #root [data-gradebook-page-heading] h2{font-size:16px!important}
+ body[data-nexus-dashboard] #root [data-gradebook-page-heading] p{display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important;font-size:11px!important;line-height:1.45!important}
+}

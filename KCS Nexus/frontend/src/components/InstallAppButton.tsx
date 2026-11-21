@@ -59,7 +59,7 @@ export default function InstallAppButton() {
     }
   }, [])
 
-  const isWorkspace = /^(\/portal|\/admin|\/incident-reports)(\/|$)/.test(location.pathname)
+  const isWorkspace = /^(\/portal|\/admin|\/incident-reports)(\/|$)/.test(location.pathname) || ['/electives','/course-syllabi','/shining-students','/student-forum','/parent-forum'].includes(location.pathname)
   if (installed || isWorkspace) return null
 
   const install = async () => {
