@@ -16,13 +16,14 @@ export const lightweightForumRecord = <T extends Record<string, any>>(record: T)
   const { attachmentData: _attachmentData, comments, ...rest } = record
   return { ...rest, hasAttachment: Boolean(record.attachmentData), ...(comments ? { comments: comments.map((item: Record<string, any>) => { const { attachmentData: _data, ...comment } = item; return { ...comment, hasAttachment: Boolean(item.attachmentData) } }) } : {}) }
 }
-export const sendForumMedia = (res: Response, record: { attachmentData?: string | null; attachmentName?: string | null }) => {
+export const sendForumMedia = (res: Response, record: { attachmentData?: string | null; attachmentName?: string | null }, cacheControl = 'private, max-age=3600') => {
   const match = /^data:([^;,]+);base64,(.+)$/s.exec(record.attachmentData || '')
   if (!match) throw new ApiError(404, 'Forum attachment not found')
   const data = Buffer.from(match[2], 'base64')
   res.setHeader('Content-Type', match[1])
   res.setHeader('Content-Length', String(data.length))
   res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(record.attachmentName || 'attachment')}`)
-  res.setHeader('Cache-Control', 'private, max-age=3600')
+  res.setHeader('Cache-Control', cacheControl)
+  res.vary('Authorization')
   res.send(data)
 }

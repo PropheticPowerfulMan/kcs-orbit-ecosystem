@@ -1,3 +1,4 @@
+import {schoolDocumentsRouter} from './school-documents.routes.js'
 import {seniorTeacherRouter} from './senior-teacher.routes.js'
 import { teachingAttendanceRouter } from './teaching-attendance.routes.js'
 import { reportCardReceiptsRouter } from './report-card-receipts.routes.js'
@@ -50,6 +51,7 @@ router.use('/academic-visibility',academicVisibilityRouter)
 
 router.use('/account-access',accountAccessRouter)
 router.use('/site-content',siteContentRouter)
+router.use('/school-documents',schoolDocumentsRouter)
 router.use('/auth', authRouter)
 router.use('/documents', documentDownloadRouter)
 router.use('/academy', academyRouter)

@@ -347,7 +347,8 @@ export const forumAPI = {
 
 // --- Student Forum API ---
 export const studentForumAPI = {
-  getPosts: () => api.get('/student-forum/posts'),
+  getPosts: (audience?:'SCHOOL'|'CLASS') => api.get('/student-forum/posts',{params:audience?{audience}:undefined,headers:{'x-silent-feedback':'true'}}),
+  getContext: () => api.get('/student-forum/context'),
   createPost: (data: object) => api.post('/student-forum/posts', data),
   addComment: (postId: string, data: object) => api.post(`/student-forum/posts/${postId}/comments`, data),
   getPostAttachment: (id: string) => api.get(`/student-forum/posts/${id}/attachment`, { responseType: 'blob' }),

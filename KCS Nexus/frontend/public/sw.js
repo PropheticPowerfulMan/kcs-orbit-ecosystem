@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-senior-teacher-20261119-v49'
+const CACHE_NAME = 'kcs-nexus-shell-school-documents-20261121-v50'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
@@ -10,7 +10,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) =>
       Promise.all(
         cacheNames
-          .filter((cacheName) => cacheName.startsWith('kcs-nexus-shell-') && cacheName !== CACHE_NAME)
+          .filter((cacheName) => (cacheName.startsWith('kcs-nexus-shell-') || cacheName.startsWith('kcs-nexus-senior-teacher-')) && cacheName !== CACHE_NAME)
           .map((cacheName) => caches.delete(cacheName))
       )
     ).then(() => self.clients.claim())
@@ -32,16 +32,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Ne jamais mettre les API en cache.
-  if (
-    url.origin !== self.location.origin ||
-    url.pathname.includes('/api/')
-  ) {
-    return;
-  }
-
   // A PDF is a document, never the application shell. Cache only complete PDFs.
-  if (url.pathname.includes('/documents/handbooks/') && url.pathname.endsWith('.pdf')) {
+  if (url.origin === self.location.origin && ((url.pathname.includes('/documents/handbooks/') && url.pathname.endsWith('.pdf')) || /^\/(?:nexus\/)?api\/school-documents\/files\/[a-f0-9-]{36}$/.test(url.pathname))) {
     if (request.headers.has('range')) return;
     event.respondWith(fetch(request).then((response) => {
       if (response.status === 200 && response.headers.get('Content-Type')?.includes('application/pdf')) {
@@ -50,6 +42,14 @@ self.addEventListener('fetch', (event) => {
       }
       return response;
     }).catch(async () => (await caches.match(request)) || new Response('Manuel indisponible hors connexion. Reconnectez-vous puis réessayez. / Handbook unavailable offline. Please reconnect and retry.', {status: 503})));
+    return;
+  }
+
+  // Ne jamais mettre les API en cache.
+  if (
+    url.origin !== self.location.origin ||
+    url.pathname.includes('/api/')
+  ) {
     return;
   }
 
@@ -85,6 +85,15 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Ressources statiques : cache prioritaire, puis rÃ©seau.
+  // Public images may be replaced by the school; always revalidate them online.
+  if (url.pathname.startsWith('/images/')) {
+    event.respondWith(fetch(request, {cache:'no-cache'}).then(response => {
+      if(response.ok){const copy=response.clone();event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.put(request,copy)).catch(()=>undefined))}
+      return response
+    }).catch(async()=>await caches.match(request)||new Response('Image unavailable',{status:503})));
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
