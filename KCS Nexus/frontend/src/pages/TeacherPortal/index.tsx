@@ -1551,7 +1551,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   if (segment === 'grades') {
     return (
       <section className="space-y-6">
-        <div className="nexus-workspace-card p-5">
+        <div data-gradebook-page-heading className="nexus-workspace-card p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">
@@ -2661,14 +2661,13 @@ const TeacherDashboardHome = () => {
 
   useEffect(() => {
     let active = true
-    Promise.all([teacherWorkspaceAPI.overview(), messagesAPI.getAll({ box: 'all', limit: 4 })])
+    Promise.allSettled([teacherWorkspaceAPI.overview(), messagesAPI.getAll({ box: 'all', limit: 4 })])
       .then(([overviewResponse, messagesResponse]) => {
         if (!active) return
-        setOverview(overviewResponse.data?.data ?? {})
-        setDashboardMessages((messagesResponse.data?.data ?? []).slice(0, 4))
-        setDashboardStatus('ready')
+        if(overviewResponse.status==='fulfilled')setOverview(overviewResponse.value.data?.data??{})
+        if(messagesResponse.status==='fulfilled')setDashboardMessages((messagesResponse.value.data?.data??[]).slice(0,4))
+        setDashboardStatus(overviewResponse.status==='fulfilled'?'ready':'error')
       })
-      .catch(() => active && setDashboardStatus('error'))
     return () => { active = false }
   }, [])
 

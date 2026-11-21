@@ -26,7 +26,7 @@ export default function ConnectionGuard() {
       setRetryAttempt(0)
       setState('offline')
     }
-    const handleOnline = () => showRecovered()
+    const handleOnline = () => { clearRecoveryTimer(); setRetryAttempt(0); setState('degraded') }
     const handleDegraded = (event: Event) => {
       clearRecoveryTimer()
       const detail = (event as CustomEvent<{ attempt?: number }>).detail
@@ -55,8 +55,8 @@ export default function ConnectionGuard() {
         tone: 'border-red-300 bg-red-50 text-red-950 dark:border-red-800 dark:bg-red-950/95 dark:text-red-100',
         icon: '!',
         message: isFrench
-          ? 'Vous êtes hors ligne. Les champs restent affichés et aucune modification ne sera envoyée avant le retour de la connexion.'
-          : 'You are offline. Form fields remain visible and no change will be sent until the connection returns.',
+          ? 'Vous êtes hors ligne. Conservez cette page ouverte. Les notes du carnet sont gardées sur cet appareil ; un enregistrement serveur reste à confirmer.'
+          : 'You are offline. Keep this page open. Gradebook edits stay on this device; server saving still needs confirmation.',
       }
     : state === 'degraded'
       ? {
@@ -69,11 +69,11 @@ export default function ConnectionGuard() {
       : {
           tone: 'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/95 dark:text-emerald-100',
           icon: '✓',
-          message: isFrench ? 'Connexion rétablie. Nexus est de nouveau synchronisé.' : 'Connection restored. Nexus is synchronized again.',
+          message: isFrench ? 'Le serveur répond de nouveau. Vérifiez la confirmation des enregistrements en attente.' : 'The server is responding again. Check confirmation of any pending saves.',
         }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-2 z-[1390] flex justify-center px-3" role="status" aria-live="assertive">
+    <div className="nexus-connection-notice pointer-events-none fixed inset-x-0 top-2 z-[1390] flex justify-center px-3" role="status" aria-live="polite">
       <div className={`flex max-w-3xl items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-2xl backdrop-blur ${presentation.tone}`}>
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-current/30 font-black" aria-hidden="true">{presentation.icon}</span>
         <span>{presentation.message}</span>

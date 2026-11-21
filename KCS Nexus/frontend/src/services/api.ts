@@ -1,3 +1,4 @@
+import {READ_RETRY_BUDGET_MS,readRetryDelay,isTemporaryFailure,isSessionRejection} from '@/utils/networkPolicy'
 import { useUIStore } from '@/store/uiStore'
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/store/authStore'
@@ -52,41 +53,16 @@ const feedbackExcludedPaths = ['/auth/login', '/auth/refresh']
 type ResilientRequestConfig = InternalAxiosRequestConfig & {
   _retry?: boolean
   _networkRetryCount?: number
+  _networkStartedAt?: number
 }
-const safeReadMethods = new Set(['GET', 'HEAD', 'OPTIONS'])
-const transientStatuses = new Set([408, 425, 429, 502, 503, 504])
 let connectionWasDegraded = false
-
-const dispatchConnectionDegraded = (attempt = 0) => {
-  connectionWasDegraded = true
-  window.dispatchEvent(new CustomEvent('ecosystem:connection-degraded', { detail: { attempt } }))
-}
-
-const dispatchConnectionRestored = () => {
-  if (!connectionWasDegraded) return
-  connectionWasDegraded = false
-  window.dispatchEvent(new CustomEvent('ecosystem:connection-restored'))
-}
-
-const isTransientNetworkError = (error: AxiosError) => {
-  if (error.code === 'ERR_CANCELED') return false
-  if (!error.response) return true
-  return transientStatuses.has(error.response.status)
-}
-
-const mayRetrySafely = (config: ResilientRequestConfig | undefined, error: AxiosError) => {
-  const method = config?.method?.toUpperCase() || 'GET'
-  const optedOut = config?.headers?.['x-no-network-retry'] === 'true'
-  return Boolean(config && safeReadMethods.has(method) && !optedOut && isTransientNetworkError(error) && (config._networkRetryCount || 0) < 4)
-}
-
-const networkRetryDelay = (attempt: number) => 650 * (2 ** (attempt - 1)) + Math.round(Math.random() * 250)
-const waitForNetworkRetry = (milliseconds: number) => new Promise<void>((resolve) => {
-  if (navigator.onLine) { window.setTimeout(resolve, milliseconds); return }
-  let settled = false
-  const finish = () => { if (settled) return; settled = true; window.removeEventListener('online', finish); resolve() }
-  window.addEventListener('online', finish, { once: true })
-  window.setTimeout(finish, Math.max(milliseconds, 5000))
+const dispatchConnectionDegraded=(attempt=0)=>{connectionWasDegraded=true;window.dispatchEvent(new CustomEvent('ecosystem:connection-degraded',{detail:{attempt}}))}
+const dispatchConnectionRestored=()=>{if(connectionWasDegraded){connectionWasDegraded=false;window.dispatchEvent(new CustomEvent('ecosystem:connection-restored'))}}
+const waitForNetworkRetry=(milliseconds:number,signal?:AbortSignal)=>new Promise<void>((resolve,reject)=>{
+ const finish=()=>{clearTimeout(timer);signal?.removeEventListener('abort',cancel);resolve()}
+ const cancel=()=>{clearTimeout(timer);signal?.removeEventListener('abort',cancel);reject(new axios.CanceledError('Request canceled'))}
+ const timer=window.setTimeout(finish,milliseconds)
+ if(signal?.aborted)cancel();else signal?.addEventListener('abort',cancel,{once:true})
 })
 
 const expectsMutationFeedback = (config?: InternalAxiosRequestConfig) => {
@@ -117,6 +93,9 @@ const mutationErrorMessage = (error: AxiosError) => {
 // Request interceptor - attach JWT token
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    const resilient=config as ResilientRequestConfig
+    resilient._networkStartedAt ??= performance.now()
+    if(resilient._networkRetryCount)config.timeout=Math.max(1,Math.min(config.timeout||40000,READ_RETRY_BUDGET_MS-(performance.now()-resilient._networkStartedAt)))
     // Capture URL context before a refresh awaits; retries keep the original request's scope.
     if (!config.headers.has('X-Nexus-Workspace')) {
       const path = window.location.pathname
@@ -174,7 +153,7 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    if ((error.response?.status === 401 || identityNeedsRevalidation) && !originalRequest._retry) {
+    if ((error.response?.status === 401 || identityNeedsRevalidation) && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true
 
       try {
@@ -191,20 +170,26 @@ api.interceptors.response.use(
         useAuthStore.getState().login(user, token, refreshToken)
         originalRequest.headers.Authorization = `Bearer ${token}`
         return api(originalRequest)
-      } catch {
-        useAuthStore.getState().logout()
-        window.location.replace(getRouteUrl('login'))
-        return Promise.reject(error)
+      } catch (refreshError) {
+        if(!useAuthStore.getState().refreshToken||isSessionRejection(refreshError as AxiosError)){
+          useAuthStore.getState().logout()
+          window.location.replace(getRouteUrl('login'))
+        }else dispatchConnectionDegraded()
+        return Promise.reject(refreshError)
       }
     }
-    if (mayRetrySafely(originalRequest, error)) {
-      originalRequest._networkRetryCount = (originalRequest._networkRetryCount || 0) + 1
+    const delay=originalRequest&&originalRequest.headers?.['x-no-network-retry']!=='true'?readRetryDelay({
+      method:originalRequest.method,attempt:originalRequest._networkRetryCount||0,
+      elapsed:performance.now()-(originalRequest._networkStartedAt??performance.now()),status:error.response?.status,code:error.code,
+      retryAfter:error.response?.headers?.['retry-after'],
+    }):null
+    if(delay!==null&&delay!==undefined){
+      originalRequest._networkRetryCount=(originalRequest._networkRetryCount||0)+1
       dispatchConnectionDegraded(originalRequest._networkRetryCount)
-      await waitForNetworkRetry(networkRetryDelay(originalRequest._networkRetryCount))
+      await waitForNetworkRetry(delay,originalRequest.signal as AbortSignal|undefined)
       return api(originalRequest)
     }
-
-    if (isTransientNetworkError(error)) dispatchConnectionDegraded()
+    if(isTemporaryFailure(error))dispatchConnectionDegraded()
 
     if (expectsMutationFeedback(originalRequest)) dispatchMutationFeedback('error', mutationErrorMessage(error))
     return Promise.reject(error)
@@ -380,7 +365,7 @@ export const teacherWorkspaceAPI = {
   overview: () => api.get('/teachers/me/overview'),
   get: () => api.get('/teachers/me/workspace'),
   save: (state: Record<string, unknown>, revision?: number, silent = false) => api.put('/teachers/me/workspace', { state, revision }, silent ? { headers: { 'x-silent-feedback': 'true' } } : undefined),
-  syncCourse: (data: object) => api.put('/teachers/me/courses/sync', data),
+  syncCourse: (data: object, silent = false) => api.put('/teachers/me/courses/sync', data, silent ? {headers:{'x-silent-feedback':'true'}} : undefined),
   deleteCourse: (courseId: string) => api.delete('/teachers/me/courses/' + encodeURIComponent(courseId)),
   attendance: (courseId: string, date?: string) => api.get('/teachers/me/attendance', { params: { courseId, date } }),
   saveAttendance: (data: object) => api.post('/teachers/me/attendance/bulk', data),

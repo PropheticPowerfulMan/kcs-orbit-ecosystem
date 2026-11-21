@@ -1,3 +1,4 @@
+import InstitutionalCredentialsDialog from '@/components/admin/InstitutionalCredentialsDialog'
 import { printAdminInstitutionalReport } from '@/utils/adminInstitutionalReportPrint'
 import {ParentProfileView,LearnerProfileView} from '@/components/admin/RegistryProfileView'
 import { adminDashboardText, adminDashboardMonth } from '@/utils/adminDashboardLanguage'
@@ -2640,6 +2641,8 @@ const AdminSectionView = ({
 
     return (
       <div data-people-registry="parents" className="admin-person-directory space-y-5">
+        {familyCredentials&&<InstitutionalCredentialsDialog loading={familyCredentials.loading} error={familyCredentials.error?familyCredentials.message:undefined} reset={Boolean(familyCredentials.reset)} entries={[familyCredentials.parent,...(familyCredentials.students||[])].filter(Boolean)} onClose={()=>setFamilyCredentials(null)}/>}
+
         {familyCredentials && createPortal((
           <div className="kcs-credential-modal fixed inset-0 z-[9999] grid place-items-center overflow-y-auto bg-slate-950/85 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true" aria-label="Identifiants générés">
             <section className="kcs-credential-modal-panel my-auto max-h-[calc(100dvh-1.5rem)] min-h-[min(34rem,calc(100dvh-1.5rem))] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-emerald-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-5 text-slate-900 shadow-[0_35px_120px_rgba(0,20,45,.65)] dark:border-sky-700/60 dark:from-slate-950 dark:via-kcs-blue-950 dark:to-slate-900 dark:text-slate-100 sm:max-h-[calc(100dvh-3rem)] sm:min-h-[36rem] sm:p-9">
@@ -2916,18 +2919,7 @@ const AdminSectionView = ({
               {familyDirectory.map((familyName) => <option key={familyName}>{familyName}</option>)}
             </select>
           </div>
-          {familyCredentials && createPortal((
-            <div className="kcs-credential-modal fixed inset-0 z-[9999] grid place-items-center overflow-y-auto bg-slate-950/85 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true" aria-label="Identifiants générés">
-              <section className="kcs-credential-modal-panel relative my-auto max-h-[calc(100dvh-1.5rem)] min-h-[min(34rem,calc(100dvh-1.5rem))] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-emerald-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-5 text-slate-900 shadow-[0_35px_120px_rgba(0,20,45,.65)] dark:border-sky-700/60 dark:from-slate-950 dark:via-kcs-blue-950 dark:to-slate-900 dark:text-slate-100 sm:max-h-[calc(100dvh-3rem)] sm:min-h-[36rem] sm:p-9">
-                <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">{familyCredentials.loading ? 'Réinitialisation en cours' : familyCredentials.error ? 'Réinitialisation impossible' : familyCredentials.reset ? 'Réinitialisation terminée' : 'Identifiants générés'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'Préparation du nouvel accès…' : familyCredentials.error ? 'Le nouvel accès n’a pas pu être généré' : familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Accès de la nouvelle famille'}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{familyCredentials.reset ? 'Conservez ces informations dans un canal sûr. Le mot de passe doit être changé à la prochaine connexion.' : 'Le parent accède aux portails autorisés sauf SAVANEX. Les élèves n’accèdent ni à SAVANEX ni à EduPay.'}</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
-                {familyCredentials.loading ? <div className="mt-5 flex items-center gap-3 rounded-2xl bg-sky-50 p-5 font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white"><RefreshCw className="animate-spin" size={20}/>Synchronisation des accès et des notifications…</div> : null}
-                {familyCredentials.error ? <p className="mt-5 rounded-2xl bg-red-50 p-5 font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">{familyCredentials.message}</p> : null}
-                <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{index === 0 && familyCredentials.parent ? 'Parent' : `Élève ${credential.studentId || index}`}</p><p className="mt-3 text-base font-bold text-kcs-blue-950 dark:text-white">{credential.displayName || credential.studentId || (index === 0 ? 'Parent' : 'Élève')}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d'accès : <strong>{credential.accessCode}</strong></p><p className="mt-2 text-sm">Mot de passe : <strong>{credential.temporaryPassword}</strong></p></article>)}
-                </div>
-              </section>
-            </div>
-          ), document.body)}
+          {familyCredentials&&<InstitutionalCredentialsDialog loading={familyCredentials.loading} error={familyCredentials.error?familyCredentials.message:undefined} reset={Boolean(familyCredentials.reset)} entries={[familyCredentials.parent,...(familyCredentials.students||[])].filter(Boolean)} onClose={()=>setFamilyCredentials(null)}/>}
           {showCreateStudent && createPortal((
             <div data-entity-dialog="family-create" role="dialog" aria-modal="true" aria-label={tr("Ajouter un élève et sa famille","Add a learner and family")}>
             <form className="registry-dialog-window" onSubmit={(event) => {

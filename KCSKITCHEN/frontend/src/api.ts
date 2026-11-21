@@ -1,3 +1,4 @@
+import {resilientFetch} from './resilientFetch'
 const API_BASE = import.meta.env.VITE_API_URL || '/kitchen/api'
 
 const TOKEN_KEY = 'kcs-kitchen-token'
@@ -17,39 +18,18 @@ export function setToken(token: string | null) {
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const method = String(options.method || 'GET').toUpperCase()
-  const attempts = method === 'GET' ? 3 : 1
-  let lastError: unknown
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 30_000)
-    try {
-      const response = await fetch(API_BASE + path, {
-        ...options,
-        signal: options.signal || controller.signal,
-        headers: {
-          'content-type': 'application/json',
-          ...(getToken() ? { authorization: 'Bearer ' + getToken() } : {}),
-          ...(options.headers || {})
-        }
-      })
-      const body = await response.json().catch(() => ({}))
-      if (!response.ok) throw Object.assign(new Error(body.message || 'Request failed'), { status: response.status, fields: body.fields })
-      return body as T
-    } catch (error: any) {
-      lastError = error
-      const retryable = method === 'GET' && (!error?.status || error.status >= 500)
-      if (!retryable || attempt === attempts - 1) throw error
-      await new Promise(resolve => window.setTimeout(resolve, 500 * (2 ** attempt)))
-    } finally {
-      window.clearTimeout(timeout)
-    }
-  }
-  throw lastError
+  return resilientFetch<T>(API_BASE+path,{
+    ...options,
+    headers:{'content-type':'application/json',...(getToken()?{authorization:'Bearer '+getToken()}:{}),...(options.headers||{})},
+  },async response=>{
+    const body=await response.json().catch(()=>({}))
+    if(!response.ok)throw Object.assign(new Error(body.message||'Request failed'),{status:response.status,fields:body.fields})
+    return body as T
+  })
 }
 
 export async function apiBlob(path: string): Promise<Blob> {
-  const response = await fetch(API_BASE + path, {
+  const response = await resilientFetch(API_BASE + path, {
     headers: getToken() ? { authorization: 'Bearer ' + getToken() } : {}
   })
   if (!response.ok) throw new Error('Official profile photo is unavailable')

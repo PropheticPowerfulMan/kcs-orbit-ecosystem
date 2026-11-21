@@ -1,3 +1,4 @@
+import {transcriptReceiptUrl}from '../utils/transcriptReceipt.js'
 import {createHash} from 'node:crypto'
 import { deliveryRecipientUnavailable } from './deliveryRecipientAccess.js'
 import { reportCardReceiptUrl } from '../utils/reportCardReceipt.js'
@@ -87,23 +88,24 @@ export async function processOutboundMailQueue() {
       select: { attachmentName: true, attachmentMime: true, attachmentData: true, sharedAttachment: { select: { data: true } } },
     }) : null
     const attachmentData = message?.attachmentData ?? message?.sharedAttachment?.data
-    if (row.reportCardId && (!attachmentData?.length || message?.attachmentMime !== 'application/pdf')) { await prisma.correspondenceLog.update({where:{id:row.id},data:{status:'FAILED',failureReason:'REPORT_CARD_PDF_ATTACHMENT_MISSING'}}); continue }
+    const transcriptReceipt=Number((metadata as Record<string,unknown>).transcriptReceiptVersion)===2
+    if ((row.reportCardId||transcriptReceipt) && (!attachmentData?.length || message?.attachmentMime !== 'application/pdf')) { await prisma.correspondenceLog.update({where:{id:row.id},data:{status:'FAILED',failureReason:transcriptReceipt?'TRANSCRIPT_PDF_ATTACHMENT_MISSING':'REPORT_CARD_PDF_ATTACHMENT_MISSING'}}); continue }
     const attachmentHash=attachmentData?.length?createHash('sha256').update(attachmentData).digest('hex'):null
-    const expectedHash=(metadata as Record<string,unknown>).reportCardAttachmentSha256
-    if(row.reportCardId&&expectedHash&&expectedHash!==attachmentHash){await prisma.correspondenceLog.update({where:{id:row.id},data:{status:'FAILED',failureReason:'REPORT_CARD_PDF_INTEGRITY_MISMATCH'}});continue}
+    const expectedHash=(metadata as Record<string,unknown>)[transcriptReceipt?'transcriptAttachmentSha256':'reportCardAttachmentSha256']
+    if((row.reportCardId||transcriptReceipt)&&expectedHash&&expectedHash!==attachmentHash){await prisma.correspondenceLog.update({where:{id:row.id},data:{status:'FAILED',failureReason:transcriptReceipt?'TRANSCRIPT_PDF_INTEGRITY_MISMATCH':'REPORT_CARD_PDF_INTEGRITY_MISMATCH'}});continue}
     const language = metadata.language === 'en' ? 'en' : 'fr'
     const attachmentNote = message?.attachmentName ? (language === 'fr' ? `\n\nDocument joint : ${message.attachmentName}. Disponible aussi dans votre boîte Nexus.` : `\n\nAttached document: ${message.attachmentName}. Also available in your Nexus inbox.`) : ''
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] || character))
     const messageHtml = (row.body + attachmentNote).split(/\r?\n/).map((line) => line.trim() ? `<p style="margin:0 0 16px;line-height:1.72;color:#334155">${escapeHtml(line)}</p>` : '<div style="height:12px">&nbsp;</div>').join('')
     const trackingUrl = `${process.env.FRONTEND_URL?.replace(/\/$/, '') || ''}/api/messages/tracking/email/${encodeURIComponent(row.id)}.gif`
-    const receiptUrl = reportCardReceiptUrl(row, env.FRONTEND_URL, env.JWT_SECRET, language)
-    const receiptLabel = language === 'fr' ? 'Confirmer la réception du bulletin' : 'Confirm receipt of the report card'
+    const receiptUrl = transcriptReceiptUrl(row,env.FRONTEND_URL,env.JWT_SECRET,language)||reportCardReceiptUrl(row, env.FRONTEND_URL, env.JWT_SECRET, language)
+    const receiptLabel=transcriptReceipt?(language==='fr'?'Confirmer la réception du relevé académique':'Confirm receipt of the transcript'):(language==='fr'?'Confirmer la réception du bulletin':'Confirm receipt of the report card')
     const receiptText = receiptUrl ? '\n\n' + receiptLabel + ': ' + receiptUrl : ''
     const result = await sendSchoolMail({
       to: row.recipientEmail,
       replyTo: OFFICIAL_REPLY_TO,
       subject: row.subject,
-      text: row.body + (row.reportCardId ? attachmentNote : '') + receiptText,
+      text: row.body + (row.reportCardId||transcriptReceipt ? attachmentNote : '') + receiptText,
       html: `${messageHtml}${receiptUrl ? `<p style="margin:24px 0"><a href="${escapeHtml(receiptUrl)}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:#086785;color:#fff;text-decoration:none;font-weight:bold">${receiptLabel}</a></p>` : ''}<img src="${trackingUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`,
       attachments: attachmentData && message?.attachmentName ? [{ filename: message.attachmentName, content: Buffer.from(attachmentData), contentType: message.attachmentMime ?? undefined }] : undefined,
       branded: true,
@@ -123,7 +125,7 @@ export async function processOutboundMailQueue() {
     await prisma.$transaction(async tx=>{
       await tx.$queryRaw(Prisma.sql`SELECT id FROM "CorrespondenceLog" WHERE id = ${row.id} FOR UPDATE`)
       const latest=await tx.correspondenceLog.findUniqueOrThrow({where:{id:row.id}}),m=queueMetadata(latest.metadata) as Record<string,unknown>
-      const acknowledged=Boolean(m.reportCardReceiptConfirmedAt)
+      const acknowledged=Boolean(m.reportCardReceiptConfirmedAt||m.transcriptReceiptConfirmedAt)
       await tx.correspondenceLog.update({where:{id:row.id},data:{status:acknowledged?'DELIVERED':retryable?'QUEUED':'FAILED',failureReason:acknowledged?null:result.providerDetail||result.reason,metadata:{...metadata,...m,leaseId:null,leaseUntil:null,attempts,lastAttemptAt:now.toISOString(),nextAttemptAt:!acknowledged&&retryable?new Date(now.getTime()+delay).toISOString():null} as Prisma.InputJsonValue}})
     })
 

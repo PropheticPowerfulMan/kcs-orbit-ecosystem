@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-shell-school-documents-20261121-v50'
+const CACHE_NAME = 'kcs-nexus-shell-mobile-network-20261121-v51'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
@@ -6,16 +6,34 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) =>
-      Promise.all(
-        cacheNames
-          .filter((cacheName) => (cacheName.startsWith('kcs-nexus-shell-') || cacheName.startsWith('kcs-nexus-senior-teacher-')) && cacheName !== CACHE_NAME)
-          .map((cacheName) => caches.delete(cacheName))
-      )
-    ).then(() => self.clients.claim())
-  );
-});
+  event.waitUntil((async () => {
+    const names = await caches.keys()
+    const owned = names.filter(name => (name.startsWith('kcs-nexus-shell-') || name.startsWith('kcs-nexus-senior-teacher-')) && name !== CACHE_NAME).reverse()
+    const current = await caches.open(CACHE_NAME)
+    for (const name of owned) {
+      let complete = true
+      try {
+        const previous = await caches.open(name)
+        for (const request of await previous.keys()) {
+          const url = new URL(typeof request === 'string' ? request : request.url, self.location.origin)
+          if (url.origin !== self.location.origin || SIBLING_APP_PREFIXES.some(prefix => url.pathname.startsWith(prefix))) continue
+          const pdf = (url.pathname.includes('/documents/handbooks/') && url.pathname.endsWith('.pdf')) || /^\/(?:nexus\/)?api\/school-documents\/files\/[a-f0-9-]{36}$/.test(url.pathname)
+          const shell = url.pathname === '/' || url.pathname === '/index.html'
+          const asset = url.pathname.startsWith('/assets/') || url.pathname.startsWith('/images/') || url.pathname.startsWith('/icons/')
+          if ((!shell && !pdf && !asset) || (!pdf && url.pathname.includes('/api/')) || await current.match(request)) continue
+          const response = await previous.match(request)
+          if (!response || response.status !== 200) continue
+          const type = response.headers.get('Content-Type') || ''
+          if (pdf && !type.includes('application/pdf') || asset && type.includes('text/html')) continue
+          await current.put(request, response.clone())
+        }
+      } catch { complete = false }
+      // Retain the previous fallback if device storage could not complete the transfer.
+      if (complete) await caches.delete(name)
+    }
+    await self.clients.claim()
+  })())
+})
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;

@@ -1,3 +1,4 @@
+import {initialGradebookPanel,gradebookPanelKey} from '@/utils/mobileWorkspace'
 import AcademicCycleNotice from '@/components/shared/AcademicCycleNotice'
 import {officialAcademicCycle,globallyClosedCycle} from '@/utils/academicCycleSelection'
 import CourseRegularityPanel from '@/components/teachingAttendance/CourseRegularityPanel'
@@ -207,13 +208,19 @@ const downloadFile = (fileName: string, content: string, type: string) => {
 }
 
 const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse, onAction, onRegisterSave }: Props) => {
+  const compact=window.matchMedia('(max-width:767px)').matches
+  const [periodPanelOpen,setPeriodPanelOpen]=useState(!compact)
+  const [officialResultsOpen,setOfficialResultsOpen]=useState(!compact)
+  const [detailsOpen,setDetailsOpen]=useState(!compact)
+  const [bulkToolsOpen,setBulkToolsOpen]=useState(!compact)
+  const jumpTo=(key:string)=>requestAnimationFrame(()=>requestAnimationFrame(()=>document.querySelector<HTMLElement>('[data-gradebook-section="'+key+'"]')?.scrollIntoView({block:'start',behavior:'instant' as ScrollBehavior})))
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false)
   const [focusPeriodsOpen,setFocusPeriodsOpen]=useState(false)
-  const [commandCenterOpen, setCommandCenterOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:command-center') !== 'closed')
-  const [taskPanelOpen, setTaskPanelOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:task-panel') !== 'closed')
-  const [weightPanelOpen, setWeightPanelOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:weight-panel') !== 'closed')
+  const [commandCenterOpen, setCommandCenterOpen] = useState(() => initialGradebookPanel('command-center',compact,key=>localStorage.getItem(key)))
+  const [taskPanelOpen, setTaskPanelOpen] = useState(() => initialGradebookPanel('task-panel',compact,key=>localStorage.getItem(key)))
+  const [weightPanelOpen, setWeightPanelOpen] = useState(() => initialGradebookPanel('weight-panel',compact,key=>localStorage.getItem(key)))
   const togglePanel = (key: 'task' | 'weight', open: boolean) => {
-    localStorage.setItem(`kcs:nexus:gradebook:${key}-panel`, open ? 'open' : 'closed')
+    localStorage.setItem(gradebookPanelKey(key+'-panel',compact), open ? 'open' : 'closed')
     if (key === 'task') setTaskPanelOpen(open); else setWeightPanelOpen(open)
   }
   const language = useUIStore((state) => state.language)
@@ -904,7 +911,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         room: '',
         studentIds: enrolledCourseStudents.map((student) => student.id),
         studentNumbers: enrolledCourseStudents.map((student) => student.studentNumber).filter(Boolean),
-      })
+      }, true)
       const officialCourseId = String(synchronizedCourse.data?.data?.id || selectedCourse.id)
       const synchronizedEnrollmentCount = synchronizedCourse.data?.data?.enrollments?.length ?? 0
       if (synchronizedEnrollmentCount !== enrolledCourseStudents.length) {
@@ -941,7 +948,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       const notified = Number(response.data?.data?.superAdministrationNotified ?? 0)
       onAction(`${gradedRows.length} final grade(s) submitted and independently verified for Super Administration review${notified ? `; ${notified} administrator notification(s) created` : ''}.`)
     } catch (error: any) {
-      onAction(error?.response?.data?.message || error?.message || 'Final-grade submission failed.', true)
+      onAction((String(error?.response?.data?.message||'').startsWith('The course roster changed.')?tr('La liste du cours a changé dans My Courses. Rechargez le carnet avant de soumettre. Aucun élève n’a été réinscrit.','The course roster changed in My Courses. Reload Gradebook before submitting. No learner was re-enrolled.'):error?.response?.data?.message) || error?.message || 'Final-grade submission failed.', true)
     } finally { setSubmittingFinals(false) }
   }
 
@@ -1026,6 +1033,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
 
   return (
     <div data-kcs-gradebook="true" className="gradebook-mobile-surface space-y-6">
+      <nav data-gradebook-mobile-nav aria-label={tr('Accès rapide au carnet','Quick gradebook access')}>
+       <div><label><span>{tr('Cours','Course')}</span><select aria-label={tr('Cours du carnet','Gradebook course')} value={selectedCourseId} onChange={event=>onSelectCourse(event.target.value)}>{courses.map(course=><option key={course.id} value={course.id}>{course.name} · {canonicalClassLabel(course.className||course.gradeLevels?.[0])}</option>)}</select></label><label><span>{tr('Période','Period')}</span><select aria-label={tr('Période du carnet','Gradebook period')} value={term} onChange={event=>chooseTerm(event.target.value)}>{terms.map(period=><option key={period} value={period} disabled={period==='Annual final'&&!annualSummaryReady}>{period==='Annual final'?tr('Bilan annuel','Annual summary'):period.replace('Semester ','S').replace('Quarter ','Q')}</option>)}</select></label></div>
+       <div><button type="button" data-gradebook-save disabled={periodReadOnly||savingSpreadsheet||loadedScope!==cycleKey} onClick={()=>void saveSpreadsheet()}>{savingSpreadsheet?tr('Enregistrement…','Saving…'):tr('Enregistrer','Save')}</button><button type="button" onClick={()=>jumpTo('spreadsheet')}>{tr('Notes','Scores')}</button><button type="button" onClick={()=>{setTaskPanelOpen(true);jumpTo('task')}}>{tr('Créer un travail','New task')}</button><button type="button" onClick={()=>{setWeightPanelOpen(true);jumpTo('weight')}}>{tr('Pondération','Weights')}</button><button type="button" aria-expanded={periodPanelOpen} onClick={()=>{setPeriodPanelOpen(v=>!v);if(!periodPanelOpen)jumpTo('periods')}}>{tr('Périodes','Periods')}</button></div>
+      </nav>
       <AcademicCycleNotice official={officialAcademicCycle(periodAccess)} onFollow={()=>{const current=officialAcademicCycle(periodAccess);if(current){chooseTerm(current.term);manuallyBrowsingPeriod.current=false;if(current.academicYear!==academicYear)setAcademicYear(current.academicYear)}}}/>
       {excludedAssessments.length > 0 && !periodReadOnly && <section role="status" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
         <b>{tr('Des notes sont exclues par une pondération de 0 %.', 'Some scores are excluded by a 0% category weight.')}</b>
@@ -1044,7 +1055,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       </div>, document.body)}
       {weightScopeOpen && <GradebookWeightScopeDialog key={cycleKey} courses={courses} currentCourseId={selectedCourseId} academicYear={academicYear} term={term} categories={categories} onApply={applyWeightsToCourses} onClose={() => setWeightScopeOpen(false)}/>}
       {periodReadOnly && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{periodNotice}</p>}
-      <section data-gradebook-periods hidden={spreadsheetOpen&&!focusPeriodsOpen} className="shrink-0 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
+      <section data-gradebook-periods data-gradebook-section="periods" data-mobile-periods-open={periodPanelOpen} hidden={spreadsheetOpen&&!focusPeriodsOpen} className="shrink-0 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
         <p className="text-sm font-bold text-kcs-blue-950 dark:text-sky-100">{academicYear} · {tr('Période affichée', 'Displayed period')} {term}</p>
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{loadedScope !== cycleKey ? tr('Chargement sécurisé des notes enregistrées…', 'Loading saved gradebook securely…') : tr('Vos notes restent conservées dans leur période. Choisissez une période ci-dessous pour les retrouver.', 'Your grades remain saved in their original period. Choose a period below to view them.')} {officialTerm !== term && <strong>{tr('Période de saisie ouverte', 'Open grade-entry period')} {officialTerm}.</strong>}</p>
         {!annualSummaryReady && <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{tr('Le bilan annuel sera disponible en lecture seule après la clôture des quatre quarters par le SuperAdmin. Les dates seules ne l’activent pas.', 'The read-only annual summary becomes available after the SuperAdmin closes all four quarters. Calendar dates alone do not activate it.')}</p>}
@@ -1064,7 +1075,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                 Spreadsheet entry, weighted categories, predictive risk detection, report-card comments, and synchronized parent/student/admin visibility.
               </p>}
             </div>
-            <button type="button" aria-expanded={commandCenterOpen} onClick={() => { const next=!commandCenterOpen;setCommandCenterOpen(next);localStorage.setItem('kcs:nexus:gradebook:command-center',next?'open':'closed') }} className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-kcs-blue-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 sm:w-auto dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={19} className={`transition-transform ${commandCenterOpen?'rotate-180':''}`}/><span>{commandCenterOpen?'Hide command center':'Show command center'}</span></button>
+            <button type="button" aria-expanded={commandCenterOpen} onClick={() => { const next=!commandCenterOpen;setCommandCenterOpen(next);localStorage.setItem(gradebookPanelKey('command-center',compact),next?'open':'closed') }} className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-kcs-blue-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 sm:w-auto dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={19} className={`transition-transform ${commandCenterOpen?'rotate-180':''}`}/><span>{commandCenterOpen?'Hide command center':'Show command center'}</span></button>
           </div>
           {commandCenterOpen && <div className="mt-4 flex flex-wrap items-end gap-1.5 border-t border-gray-100 pt-4 dark:border-kcs-blue-800">
               <select aria-label="Academic year" value={academicYear} onChange={(event)=>setAcademicYear(event.target.value)} className="w-32 rounded-xl border border-gray-200 px-3 py-2 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
@@ -1115,15 +1126,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       </div>
 
       {officialCourseGrades.length > 0 && (
-        <section className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 dark:border-emerald-800 dark:bg-emerald-950/20">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <details open={officialResultsOpen} onToggle={event=>setOfficialResultsOpen(event.currentTarget.open)} className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 dark:border-emerald-800 dark:bg-emerald-950/20">
+          <summary className="flex cursor-pointer list-none flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">Official submitted results</p>
               <h4 className="mt-1 font-bold text-kcs-blue-950 dark:text-white">Grades already preserved in report cards</h4>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">These values come directly from the official Nexus academic register. Recovered task details remain editable in the spreadsheet below.</p>
             </div>
             <span className="w-fit rounded-full bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white">{officialCourseGrades.length} official grade(s)</span>
-          </div>
+          </summary>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {officialCourseGrades.map((grade) => (
               <div key={grade.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white px-4 py-3 dark:border-emerald-900 dark:bg-kcs-blue-950">
@@ -1132,10 +1143,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               </div>
             ))}
           </div>
-        </section>
+        </details>
       )}
       <div className={`grid gap-4 transition-all ${configurationGridClass}`}>
-        <div className={`nexus-workspace-card rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${taskPanelOpen ? 'p-5' : 'p-3'}`}>
+        <div data-gradebook-section="task" className={`nexus-workspace-card rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${taskPanelOpen ? 'p-5' : 'p-3'}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <h4 className="font-bold text-kcs-blue-900 dark:text-white">Create an assessment task</h4>
@@ -1191,7 +1202,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </div>}
         </div>
 
-        <div className={`nexus-workspace-card rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${weightPanelOpen ? 'p-5' : 'p-3'}`}>
+        <div data-gradebook-section="weight" className={`nexus-workspace-card rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${weightPanelOpen ? 'p-5' : 'p-3'}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h4 className="font-bold text-kcs-blue-900 dark:text-white">Category weighting</h4>
@@ -1229,9 +1240,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       {selectedCourse?.id && <CourseRegularityPanel courseId={selectedCourse.id} academicYear={academicYear} term={term}/>}
 
       <GradebookFocusHost expanded={spreadsheetOpen}>
-      <div data-kcs-gradebook data-gradebook-focus={spreadsheetOpen||undefined} className={spreadsheetOpen ? "gradebook-focus-window fixed inset-0 z-[9990] flex flex-col overflow-hidden bg-[#e2edf7] text-kcs-blue-950 shadow-2xl dark:bg-[#081e31] dark:text-white" : "overflow-hidden rounded-2xl border border-sky-100 bg-white dark:border-sky-800 dark:bg-kcs-blue-900/50"}>
+      <div data-gradebook-section="spreadsheet" data-gradebook-details={detailsOpen} data-gradebook-tools={bulkToolsOpen} data-kcs-gradebook data-gradebook-focus={spreadsheetOpen||undefined} className={spreadsheetOpen ? "gradebook-focus-window fixed inset-0 z-[9990] flex flex-col overflow-hidden bg-[#e2edf7] text-kcs-blue-950 shadow-2xl dark:bg-[#081e31] dark:text-white" : "overflow-hidden rounded-2xl border border-sky-100 bg-white dark:border-sky-800 dark:bg-kcs-blue-900/50"}>
       {spreadsheetOpen&&<header className="nexus-gradebook-focus-heading flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-sky-600/40 bg-gradient-to-r from-[#082e4e] to-[#12536c] px-4 py-3 text-white"><div className="flex min-w-0 items-center gap-3"><span className="rounded-xl border border-white/20 bg-white/10 p-2"><FileSpreadsheet size={23}/></span><div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[.15em] text-cyan-200">KCS Nexus · {tr('Espace de cotation','Grading workspace')}</p><h3 className="truncate text-base font-black sm:text-lg">{selectedCourse?.name}</h3><p className="text-[11px] text-sky-100">{academicYear} · {term} · {studentAnalytics.length} {tr('élèves','learners')}</p></div></div><div className="flex items-center gap-2"><button type="button" aria-expanded={focusPeriodsOpen} onClick={()=>setFocusPeriodsOpen(v=>!v)} className="rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-xs font-bold text-white">{tr('Choisir la période','Choose period')} <ChevronDown size={13} className="inline"/></button><button type="button" onClick={()=>setSpreadsheetOpen(false)} className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white hover:bg-rose-700"><Minimize2 size={15}/>{tr('Fermer','Close')} <span className="hidden opacity-70 sm:inline">Esc</span></button></div></header>}
-      <section hidden={spreadsheetOpen&&!focusPeriodsOpen} className="shrink-0 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
+      <section data-gradebook-inline-periods hidden={!spreadsheetOpen||!focusPeriodsOpen} className="shrink-0 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
         <p className="text-sm font-bold text-kcs-blue-950 dark:text-sky-100">{academicYear} · {tr('Période affichée', 'Displayed period')} {term}</p>
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{loadedScope !== cycleKey ? tr('Chargement sécurisé des notes enregistrées…', 'Loading saved gradebook securely…') : tr('Vos notes restent conservées dans leur période. Choisissez une période ci-dessous pour les retrouver.', 'Your grades remain saved in their original period. Choose a period below to view them.')} {officialTerm !== term && <strong>{tr('Période actuelle du calendrier', 'Current calendar period')} {officialTerm}.</strong>}</p>
         {!annualSummaryReady && <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{tr('Le bilan annuel sera disponible en lecture seule après la clôture des quatre quarters par le SuperAdmin. Les dates seules ne l’activent pas.', 'The read-only annual summary becomes available after the SuperAdmin closes all four quarters. Calendar dates alone do not activate it.')}</p>}
@@ -1243,20 +1254,21 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       </section>
         <div data-gradebook-toolbar className={`flex flex-col gap-2 border-b p-3 dark:border-kcs-blue-800 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between ${spreadsheetOpen ? 'border-kcs-blue-200 bg-[#dceaf9] dark:border-kcs-blue-700 dark:bg-kcs-blue-950' : 'border-gray-100'}`}>
           <div>
-            <h4 className="font-bold text-kcs-blue-900 dark:text-white">Live spreadsheet</h4>{periodReadOnly && <p className="text-xs font-bold text-amber-800 dark:text-amber-300">{periodNotice}</p>}
+            <h4 className="font-bold text-kcs-blue-900 dark:text-white">Live spreadsheet</h4><button type="button" data-gradebook-details-toggle aria-pressed={detailsOpen} onClick={()=>setDetailsOpen(v=>!v)}>{detailsOpen?tr("Masquer l’analyse","Hide analysis"):tr("Voir l’analyse","Show analysis")}</button>{periodReadOnly && <p className="text-xs font-bold text-amber-800 dark:text-amber-300">{periodNotice}</p>}
             <p className="text-xs text-gray-500 dark:text-gray-400">Sticky roster, editable cells, comments, missing detection, weighted final average, and predictive final grade.</p>
           </div>
           <div className="flex flex-wrap items-end gap-1.5">
             <button type="button" disabled={periodReadOnly || savingSpreadsheet || loadedScope !== cycleKey} onClick={() => void saveSpreadsheet()} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><CheckCircle2 size={15}/> Save</button>
             {skipDeleteConfirmation && <button type="button" onClick={() => { localStorage.removeItem('kcs:nexus:gradebook:skip-delete-confirmation'); setSkipDeleteConfirmation(false) }} className="inline-flex items-center rounded-xl border border-amber-300 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-700 dark:text-amber-200">{tr('Réactiver la confirmation', 'Restore delete prompts')}</button>}
-            <button type="button" onClick={() => void exportGradebook('PDF', false, true)} className="inline-flex items-center justify-center gap-1 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800"><FileText size={15}/>{tr('PDF détaillé', 'Detailed PDF')}</button>
+            <button type="button" data-gradebook-bulk-tools onClick={() => void exportGradebook('PDF', false, true)} className="inline-flex items-center justify-center gap-1 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800"><FileText size={15}/>{tr('PDF détaillé', 'Detailed PDF')}</button>
             {!spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><Maximize2 size={15}/> Dedicated window</button>}
 
-            <label className="grid gap-1 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-300"><span>Assignment to fill</span><select aria-label="Assignment for bulk score" className="input-kcs py-2 text-sm" value={selectedAssignmentId} disabled={!visibleAssignments.length} onChange={(event) => setSelectedAssignmentId(event.target.value)}>
+            <button type="button" data-gradebook-tools-toggle aria-expanded={bulkToolsOpen} onClick={()=>setBulkToolsOpen(value=>!value)}>{bulkToolsOpen?tr('Moins d’options','Fewer actions'):tr('Plus d’options','More actions')}</button>
+            <label data-gradebook-bulk-tools className="grid gap-1 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-300"><span>Assignment to fill</span><select aria-label="Assignment for bulk score" className="input-kcs py-2 text-sm" value={selectedAssignmentId} disabled={!visibleAssignments.length} onChange={(event) => setSelectedAssignmentId(event.target.value)}>
               {visibleAssignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.title}</option>)}
             </select></label>
-            <label className="grid gap-1 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-300"><span>Score / {selectedBulkAssignment?.maxPoints ?? '—'}</span><input aria-label="Bulk score value" type="number" min={0} max={selectedBulkAssignment?.maxPoints} disabled={!selectedBulkAssignment} className="input-kcs w-28 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50" value={bulkValue} onChange={(event) => setBulkValue(event.target.value)} placeholder="Enter score" /></label>
-            <button type="button" disabled={!selectedBulkAssignment} onClick={applyBulkScore} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-50">Apply to all students</button>
+            <label data-gradebook-bulk-tools className="grid gap-1 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-300"><span>Score / {selectedBulkAssignment?.maxPoints ?? '—'}</span><input aria-label="Bulk score value" type="number" min={0} max={selectedBulkAssignment?.maxPoints} disabled={!selectedBulkAssignment} className="input-kcs w-28 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50" value={bulkValue} onChange={(event) => setBulkValue(event.target.value)} placeholder="Enter score" /></label>
+            <button type="button" data-gradebook-bulk-tools disabled={!selectedBulkAssignment} onClick={applyBulkScore} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-50">Apply to all students</button>
           </div>
           <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">{autosaveEnabled ? tr('Enregistrement automatique activé pour ce cours et cette année.', 'Automatic saving is enabled for this course and year.') : tr('Cliquez une première fois sur Save pour activer l’enregistrement automatique.', 'Click Save once to enable automatic saving.')}</p>
           {saveNotice && <p role="status" className={`text-xs font-bold ${syncedContents.current.get(cycleKey) === currentSnapshotContent ? 'text-green-700 dark:text-green-300' : 'text-amber-800 dark:text-amber-300'}`}>{saveNotice}</p>}
@@ -1271,7 +1283,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         <div className={spreadsheetOpen ? "flex-1 overflow-auto" : "max-h-[680px] overflow-auto"}>
           <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-xs">
             <thead className="sticky top-0 z-20 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm dark:bg-kcs-blue-900 dark:text-gray-300">
-              <tr>
+              <tr data-gradebook-header-row>
                 <th className="sticky left-0 z-30 w-56 bg-gray-50 px-3 py-2 text-left dark:bg-kcs-blue-900">Student<span className="mt-1 block text-[10px] font-semibold normal-case text-kcs-blue-500 dark:text-kcs-blue-300">{canonicalClassLabel(selectedCourse?.className || selectedCourse?.gradeLevels?.[0])} - Official course enrollment</span></th>
                 {visibleAssignments.map((assignment) => (
                   <th key={assignment.id} draggable onDragStart={() => setDraggedAssignmentId(assignment.id)} onDragEnd={() => setDraggedAssignmentId('')} onDragOver={(event) => event.preventDefault()} onDrop={() => moveAssignment(assignment.id)} title={tr('Glissez pour ordonner les colonnes de même date', 'Drag to arrange columns sharing the same assessment date')} className={`min-w-32 cursor-move border-l border-gray-100 px-2 py-2 text-center dark:border-kcs-blue-800 ${draggedAssignmentId === assignment.id ? 'opacity-50' : ''}`}>
@@ -1288,7 +1300,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             </thead>
             <tbody>
               {studentAnalytics.map(({ student, average, missing, projected, risk },rowIndex) => (
-                <tr key={student.id} className="group">
+                <tr data-gradebook-score-row key={student.id} className="group">
                   <td className="sticky left-0 z-10 border-t border-gray-100 bg-white px-3 py-1.5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{canonicalClassLabel(student.grade, student.section)}</p>
@@ -1337,7 +1349,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                 </tr>
               ))}
               {studentAnalytics.length > 0 && (
-                <tr className="bg-gray-50 font-bold text-kcs-blue-900 dark:bg-kcs-blue-800/30 dark:text-white">
+                <tr data-gradebook-score-row className="bg-gray-50 font-bold text-kcs-blue-900 dark:bg-kcs-blue-800/30 dark:text-white">
                   <td className="sticky left-0 z-10 border-t border-gray-100 bg-gray-50 px-4 py-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-800">
                     Class average
                   </td>

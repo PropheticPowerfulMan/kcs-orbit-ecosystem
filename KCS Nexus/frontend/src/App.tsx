@@ -1,3 +1,4 @@
+import MobileWorkspaceNavigator from '@/components/shared/MobileWorkspaceNavigator'
 import {portalHome} from '@/utils/accountScope'
 import AdminWorkspaceTheme from '@/components/admin/AdminWorkspaceTheme'
 import PortalDialogTheme from '@/components/shared/PortalDialogTheme'
@@ -195,7 +196,7 @@ const App = () => {
   const location = useLocation()
   return (
     <>
-      <AdminWorkspaceTheme/><PortalDialogTheme />
+      <AdminWorkspaceTheme/><PortalDialogTheme /><MobileWorkspaceNavigator/>
       <RouteScrollReset />
       <GlobalTextTranslator />
       <RouteErrorBoundary routeKey={location.pathname}>
