@@ -1,6 +1,6 @@
 import {aggregateReportCardResults} from '../services/annualReportCard.service.js'
 type Course={id:string;code:string;name:string;credits:number;grade?:string}
-type Grade={id:string;studentId:string;courseId:string;percentage:number;letterGrade:string;period:string;createdAt:Date;course:Course}
+type Grade={archived?:boolean;id:string;studentId:string;courseId:string;percentage:number;letterGrade:string;period:string;createdAt:Date;course:Course}
 type Legacy={id:string;studentId:string;academicYear:string;gradeLevel:string;term:string;courseCode:string;courseName:string;credits:number;percentage:number;letterGrade:string;verificationStatus:string;sourceSchool:string;sourceDocument:string;updatedAt:Date}
 export type TranscriptRow={id:string;studentId:string;gradeLevel:string;percentage:number;letterGrade:string;credits:number;qualityPoints:number;cycle:{academicYear:string;term:string;status:string};course:Course;source:string;sourceSchool?:string;sourceDocument?:string}
 const level=(value:string|undefined)=>{const match=/^(?:grade\s*)?(9|10|11|12)(?:\s*[a-z])?$/i.exec((value||'').trim());return match?'Grade '+match[1]:null}
@@ -24,9 +24,15 @@ export function buildTranscriptRecords(input:{studentGrade:string;activeAcademic
   const authoritative=snapshot??(year===input.activeAcademicYear?input.studentGrade:knownYearGrade)
   const grade=authoritative?level(authoritative):level(row.course.grade)
   if(!grade){if(!/^(?:K[345]|Kindergarten|Grade\s*[1-8])(?:\s*[a-z])?$/i.test(String(authoritative??row.course.grade??'').trim()))unclassifiedRecords++;continue}
-  add({id:row.id,studentId:row.studentId,gradeLevel:grade,percentage:row.percentage,letterGrade:row.letterGrade,credits:row.course.credits,qualityPoints:points(row.percentage)*row.course.credits,cycle:{academicYear:year,term:term(rawTerm),status},course:row.course,source:'NEXUS_APPROVED'},row.createdAt.getTime(),1)
+  add({id:row.id,studentId:row.studentId,gradeLevel:grade,percentage:row.percentage,letterGrade:row.letterGrade,credits:row.course.credits,qualityPoints:points(row.percentage)*row.course.credits,cycle:{academicYear:year,term:term(rawTerm),status},course:row.course,source:row.archived?'NEXUS_ARCHIVED_APPROVED':'NEXUS_APPROVED'},row.createdAt.getTime(),1)
  }
  const detailed=[...rows.values()].map(value=>value.row).sort((a,b)=>a.cycle.academicYear.localeCompare(b.cycle.academicYear)||periodOrder(a.cycle.term)-periodOrder(b.cycle.term)||a.course.code.localeCompare(b.course.code))
+ const {credits,qualityPoints,weightedTotal,representedCourses}=summarizeTranscriptCourses(detailed)
+ const represented=new Set(detailed.map(row=>row.gradeLevel));const levels=['Grade 9','Grade 10','Grade 11','Grade 12']
+ return{rows:detailed,summary:{credits,cumulativeGpa:credits?Number((qualityPoints/credits).toFixed(2)):null,cumulativeAverage:credits?Number((weightedTotal/credits).toFixed(2)):null,officialRecords:detailed.length,legacyRecords:detailed.filter(row=>row.source==='QUICKSCHOOLS_VERIFIED').length,representedCourses,gradeCoverage:levels.map(gradeLevel=>({gradeLevel,records:detailed.filter(row=>row.gradeLevel===gradeLevel).length})),missingGradeLevels:levels.filter(grade=>!represented.has(grade)),unclassifiedRecords}}
+}
+
+export function summarizeTranscriptCourses(detailed:TranscriptRow[]){
  const groups=new Map<string,TranscriptRow[]>()
  for(const row of detailed){const key=row.cycle.academicYear+'::'+row.course.code.trim().toLowerCase();groups.set(key,[...(groups.get(key)??[]),row])}
  let credits=0,qualityPoints=0,weightedTotal=0
@@ -38,6 +44,5 @@ export function buildTranscriptRecords(input:{studentGrade:string;activeAcademic
   const percentage=annual?.percentage??aggregate?.percentage??group.reduce((sum,row)=>sum+row.percentage,0)/group.length
   const credit=Math.max(0,annual?.credits??group[0].credits);credits+=credit;qualityPoints+=points(percentage)*credit;weightedTotal+=percentage*credit
  }
- const represented=new Set(detailed.map(row=>row.gradeLevel));const levels=['Grade 9','Grade 10','Grade 11','Grade 12']
- return{rows:detailed,summary:{credits,cumulativeGpa:credits?Number((qualityPoints/credits).toFixed(2)):null,cumulativeAverage:credits?Number((weightedTotal/credits).toFixed(2)):null,officialRecords:detailed.length,legacyRecords:detailed.filter(row=>row.source==='QUICKSCHOOLS_VERIFIED').length,representedCourses:groups.size,gradeCoverage:levels.map(gradeLevel=>({gradeLevel,records:detailed.filter(row=>row.gradeLevel===gradeLevel).length})),missingGradeLevels:levels.filter(grade=>!represented.has(grade)),unclassifiedRecords}}
+ return {credits,qualityPoints,weightedTotal,representedCourses:groups.size,average:credits?Number((weightedTotal/credits).toFixed(2)):null,gpa:credits?Number((qualityPoints/credits).toFixed(2)):null}
 }

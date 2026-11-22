@@ -1,5 +1,5 @@
 import { prisma } from './db';
-import { getOrCreateCurrentAcademicCalendar } from './services/academic-calendar.service';
+import { getOrCreateCurrentAcademicCalendar, saveAcademicCalendar } from './services/academic-calendar.service';
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildDefaultAcademicCalendar } from "@ecosystem/shared-contracts";
@@ -50,4 +50,13 @@ test("reading a previously closed year never activates another academic year", a
  (prisma.$transaction as any) = async () => { throw new Error('Unexpected implicit activation'); };
  try { assert.equal(await getOrCreateCurrentAcademicCalendar('school-test',new Date('2028-10-01T12:00:00Z')),closed);assert.equal(reads,2); }
  finally { prisma.academicYear.findFirst=original;prisma.$transaction=originalTransaction; }
+});
+
+
+test('calendar correction keeps stable period IDs and full before/after versions',async()=>{
+ const original=prisma.$transaction;const input=buildDefaultAcademicCalendar(2026,'school-test');const periods=new Map<string,any>();input.periods.forEach((p,i)=>periods.set(p.type+':'+p.sequence,{id:'stable-'+i,academicYearId:'year-2026',...p}));let before:any=null,after:any=null,audit:any=null;
+ const current=()=>({id:'year-2026',name:input.name,periods:[...periods.values()]});
+ const tx={academicYear:{findUnique:async()=>{before=structuredClone(current());return before},updateMany:async()=>({count:0}),upsert:async()=>({id:'year-2026'}),findUniqueOrThrow:async()=>{after=structuredClone(current());return after}},academicPeriod:{upsert:async(args:any)=>{const key=args.where.academicYearId_type_sequence.type+':'+args.where.academicYearId_type_sequence.sequence;const row=periods.get(key);assert.ok(row);periods.set(key,{...row,...args.update})},deleteMany:async()=>{throw Error('Period references must never be deleted on edit')}},auditLog:{create:async(args:any)=>{audit=args.data}}};
+ (prisma.$transaction as any)=async(fn:any)=>fn(tx);
+ try{input.periods[0].name='Semester One';await saveAcademicCalendar(input,'KCS_NEXUS');assert.equal(periods.get('SEMESTER:1').id,'stable-0');assert.equal(audit.metadata.before.periods[0].name,before.periods[0].name);assert.equal(audit.metadata.after.periods[0].name,'Semester One');assert.equal(after.periods.length,6)}finally{prisma.$transaction=original}
 });

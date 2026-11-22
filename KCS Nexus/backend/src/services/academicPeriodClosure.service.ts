@@ -1,3 +1,4 @@
+import {captureAcademicHistory} from './schoolHistory.service.js'
 import { Prisma } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { prisma } from '../config/prisma.js'
@@ -44,6 +45,7 @@ export async function closeAcademicPeriod(input:Input,db:typeof prisma=prisma){
       }
       if (snapshots.size) await tx.teacherWorkspace.update({ where: { id: workspace.id }, data: { state: { ...state, gradebookClosedCategoryWeightsByCycle: frozen } as Prisma.InputJsonValue, revision: { increment: 1 } } })
     }
+    await captureAcademicHistory(tx,{academicYear:input.academicYear,term:input.term,calendar,actorId,reason:'PERIOD_CLOSURE',now})
     const audit = await tx.auditLog.create({ data: { id, actorId, action: 'ACADEMIC_PERIOD_CLOSED', targetType: 'AcademicPeriodClosure', targetId: input.academicYear + '::' + input.term, metadata: { academicYear: input.academicYear, term: input.term, frozenCourseWeights, closureMode: input.automatic ? 'AUTOMATIC_CALENDAR_END_PLUS_7_DAYS' : 'EXPLICIT_SUPERADMIN_AFTER_GRADE_FINALIZATION', ...(input.automatic ? { graceDays: 7, graceEndDate: input.graceEndDate ?? null, timeZone: SCHOOL_CLOSURE_TIME_ZONE } : {}) } } })
     return { alreadyClosed: false, closedAt: audit.createdAt, frozenCourseWeights }
   }, { maxWait: 10000, timeout: 60000 })

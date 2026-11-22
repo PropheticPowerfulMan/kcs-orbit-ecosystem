@@ -1,3 +1,4 @@
+import SchoolHistoryCenter from '@/components/admin/SchoolHistoryCenter'
 import InstitutionalCredentialsDialog from '@/components/admin/InstitutionalCredentialsDialog'
 import { printAdminInstitutionalReport } from '@/utils/adminInstitutionalReportPrint'
 import {ParentProfileView,LearnerProfileView} from '@/components/admin/RegistryProfileView'
@@ -3531,6 +3532,8 @@ const AdminSectionView = ({
   if (segment === 'site' || segment === 'news' || segment === 'media' || segment === 'site-videos') return <AdminSiteManager initial={segment==='site-videos'?'videos':segment==='news'?'news':segment==='media'?'media':'pages'}/>
 
   if (segment === 'analytics') return <AdminAnalyticsPanel />
+
+  if (segment === 'school-history') return <SchoolHistoryCenter/>
 
   if (segment === 'academic-calendar') return <AcademicCalendarSettings />
 

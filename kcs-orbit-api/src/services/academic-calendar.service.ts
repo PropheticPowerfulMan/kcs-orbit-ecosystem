@@ -47,6 +47,7 @@ const includePeriods = { periods: { orderBy: [{ type: "asc" as const }, { sequen
 export async function saveAcademicCalendar(raw: AcademicCalendarInput, sourceApp: AppSlug) {
   const input = validateAcademicCalendar(raw);
   return prisma.$transaction(async (tx) => {
+    const before = await tx.academicYear.findUnique({where:{organizationId_name:{organizationId:input.organizationId,name:input.name}},include:includePeriods});
     if (input.isCurrent) {
       await tx.academicYear.updateMany({
         where: { organizationId: input.organizationId, isCurrent: true, NOT: { name: input.name } },
@@ -64,18 +65,22 @@ export async function saveAcademicCalendar(raw: AcademicCalendarInput, sourceApp
         status: input.isCurrent ? "ACTIVE" : input.status, isCurrent: Boolean(input.isCurrent)
       }
     });
-    await tx.academicPeriod.deleteMany({ where: { academicYearId: year.id } });
-    await tx.academicPeriod.createMany({ data: input.periods.map((period) => ({
-      academicYearId: year.id, type: period.type, sequence: period.sequence, code: period.code,
-      name: period.name, startDate: period.startDate, endDate: period.endDate
-    })) });
+    // Stable period IDs preserve references when dates or labels are corrected.
+    for (const period of input.periods) {
+      const data={code:period.code,name:period.name,startDate:period.startDate,endDate:period.endDate};
+      await tx.academicPeriod.upsert({
+        where:{academicYearId_type_sequence:{academicYearId:year.id,type:period.type,sequence:period.sequence}},
+        create:{academicYearId:year.id,type:period.type,sequence:period.sequence,...data},update:data
+      });
+    }
+    const after=await tx.academicYear.findUniqueOrThrow({where:{id:year.id},include:includePeriods});
     await tx.auditLog.create({ data: {
       organizationId: input.organizationId,
       action: input.isCurrent ? "academic_calendar.activated" : "academic_calendar.saved",
       entityType: "academicYear", entityId: year.id,
-      metadata: { name: input.name, sourceApp } as Prisma.InputJsonValue
+      metadata: JSON.parse(JSON.stringify({name:input.name,sourceApp,formatVersion:1,before,after})) as Prisma.InputJsonValue
     } });
-    return tx.academicYear.findUniqueOrThrow({ where: { id: year.id }, include: includePeriods });
+    return after;
   });
 }
 

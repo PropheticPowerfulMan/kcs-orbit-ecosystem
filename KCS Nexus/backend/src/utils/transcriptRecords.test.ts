@@ -15,3 +15,19 @@ test('unknown historical classes are identified rather than projected backwards'
 test('partial attendance does not treat missing quarters as zero or overweight a single quarter',()=>{const result=buildTranscriptRecords({...input,grades:[grade('Semester 1 · Quarter 1',80),grade('Semester 1 · Quarter 2',90),grade('Semester 2 · Quarter 3',70)]});assert.equal(result.summary.cumulativeAverage,80)})
 
 test('a later transfer to high school does not convert elementary course grades into transcript credit',()=>{const result=buildTranscriptRecords({...input,studentGrade:'Grade 11',grades:[grade('Semester 1 · Quarter 1',95,'2026-2027',{...course,grade:'Grade 1'})]});assert.equal(result.rows.length,0);assert.equal(result.summary.credits,0)})
+
+
+test('a complete Grade 9–12 journey remains retrievable with 2050 as active year',()=>{
+ const grades=Array.from({length:4},(_,i)=>grade('Annual final',80+i*2,(2023+i)+'-'+(2024+i),{...course,id:'math-'+i,grade:'Grade '+(9+i)}));
+ const result=buildTranscriptRecords({...input,studentGrade:'Graduated',activeAcademicYear:'2050-2051',grades});
+ assert.deepEqual(result.summary.missingGradeLevels,[]);assert.equal(result.summary.credits,8);assert.equal(result.summary.cumulativeAverage,83);assert.equal(result.rows.length,4);
+ assert.deepEqual(result.rows.map(row=>row.gradeLevel),['Grade 9','Grade 10','Grade 11','Grade 12']);
+ assert.deepEqual(result.rows.map(row=>row.cycle.academicYear),['2023-2024','2024-2025','2025-2026','2026-2027']);
+});
+test('verified imported Grade 9–11 report cards complement approved Grade 12 records',()=>{
+ const legacy=[9,10,11].map((level,i)=>({id:'legacy-'+level,studentId:'s',academicYear:(2023+i)+'-'+(2024+i),gradeLevel:'Grade '+level,term:'Annual final',courseCode:'ALG',courseName:'Algebra',credits:2,percentage:80+i*2,letterGrade:'B',verificationStatus:'VERIFIED',sourceSchool:'KCS',sourceDocument:'Official imported report card '+level,updatedAt:new Date('2026-10-01')}));
+ const result=buildTranscriptRecords({...input,studentGrade:'Grade 12',legacy,grades:[grade('Annual final',86,'2026-2027',{...course,grade:'Grade 12'})]});assert.equal(result.summary.legacyRecords,3);assert.equal(result.summary.credits,8);assert.equal(result.summary.cumulativeAverage,83);assert.deepEqual(result.summary.missingGradeLevels,[]);assert.equal(result.rows.filter(row=>row.sourceDocument).length,3);
+});
+
+
+test('preserved approved grades remain on the transcript after operational course deletion',()=>{const archived={...grade('Annual final',88,'2026-2027'),archived:true};const result=buildTranscriptRecords({...input,grades:[archived]});assert.equal(result.rows[0].source,'NEXUS_ARCHIVED_APPROVED');assert.equal(result.summary.cumulativeAverage,88);assert.equal(result.summary.credits,2)})

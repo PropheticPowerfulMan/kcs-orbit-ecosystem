@@ -1,3 +1,4 @@
+import {preserveCourseHistory} from '../services/schoolHistory.service.js'
 import {teacherCoursePeriodsRouter,teachingPeriodSchema} from './teacher-course-periods.routes.js'
 import {saveCoursePeriods} from '../services/courseTeachingPeriods.service.js'
 import { parentMeetingsRouter } from './parent-meetings.routes.js'
@@ -608,6 +609,7 @@ teachersRouter.delete('/me/courses/:courseId', authenticate, requireRoles('teach
     }
     if (closedGradebookChanged(before, after, access)) throw new ApiError(409, 'ACADEMIC_PERIOD_CLOSED: A course with closed academic records cannot be deleted.')
     const correctedCards = await tx.$queryRaw<Array<{id:string}>>(Prisma.sql`UPDATE "ReportCard" SET "academicCorrections" = jsonb_set("academicCorrections", '{hiddenCourseIds}', ("academicCorrections"->'hiddenCourseIds') - ${course.id}::text), "updatedAt" = NOW() WHERE jsonb_typeof("academicCorrections"->'hiddenCourseIds') = 'array' AND ("academicCorrections"->'hiddenCourseIds') ? ${course.id}::text RETURNING id`)
+    await preserveCourseHistory(tx,course.id,req.user!.sub)
     await tx.course.delete({ where: { id: course.id } })
     await tx.auditLog.create({
       data: {
@@ -618,7 +620,7 @@ teachersRouter.delete('/me/courses/:courseId', authenticate, requireRoles('teach
         metadata: { name: course.name, removedDependencies: course._count, visibilityCleanedReportCardIds: correctedCards.map(card=>card.id) },
       },
     })
-  })
+  },{maxWait:10000,timeout:30000})
   return success(res, { id: course.id, removedDependencies: course._count }, 'Course and all official student dependencies deleted')
 }))
 
