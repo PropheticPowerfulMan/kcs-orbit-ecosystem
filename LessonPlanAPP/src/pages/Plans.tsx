@@ -1,3 +1,4 @@
+import {useApp} from "../contexts/AppContext";
 import { Archive, CheckCircle2, Copy, Download, Edit3, FileJson, MessageSquareWarning, RefreshCcw, Send, ShieldCheck, Trash2, Upload, XCircle } from "lucide-react";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -34,6 +35,8 @@ const initialFilters: LessonFilters = {
 };
 
 export const Plans = () => {
+  const {language}=useApp();const tr=(en:string,fr:string)=>language==="fr"?fr:en;
+  const [filtersOpen,setFiltersOpen]=useState(()=>!window.matchMedia("(max-width:767px)").matches);
   const { currentUser, can } = useAuth();
   const [lessons, setLessons] = useState(() => applyLessonVisibility(currentUser, lessonRepository.list()));
   const [showDeleted, setShowDeleted] = useState(false);
@@ -183,6 +186,8 @@ export const Plans = () => {
         )}
       </div>
 
+      <div className="ep-plan-search"><label htmlFor="ep-plan-query">{tr("Find a lesson plan","Rechercher une préparation")}</label><Input id="ep-plan-query" value={filters.query} onChange={e=>patch("query",e.target.value)} placeholder={tr("Subject, topic or objective…","Cours, sujet ou objectif…")}/></div>
+      <details className="ep-plan-filters" open={filtersOpen} onToggle={e=>setFiltersOpen(e.currentTarget.open)}><summary><span>{tr("Precise filters","Filtres précis")} · {Object.entries(filters).filter(([key,value])=>key!=="query"&&value&&value!=="all").length}</span><span aria-hidden="true">+</span></summary>
       <Card className="p-4">
         <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-6">
           <Field label="Keywords"><Input value={filters.query} onChange={(e) => patch("query", e.target.value)} placeholder="topic, objective..." /></Field>
@@ -234,6 +239,7 @@ export const Plans = () => {
           {gradeOptions.map((grade) => <option key={grade} value={grade} />)}
         </datalist>
       </Card>
+      </details>
 
       <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
         <label className="flex items-center gap-2 text-sm font-bold text-foreground">

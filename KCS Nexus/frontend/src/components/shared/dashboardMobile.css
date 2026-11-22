@@ -90,3 +90,17 @@
  body[data-nexus-dashboard] #root [data-gradebook-page-heading] h2{font-size:16px!important}
  body[data-nexus-dashboard] #root [data-gradebook-page-heading] p{display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important;font-size:11px!important;line-height:1.45!important}
 }
+
+@media screen and (max-width:767px){
+ body[data-nexus-dashboard] #root .portal-shell>main{font-size:11.5px;line-height:1.45}
+ body[data-nexus-dashboard] #root .portal-shell main .portal-dashboard-title{font-size:16px!important}
+ body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-heading h2{font-size:15px!important}
+ body[data-nexus-dashboard] #root .portal-shell main .nexus-workspace-card:is(.p-5,.p-6){padding:10px!important}
+ body[data-nexus-dashboard] #root .portal-shell main .workspace-dashboard-tabs button{font-size:10.5px;min-height:34px}
+ body[data-nexus-dashboard] #root .portal-shell main table[data-mobile-table]{font-size:10.5px}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) table{font-size:10.5px}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) table :is(th,td){padding:5px!important;min-width:81px!important;max-width:110px}
+ body[data-nexus-dashboard] :is(#root [data-gradebook-section=spreadsheet],[data-gradebook-focus]) table :is(th:first-child,td:first-child){width:110px!important;min-width:110px!important;max-width:110px!important}
+ body[data-nexus-dashboard] #root [data-gradebook-page-heading]{padding:10px!important}
+ body[data-nexus-dashboard] #root .pf-metrics{gap:8px}
+}

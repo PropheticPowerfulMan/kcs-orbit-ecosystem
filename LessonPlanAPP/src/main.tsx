@@ -4,6 +4,7 @@ import { ToastProvider } from "./components/Toast";
 import { AppProvider } from "./contexts/AppContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import "./index.css";
+import "./eduplannerRenewal.css";
 import { App } from "./App";
 import { AppTranslator } from "./components/AppTranslator";
 import { applyFinalProductionReset } from "./services/finalResetService";

@@ -211,7 +211,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const compact=window.matchMedia('(max-width:767px)').matches
   const [periodPanelOpen,setPeriodPanelOpen]=useState(!compact)
   const [officialResultsOpen,setOfficialResultsOpen]=useState(!compact)
-  const [detailsOpen,setDetailsOpen]=useState(!compact)
+  const [detailsOpen,setDetailsOpen]=useState(true)
   const [bulkToolsOpen,setBulkToolsOpen]=useState(!compact)
   const jumpTo=(key:string)=>requestAnimationFrame(()=>requestAnimationFrame(()=>document.querySelector<HTMLElement>('[data-gradebook-section="'+key+'"]')?.scrollIntoView({block:'start',behavior:'instant' as ScrollBehavior})))
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false)

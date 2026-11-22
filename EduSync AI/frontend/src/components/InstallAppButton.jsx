@@ -1,3 +1,4 @@
+import {createPortal} from "react-dom";
 import { useEffect, useState } from "react";
 
 const INSTALL_STATE_KEY = "edusync-pwa-installed-v1";
@@ -5,6 +6,8 @@ const isStandalone = () => window.matchMedia?.("(display-mode: standalone)").mat
 
 export default function InstallAppButton() {
   const [promptEvent, setPromptEvent] = useState(null);
+  const [headerTarget,setHeaderTarget]=useState(null);
+  useEffect(()=>{const root=document.getElementById("root");if(!root)return;const scan=()=>setHeaderTarget(document.querySelector(".mobile-header .icon-actions"));const observer=new MutationObserver(scan);observer.observe(root,{childList:true,subtree:true});scan();return()=>observer.disconnect()},[]);
   const [installed, setInstalled] = useState(isStandalone);
 
   useEffect(() => {
@@ -35,11 +38,12 @@ export default function InstallAppButton() {
     alert("Installation disponible. Chrome ou Edge : utilisez Installer dans la barre d'adresse ou le menu. iPhone et iPad : Partager puis Sur l'ecran d'accueil. Safari macOS : Fichier puis Ajouter au Dock.");
   };
 
-  return (
-    <button type="button" onClick={() => void install()} aria-label="Installer EduSync AI" className="edusync-install-button">
+  const button = (
+    <button type="button" onClick={() => void install()} aria-label="Installer EduSync AI" className={"edusync-install-button"+(headerTarget?" edusync-install-inline":"")}>
       <span className="edusync-install-icon" aria-hidden="true">↓</span>
       <span className="edusync-install-copy"><strong>Installer EduSync AI</strong><small>Application sécurisée KCS</small></span>
       <span className="edusync-install-arrow" aria-hidden="true">→</span>
     </button>
   );
+  return headerTarget?createPortal(button,headerTarget):button;
 }

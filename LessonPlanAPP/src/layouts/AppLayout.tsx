@@ -1,7 +1,7 @@
 import {eduplannerNexusReturn} from "../utils/nexusReturn";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { FormEvent, useState } from "react";
-import { ArrowLeft, CalendarDays, Download, Eye, EyeOff, FileText, Languages, LogOut, Mail, MessageSquare, Moon, Plus, Search, ShieldCheck, Sun, UserRound } from "lucide-react";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { FormEvent, useState, useEffect } from "react";
+import { Menu, X, BookOpen, LayoutDashboard, ArrowLeft, CalendarDays, Download, Eye, EyeOff, FileText, Languages, LogOut, Mail, MessageSquare, Moon, Plus, Search, ShieldCheck, Sun, UserRound } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useLessons } from "../hooks/useLessons";
@@ -21,6 +21,17 @@ export const AppLayout = () => {
   const { showInstall, install } = usePwaInstall();
   const { notify } = useToast();
   const navigate = useNavigate();
+  const location=useLocation();
+  const [menuOpen,setMenuOpen]=useState(false);
+  useEffect(()=>{
+    if(!menuOpen||!window.matchMedia("(max-width:767px)").matches)return;
+    const prior=document.activeElement as HTMLElement|null,bodyOverflow=document.body.style.overflow;document.body.style.overflow="hidden";
+    const drawer=document.getElementById("eduplanner-navigation"),focusable=()=>Array.from(drawer?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input,select')||[]).filter(el=>el.getClientRects().length>0);
+    const frame=requestAnimationFrame(()=>focusable()[0]?.focus());
+    const key=(event:KeyboardEvent)=>{if(event.key==="Escape"){event.preventDefault();setMenuOpen(false)}if(event.key==="Tab"){const items=focusable(),first=items[0],last=items[items.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}}};
+    window.addEventListener("keydown",key);return()=>{cancelAnimationFrame(frame);window.removeEventListener("keydown",key);document.body.style.overflow=bodyOverflow;if(prior?.isConnected)prior.focus()}
+  },[menuOpen]);
+
   const [accountOpen, setAccountOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
@@ -95,94 +106,34 @@ export const AppLayout = () => {
     notify(next === "fr" ? "Langue changée : français" : "Language changed: English");
   };
 
+  const fr=language==="fr",tr=(en:string,frText:string)=>fr?frText:en;
+  const links=[{to:"/",label:tr("Overview","Vue d’ensemble"),Icon:LayoutDashboard},{to:"/plans",label:tr("Lesson plans","Préparations"),Icon:FileText},...(can("curriculum:read")?[{to:"/curriculum",label:tr("Curriculum","Programme"),Icon:BookOpen}]:[]),{to:"/messages",label:tr("Messages","Messages"),Icon:MessageSquare}];
+  const current=links.find(link=>link.to==="/"?location.pathname==="/":location.pathname.startsWith(link.to))||links[1];
   return (
-    <div className="flex min-h-screen flex-col bg-transparent text-foreground">
-      <header className="sticky top-2 z-30 mx-2 mt-2 rounded-lg glass sm:top-3 sm:mx-3 sm:mt-3">
-        <div className="mx-auto flex flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-4 lg:flex-nowrap lg:px-6">
-          <NavLink to="/" className="flex min-w-0 flex-1 items-center gap-3 lg:flex-none">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-cyan-300/25 bg-white/95 p-1 shadow-[0_0_28px_rgba(20,184,222,0.18)]">
-              <img src={imageUrl} alt="KCS identity" className="h-full w-full rounded-sm object-cover" />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-[11px] font-black uppercase text-cyan-200">EduPlanner KCS</p>
-              <p className="truncate text-sm font-black text-white sm:text-base">{schoolDisplayName} Lesson Planner</p>
-            </div>
-          </NavLink>
-          <nav className="order-3 flex w-full items-center gap-1 overflow-x-auto md:order-none md:w-auto">
-            <NavLink to="/" className={({ isActive }) => `rounded-md px-3 py-2 text-sm font-bold ${isActive ? "border border-primary/30 bg-primary/15 text-foreground dark:border-cyan-300/25 dark:bg-cyan-500/15 dark:text-cyan-100" : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white"}`}>
-              Dashboard
-            </NavLink>
-            <NavLink to="/plans" className={({ isActive }) => `rounded-md px-3 py-2 text-sm font-bold ${isActive ? "border border-primary/30 bg-primary/15 text-foreground dark:border-cyan-300/25 dark:bg-cyan-500/15 dark:text-cyan-100" : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white"}`}>
-              Plans
-            </NavLink>
-            {can("curriculum:read") && (
-              <NavLink to="/curriculum" className={({ isActive }) => `rounded-md px-3 py-2 text-sm font-bold ${isActive ? "border border-primary/30 bg-primary/15 text-foreground dark:border-cyan-300/25 dark:bg-cyan-500/15 dark:text-cyan-100" : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white"}`}>
-                Curriculum
-              </NavLink>
-            )}
-            <NavLink to="/messages" className={({ isActive }) => `rounded-md px-3 py-2 text-sm font-bold ${isActive ? "border border-primary/30 bg-primary/15 text-foreground dark:border-cyan-300/25 dark:bg-cyan-500/15 dark:text-cyan-100" : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white"}`}>
-              Communication
-            </NavLink>
-          </nav>
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2"><a href={eduplannerNexusReturn(currentUser.role)} data-nexus-return className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-primary/35 bg-primary/10 px-3 py-2 text-xs font-bold text-foreground transition hover:bg-primary/20 dark:border-cyan-300/30 dark:bg-cyan-800/30 dark:text-cyan-100"><ArrowLeft size={15}/>{language==="fr"?"Retour à Nexus AI":"Back to Nexus AI"}</a>
-            <div className="order-4 flex w-full min-w-0 items-center gap-2 rounded-md border border-border bg-card/90 px-3 py-2 shadow-sm dark:bg-[#061520]/90 sm:w-auto sm:min-w-[240px] lg:order-none">
-              {currentUser.photoUrl ? <img src={currentUser.photoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <UserRound size={16} className="shrink-0 text-cyan-200" />}
-              <div className="min-w-0">
-                <p className="truncate text-xs font-black text-foreground">{currentUser.name}</p>
-                <p className="truncate text-[11px] text-muted-foreground">{roleLabels[currentUser.role]} - {currentUser.email}</p>
-              </div>
-            </div>
-            <Button variant="outline" className="hidden sm:inline-flex" onClick={() => navigate("/plans?focus=search")}>
-              <Search size={17} /> Search
-            </Button>
-            {showInstall && (
-              <Button
-                variant="outline"
-                className="hidden md:inline-flex"
-                onClick={() => install().then((accepted) => {
-                  notify(accepted ? "KCS EduPlanner installed" : "Use the browser installation icon or menu if the prompt is not available yet.");
-                })}
-              >
-                <Download size={17} /> Install App
-              </Button>
-            )}
-            {canCreateLessons && (
-              <Button
-                className="px-3 sm:px-4"
-                onClick={() => {
-                  const lesson = createLesson();
-                  navigate(`/editor/${lesson.id}`);
-                }}
-              >
-                <Plus size={17} /> <span className="hidden sm:inline">New Lesson Plan</span>
-              </Button>
-            )}
-            <Button variant="ghost" onClick={toggleLanguage} aria-label="Toggle language" title={language === "en" ? "Switch to French" : "Passer en anglais"}>
-              <Languages size={18} />
-              <span className="text-xs font-black uppercase">{language === "en" ? "FR" : "EN"}</span>
-            </Button>
-            <Button variant="ghost" onClick={toggleDark} aria-label="Toggle theme" title={dark ? "Switch to light theme" : "Switch to dark theme"}>
-              {dark ? <Sun size={18} /> : <Moon size={18} />}
-            </Button>
-            <Button variant="ghost" onClick={openAccount} aria-label="Account security" title="Account security">
-              <ShieldCheck size={18} />
-            </Button>
-            <Button variant="ghost" onClick={() => { signOut().finally(() => navigate("/login", { replace: true })); }} aria-label="Logout">
-              <LogOut size={18} />
-            </Button>
+    <div className="ep-shell" data-eduplanner-workspace>
+      {menuOpen&&<button type="button" className="ep-nav-scrim" aria-label={tr("Close navigation","Fermer la navigation")} onClick={()=>setMenuOpen(false)}/>}
+      <aside id="eduplanner-navigation" className="ep-sidebar" data-open={menuOpen}>
+        <NavLink to="/" className="ep-brand" onClick={()=>setMenuOpen(false)}><img src={imageUrl} alt="KCS"/><span><small>KCS ORBIT ECOSYSTEM</small><strong>Eduplanner<span>{tr("Teaching, thoughtfully.","Enseigner avec intention.")}</span></strong></span></NavLink>
+        <button type="button" className="ep-drawer-close" aria-label={tr("Close navigation","Fermer la navigation")} onClick={()=>setMenuOpen(false)}><X size={19}/></button>
+        <p className="ep-nav-caption">{tr("YOUR WORKSPACE","VOTRE ESPACE")}</p>
+        <nav aria-label={tr("Main navigation","Navigation principale")}>{links.map(({to,label,Icon})=><NavLink key={to} to={to} end={to==="/"} onClick={()=>setMenuOpen(false)} className={({isActive})=>isActive?"ep-nav-link is-active":"ep-nav-link"}><Icon size={19}/><span>{label}</span></NavLink>)}</nav>
+        {canCreateLessons&&<Button className="ep-create" onClick={()=>{const lesson=createLesson();setMenuOpen(false);navigate("/editor/"+lesson.id)}}><Plus size={18}/>{tr("New lesson plan","Nouvelle préparation")}</Button>}
+        <div className="ep-sidebar-note"><BookOpen size={22}/><strong>{tr("Every lesson, a step forward.","Chaque leçon, un pas de plus.")}</strong><p>{tr("Plan, review and share your teaching in one place.","Préparez, révisez et partagez votre enseignement au même endroit.")}</p></div>
+        <div className="ep-sidebar-footer"><a href={eduplannerNexusReturn(currentUser.role)} data-nexus-return><ArrowLeft size={16}/>{tr("Back to Nexus AI","Retour à Nexus AI")}</a>{showInstall&&<button type="button" onClick={()=>void install().then(ok=>notify(ok?tr("Eduplanner installed","Eduplanner installé"):tr("Use your browser’s installation menu.","Utilisez le menu d’installation du navigateur.")))}><Download size={16}/>{tr("Install app","Installer l’application")}</button>}<button type="button" onClick={()=>{signOut().finally(()=>navigate("/login",{replace:true}))}}><LogOut size={16}/>{tr("Sign out","Déconnexion")}</button></div>
+      </aside>
+      <div className="ep-body">
+        <header className="ep-topbar">
+          <button type="button" className="ep-menu-button" aria-expanded={menuOpen} aria-controls="eduplanner-navigation" aria-label={tr("Open navigation","Ouvrir la navigation")} onClick={()=>setMenuOpen(true)}><Menu size={21}/></button>
+          <div className="ep-context"><small>EDUPLANNER <span>/ KCS</span></small><h1>{current.label}</h1></div>
+          <div className="ep-toolbar"><button type="button" className="ep-search" onClick={()=>navigate("/plans?focus=search")}><Search size={17}/><span>{tr("Find a lesson…","Rechercher une préparation…")}</span><kbd>⌕</kbd></button>
+            <button type="button" aria-label={tr("Change language","Changer la langue")} onClick={toggleLanguage} className="ep-icon-button"><Languages size={17}/><b>{language==="en"?"FR":"EN"}</b></button>
+            <button type="button" aria-label={tr("Change theme","Changer de thème")} onClick={toggleDark} className="ep-icon-button">{dark?<Sun size={18}/>:<Moon size={18}/>}</button>
+            <button type="button" className="ep-profile" aria-label={tr("Account security","Sécurité du compte")} onClick={openAccount}>{currentUser.photoUrl?<img src={currentUser.photoUrl} alt=""/>:<span><UserRound size={19}/></span>}<div><strong>{currentUser.name}</strong><small>{roleLabels[currentUser.role]}</small></div><ShieldCheck size={16}/></button>
           </div>
-        </div>
-      </header>
-      <main className="min-w-0 flex-1 px-2 py-4 sm:px-5 lg:px-6 xl:px-8">
-        <Outlet />
-      </main>
-      <footer className="mx-2 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg glass px-3 py-3 text-xs text-muted-foreground sm:mx-3 sm:mb-3 sm:px-4 lg:px-6">
-        <span className="flex items-center gap-2"><FileText size={14} /> KCS Lesson Planner</span>
-        <span className="hidden sm:inline">{currentUser.name} - {roleLabels[currentUser.role]}</span>
-        <span className="flex items-center gap-1">
-          <CalendarDays size={14} /> A4 print-ready
-        </span>
-      </footer>
+        </header>
+        <main className="ep-main"><Outlet/></main>
+        <footer className="ep-footer"><span>KCS ORBIT · EDUPLANNER</span><span>{tr("Designed for purposeful teaching.","Au service d’un enseignement réfléchi.")}</span></footer>
+      </div>
       <Dialog open={accountOpen} title="Account Security" onClose={() => setAccountOpen(false)}>
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-md border border-cyan-300/20 bg-card/80 p-4 lg:col-span-2">

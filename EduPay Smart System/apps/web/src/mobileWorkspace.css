@@ -1,0 +1,21 @@
+
+@media screen and (max-width:767px){
+#root{--kcs-mobile-copy:12px;--kcs-mobile-caption:10px;--kcs-mobile-small:11px;--kcs-mobile-title:21px}
+.edupay-app-shell{font-size:12px;line-height:1.45}
+.edupay-app-shell .text-sm{font-size:11.5px;line-height:1.45}.edupay-app-shell .text-xs{font-size:10px}
+.edupay-app-shell :is(.text-3xl,.text-4xl){font-size:24px;line-height:1.2}.edupay-app-shell .text-2xl{font-size:20px;line-height:1.25}.edupay-app-shell .text-xl{font-size:17px}
+.edupay-app-shell :is(.p-6,.p-5){padding:13px}.edupay-app-shell :is(.gap-6,.gap-5){gap:12px}
+.edupay-app-shell :is(button,[role=button]){font-size:11px;line-height:1.35;min-height:37px}
+.edupay-app-shell :is(input:not([type=checkbox]):not([type=radio]),select,textarea){font-size:16px!important;min-height:40px}
+.edupay-app-shell table{font-size:10.5px}.edupay-app-shell :is(th,td){padding:9px 8px!important;line-height:1.4}
+.edupay-app-shell .rounded-3xl{border-radius:17px}.edupay-app-shell .rounded-2xl{border-radius:14px}
+}
+
+@media screen and (max-width:767px){
+.edupay-app-shell>main{padding:12px 11px 94px!important;gap:12px}
+.edupay-mobile-nav{gap:3px;padding:6px!important}.edupay-mobile-nav a{min-height:39px;padding:8px 10px;font-size:10px}.edupay-mobile-nav svg{width:16px;height:16px}
+.edupay-app-shell .card{padding:13px!important}.edupay-app-shell main>section>div:first-child{margin-bottom:12px}
+.edupay-app-shell .grid{min-width:0}.edupay-app-shell .overflow-x-auto{max-width:100%;overscroll-behavior-x:contain;scrollbar-width:thin}
+}
+
+@media screen{.edupay-install-inline{position:static!important;inset:auto!important;z-index:auto!important;min-height:35px!important;height:35px!important;width:35px!important;min-width:35px!important;padding:7px!important;border-radius:10px!important;box-shadow:none!important;gap:0!important;flex-shrink:0}.edupay-install-inline>span{display:none!important}.edupay-install-inline>svg{width:17px!important;height:17px!important}}

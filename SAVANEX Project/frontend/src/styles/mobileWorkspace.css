@@ -1,0 +1,18 @@
+
+@media screen and (max-width:767px){
+#root{--kcs-mobile-copy:12px;--kcs-mobile-caption:10px;--kcs-mobile-small:11px;--kcs-mobile-title:21px}
+.savanex-shell{font-size:12px;line-height:1.45}
+.savanex-shell .text-sm{font-size:11.5px;line-height:1.45}.savanex-shell .text-xs{font-size:10px}
+.savanex-shell :is(.text-3xl,.text-4xl){font-size:24px;line-height:1.2}.savanex-shell .text-2xl{font-size:20px;line-height:1.25}.savanex-shell .text-xl{font-size:17px}
+.savanex-shell :is(.p-6,.p-5){padding:13px}.savanex-shell :is(.gap-6,.gap-5){gap:12px}
+.savanex-shell :is(button,[role=button]){font-size:11px;line-height:1.35;min-height:37px}
+.savanex-shell :is(input:not([type=checkbox]):not([type=radio]),select,textarea){font-size:16px!important;min-height:40px}
+.savanex-shell table{font-size:10.5px}.savanex-shell :is(th,td){padding:9px 8px!important;line-height:1.4}
+.savanex-shell .rounded-3xl{border-radius:17px}.savanex-shell .rounded-2xl{border-radius:14px}
+}
+
+@media screen and (max-width:767px){
+.savanex-workspace>main{padding:12px!important}.savanex-shell .glass-card{padding:13px!important}.savanex-shell .savanex-responsive-table tr{border-radius:13px;margin-bottom:9px}.savanex-shell .savanex-responsive-table td{min-height:37px;padding:8px 10px!important;font-size:11px}.savanex-shell .savanex-responsive-table td:before{font-size:9px;letter-spacing:.03em}.savanex-shell .savanex-responsive-table td:last-child>div{gap:6px}.savanex-shell .savanex-entity-action{font-size:10px;min-height:35px}.savanex-shell .overflow-x-auto{overscroll-behavior-x:contain}
+}
+
+@media screen{.savanex-install-inline{position:static!important;inset:auto!important;z-index:auto!important;min-height:35px!important;height:35px!important;width:35px!important;min-width:35px!important;padding:7px!important;border-radius:10px!important;box-shadow:none!important;gap:0!important;flex-shrink:0}.savanex-install-inline>span{display:none!important}.savanex-install-inline>svg{width:17px!important;height:17px!important}}

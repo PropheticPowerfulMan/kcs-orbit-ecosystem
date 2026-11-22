@@ -1,6 +1,7 @@
+import {useApp} from "../contexts/AppContext";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Download, Eye, EyeOff, LockKeyhole, Mail, RotateCcw, ShieldCheck, UserPlus, UserRoundCheck } from "lucide-react";
+import { FileText, Download, Eye, EyeOff, LockKeyhole, Mail, RotateCcw, ShieldCheck, UserPlus, UserRoundCheck } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Input, Select } from "../components/ui/input";
@@ -30,6 +31,7 @@ const emptySignup: SignUpProfileInput = {
 };
 
 export const Login = () => {
+  const {language}=useApp();const tr=(en:string,fr:string)=>language==="fr"?fr:en;
   const { currentUser, users, authMode, loading, signIn, signUp, resetPassword } = useAuth();
   const navigate = useNavigate();
   const { showInstall, install } = usePwaInstall();
@@ -167,9 +169,10 @@ export const Login = () => {
   if (currentUser) return <Navigate to="/" replace />;
 
   return (
-    <main className="login-edupay theme-dark-panel grid min-h-screen place-items-center overflow-hidden bg-[#030d14] px-4 py-8 text-[#e7faff]">
+    <main className="ep-login login-edupay theme-dark-panel grid min-h-screen place-items-center overflow-hidden bg-[#030d14] px-4 py-8 text-[#e7faff]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(20,184,222,0.20),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.14),transparent_30%),linear-gradient(180deg,#031b34_0%,#04141f_42%,#030d14_100%)]" />
-      <Card className="relative w-full max-w-2xl overflow-hidden border-cyan-300/20 bg-[#071824]/95 p-0 text-[#e7faff]">
+      <aside className="ep-login-intro"><div className="ep-login-brand"><img src={schoolImage} alt="KCS"/><span>KCS ORBIT ECOSYSTEM<strong>Eduplanner</strong></span></div><div><span className="ep-eyebrow">{tr("THE CRAFT OF TEACHING","L’ART D’ENSEIGNER")}</span><h1>{tr("Great lessons","Les grandes leçons")}<br/>{tr("start with","commencent par")}<br/><em>{tr("a clear plan.","un plan clair.")}</em></h1><p>{tr("A calm, connected workspace for every lesson you prepare and every learner you inspire.","Un espace serein et connecté pour chaque leçon préparée et chaque élève accompagné.")}</p></div><div className="ep-login-principles"><span><FileText size={17}/>{tr("Plan with clarity","Préparez avec clarté")}</span><span><ShieldCheck size={17}/>{tr("Review with confidence","Révisez en confiance")}</span><span><UserRoundCheck size={17}/>{tr("Teach with purpose","Enseignez avec intention")}</span></div></aside>
+      <Card className="ep-login-card relative w-full max-w-2xl overflow-hidden border-cyan-300/20 bg-[#071824]/95 p-0 text-[#e7faff]">
         <div className="border-b border-cyan-300/20 bg-slate-950 px-6 py-5 text-white sm:px-7">
           <div className="flex items-center gap-3">
             <span className="grid h-16 w-16 shrink-0 place-items-center rounded-md border border-cyan-200/40 bg-white p-1 shadow-sm">
@@ -181,7 +184,7 @@ export const Login = () => {
               <p className="text-sm text-slate-300">{schoolDisplayName}</p>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="ep-login-tabs mt-4 grid grid-cols-3 gap-2">
             <Tab active={panel === "signin"} onClick={() => setPanel("signin")}>Sign in</Tab>
             <Tab active={panel === "signup"} onClick={() => setPanel("signup")}>Create account</Tab>
             <Tab active={panel === "reset"} onClick={() => setPanel("reset")}>Password</Tab>

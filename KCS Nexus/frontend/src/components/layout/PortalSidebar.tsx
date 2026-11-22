@@ -464,7 +464,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     <>
       <div className="fixed inset-x-0 top-0 z-50 px-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] sm:px-4 lg:hidden">
         <div className="nexus-mobile-dashboard-bar nexus-sidebar-topbar flex min-h-14 items-center justify-between gap-2 rounded-[24px] border px-2.5 py-2 sm:rounded-[28px] sm:px-3">
-        <Link to="/" onClick={() => setSidebarOpen(false)} className="flex min-w-0 flex-1 items-center gap-2.5">
+        <Link data-nexus-mobile-brand to="/" onClick={() => setSidebarOpen(false)} className="flex min-w-0 flex-1 items-center gap-2.5">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white p-0.5 shadow-kcs ring-2 ring-kcs-blue-100 dark:ring-kcs-blue-800">
             <img src={schoolLogoSrc} alt="Kinshasa Christian School" className="h-full w-full rounded-full object-contain" />
           </div>
@@ -480,6 +480,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
+            data-nexus-language-switch
             onClick={toggleLanguage}
             className="flex h-10 flex-shrink-0 items-center justify-center gap-1 rounded-full border border-kcs-blue-100 bg-white/70 px-2 text-kcs-blue-700 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
             aria-label={t('common.language')}
@@ -490,6 +491,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           </button>
           <button
             type="button"
+            data-nexus-theme-switch
             onClick={toggleTheme}
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-kcs-blue-100 bg-white/70 text-kcs-blue-700 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
             aria-label={theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}
@@ -498,6 +500,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           <button
+            data-nexus-menu-trigger
             ref={mobileSidebarButtonRef}
             aria-expanded={sidebarOpen}
             aria-controls="nexus-sidebar-drawer"
@@ -588,7 +591,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
       className="nexus-sidebar-rail nexus-glass-rail fixed inset-y-0 left-0 z-40 hidden h-dvh flex-col overflow-hidden border-r lg:flex"
     >
       {/* Logo */}
-      <div className={`${sidebarCollapsed ? 'px-3 py-4' : 'p-4'} border-b border-gray-100 dark:border-kcs-blue-800`}>
+      <div data-nexus-desktop-brand className={`${sidebarCollapsed ? 'px-3 py-4' : 'p-4'} border-b border-gray-100 dark:border-kcs-blue-800`}>
         <div className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-3' : 'items-center gap-2'}`}>
         <Link
           to="/"
@@ -607,7 +610,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <p className="font-bold text-xs leading-tight font-display text-kcs-blue-900 dark:text-white whitespace-nowrap">
+                <span className="nexus-brand-eyebrow">KCS ORBIT ECOSYSTEM</span><p className="font-bold text-xs leading-tight font-display text-kcs-blue-900 dark:text-white whitespace-nowrap">
                   KCS Nexus
                 </p>
                 <p className="text-xs text-kcs-gold-600 dark:text-kcs-gold-400 whitespace-nowrap">

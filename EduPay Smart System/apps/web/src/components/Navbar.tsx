@@ -244,7 +244,7 @@ export function Navbar() {
           </div>
 
           {/* Right Section */}
-          <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
+          <div data-edupay-header-actions className="flex min-w-0 items-center gap-1.5 sm:gap-3">
             <div className="hidden items-center gap-3 lg:flex">
               <FontSwitch />
               <LanguageSwitch />
