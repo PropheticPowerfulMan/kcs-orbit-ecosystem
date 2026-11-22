@@ -1,3 +1,5 @@
+import {readLessonPlanDashboardPhoto} from '../services/lessonPlanDashboardPhoto.js'
+import {assertAccountAccess} from '../services/accountAccess.service.js'
 import { createHash, randomBytes } from 'node:crypto'
 import { Router } from 'express'
 import { prisma } from '../config/prisma.js'
@@ -33,4 +35,23 @@ lessonPlanRouter.post('/exchange', asyncHandler(async (req, res) => {
   launchTickets.delete(key)
   if (!record || record.expiresAt <= Date.now()) throw new ApiError(401, 'EduPlanner launch ticket expired or already used')
   return success(res, record.identity)
+}))
+
+// Eduplanner supplies its own session; only its server-verified link chooses the Nexus account.
+lessonPlanRouter.get('/dashboard-avatar', asyncHandler(async (req, res) => {
+  const result = await readLessonPlanDashboardPhoto(req.header('authorization') || '', {
+    verifySession: async authorization => {
+      const response = await fetch(new URL('/api/ecosystem/session-check', process.env.LESSON_PLAN_INTERNAL_URL || 'http://lessonplan_api:3001'), {method:'POST',headers:{authorization},signal:AbortSignal.timeout(8000)})
+      if (!response.ok) throw new ApiError([401,403].includes(response.status)?response.status:503, 'The Eduplanner session could not be verified')
+      return response.json() as Promise<{allowed?:boolean;nexusUserId?:unknown}>
+    },
+    readAvatar: async id => {
+      await assertAccountAccess(id)
+      const user = await prisma.user.findUnique({where:id==='configured-superadmin'?{email:(process.env.SUPERADMIN_EMAIL||'').trim().toLowerCase()}:{id},select:{avatar:true}})
+      if(!user)throw new ApiError(404,'Nexus account not found')
+      return user.avatar
+    },
+  })
+  res.set('Cache-Control','private, no-store').vary('Authorization')
+  return success(res,result)
 }))
