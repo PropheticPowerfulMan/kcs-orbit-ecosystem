@@ -70,7 +70,8 @@ const submittedStatuses: LessonStatus[] = ["submitted", "under-review"];
 const rejectedStatuses: LessonStatus[] = ["rejected", "revision-requested"];
 
 export const Dashboard = () => {
-  const { imageUrl } = useApp();
+  const { language } = useApp();
+  const tr=(en:string,fr:string)=>language==="fr"?fr:en;
   const { currentUser, users, authMode, updateProfile, deleteUser, resetPassword, setUserPassword } = useAuth();
   const { lessons, createLesson } = useLessons();
   const navigate = useNavigate();
@@ -85,36 +86,10 @@ export const Dashboard = () => {
   const roleTitle = currentUser.role === "head-of-department" ? "HOD Dashboard" : `${roleLabels[currentUser.role]} Dashboard`;
 
   return (
-    <div className="space-y-6">
-      <section className="theme-dark-panel relative overflow-hidden rounded-lg border border-cyan-300/20 bg-[#061520]/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_24px_70px_rgba(0,0,0,0.38)]">
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(20,184,222,0.20),transparent_32%,rgba(16,185,129,0.12)_70%,rgba(251,191,36,0.10))]" />
-        <div className="relative grid gap-6 p-5 text-white md:grid-cols-[1.35fr_0.65fr] md:p-8">
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-            <span className="badge">Version 1.5 Enterprise Dashboard</span>
-            <p className="mt-4 text-sm font-black uppercase tracking-wide text-cyan-100">{timeGreeting(new Date())}, {currentUser.name}</p>
-            <h1 className="mt-2 max-w-3xl text-3xl font-black leading-tight text-[#f8fdff] drop-shadow-[0_2px_14px_rgba(0,0,0,0.55)] md:text-4xl xl:text-5xl">{roleTitle}</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-cyan-50/80">
-              Role-based operational command center for lesson planning, review workflows, curriculum progress, and school readiness at {schoolDisplayName}.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold text-cyan-100">
-              <span className="inline-flex items-center gap-2 rounded-md border border-cyan-300/20 bg-white/[0.06] px-3 py-2"><ShieldCheck size={15} /> {roleLabels[currentUser.role]}</span>
-              <span className="inline-flex items-center gap-2 rounded-md border border-emerald-300/20 bg-emerald-500/10 px-3 py-2"><CheckCircle2 size={15} /> {stats.readiness}% inspection ready</span>
-              <span className="inline-flex items-center gap-2 rounded-md border border-amber-300/20 bg-amber-500/10 px-3 py-2"><Clock3 size={15} /> {stats.submitted} awaiting review</span>
-            </div>
-          </motion.div>
-          <div className="flex items-end justify-start gap-4 md:justify-end">
-            <img src={imageUrl} alt="School identity" className="hidden h-24 w-24 rounded-lg border border-cyan-300/20 bg-white object-cover p-1 shadow-xl sm:block" />
-            <Button
-              className="h-11 px-5"
-              onClick={() => {
-                const lesson = createLesson();
-                navigate(`/editor/${lesson.id}`);
-              }}
-            >
-              <Plus size={19} /> New Lesson Plan
-            </Button>
-          </div>
-        </div>
+    <div className="ep-dashboard space-y-6">
+      <section className="ep-hero">
+        <div><span className="ep-eyebrow">{tr("KCS · TEACHING WORKSPACE","KCS · ESPACE PÉDAGOGIQUE")}</span><p className="ep-greeting">{timeGreeting(new Date())}, {currentUser.name}</p><h1>{tr("A little planning.","Un peu de préparation.")}<br/><em>{tr("A lasting impact.","Un impact durable.")}</em></h1><p className="ep-hero-description">{tr("Your lessons, your curriculum and your next teaching moment — clearly connected.","Vos leçons, votre programme et vos prochaines séances, clairement réunis.")}</p><div className="ep-hero-tags"><span><ShieldCheck size={14}/>{roleTitle}</span><span><CheckCircle2 size={14}/>{stats.readiness}% {tr("inspection ready","prêt pour inspection")}</span><span><Clock3 size={14}/>{stats.submitted} {tr("awaiting review","en attente de révision")}</span></div></div>
+        <div className="ep-hero-aside"><div className="ep-lesson-art" aria-hidden="true"><div/><div/><div><BookOpen size={40}/><span>KCS<br/>LESSON NOTES</span><i/></div></div><Button aria-label={tr("New lesson plan","Nouvelle préparation")} onClick={()=>{const lesson=createLesson();navigate("/editor/"+lesson.id)}}><Plus size={18}/><span>{tr("New lesson plan","Nouvelle préparation")}</span></Button></div>
       </section>
 
       {currentUser.role === "teacher" && <TeacherDashboard context={context} />}
@@ -711,7 +686,7 @@ const keepsActiveAuthority = (users: UserProfile[], draft?: UserProfile) =>
     .map((user) => (draft && user.id === draft.id ? draft : user))
     .some((user) => user.status === "active" && authorityRoles.includes(user.role));
 
-const MetricGrid = ({ children }: { children: ReactNode }) => <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{children}</div>;
+const MetricGrid = ({ children }: { children: ReactNode }) => <div className="ep-metrics">{children}</div>;
 
 const DashboardGrid = ({ children, wide = false }: { children: ReactNode; wide?: boolean }) => (
   <div className={`grid min-w-0 gap-5 ${wide ? "xl:grid-cols-2" : "xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)]"}`}>{children}</div>
@@ -719,7 +694,7 @@ const DashboardGrid = ({ children, wide = false }: { children: ReactNode; wide?:
 
 const Metric = ({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: string; value: string | number; tone: MetricTone }) => (
   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-    <Card className="min-h-[132px] p-5">
+    <Card className="ep-metric p-5">
       <Icon className={`mb-4 ${toneClass(tone)}`} size={22} />
       <p className="text-3xl font-black text-white">{value}</p>
       <p className="text-sm text-muted-foreground">{label}</p>
@@ -727,14 +702,10 @@ const Metric = ({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: s
   </motion.div>
 );
 
-const Panel = ({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: ReactNode }) => (
-  <Card className="p-5">
-    <div className="mb-4 flex items-center justify-between gap-3">
-      <h2 className="flex min-w-0 items-center gap-2 text-xl font-bold text-white"><Icon className="shrink-0 text-cyan-300" size={20} /> <span className="truncate">{title}</span></h2>
-    </div>
-    {children}
-  </Card>
-);
+const Panel = ({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: ReactNode }) => {
+ const[open,setOpen]=useState(()=>typeof window==="undefined"||!window.matchMedia("(max-width:767px)").matches);
+ return <Card className="ep-panel"><details open={open} onToggle={event=>setOpen(event.currentTarget.open)}><summary><h2><Icon size={18}/><span>{title}</span></h2><span className="ep-panel-chevron" aria-hidden="true">+</span></summary><div className="ep-panel-content">{children}</div></details></Card>
+};
 
 const ActivityList = ({ items }: { items: ActivityItem[] }) => (
   <div className="divide-y divide-cyan-300/10">

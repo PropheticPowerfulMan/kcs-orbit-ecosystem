@@ -37,7 +37,7 @@ const Topbar = ({ onMenuClick = () => {}, isSidebarCollapsed = false, onSidebarT
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+      <div data-savanex-header-actions className="flex shrink-0 items-center gap-1.5 sm:gap-3">
         <button
           type="button"
           onClick={onSidebarToggle}

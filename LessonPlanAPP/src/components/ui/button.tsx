@@ -11,6 +11,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ type = "butt
   <button
     type={type}
     ref={ref}
+    data-ep-variant={variant}
     className={cn(
       "inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-bold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
       variant === "primary" && "border border-white/30 bg-[linear-gradient(135deg,#f8fbff,#7de8ff_32%,#14b8de_70%,#0786ad)] text-[#031018] shadow-[0_14px_32px_rgba(20,184,222,0.28)] hover:brightness-110",

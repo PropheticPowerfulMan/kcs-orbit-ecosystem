@@ -7,6 +7,7 @@ import { App } from "./App";
 import { I18nProvider } from "./i18n";
 import { applyLegacyReceiptVerificationRedirect } from "./utils/receiptLinkRecovery";
 import "./styles.css";
+import "./mobileWorkspace.css";
 import MutationFeedback from "./components/MutationFeedback";
 
 import { SecurePageBoundary } from './components/SecurePageBoundary';
