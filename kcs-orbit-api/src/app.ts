@@ -1,3 +1,4 @@
+import {academyRateLimit} from './middleware/academy-rate-limit';
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -79,7 +80,7 @@ export function createApp() {
   });
 
   app.use("/api/auth", authRateLimit(15 * 60 * 1000, 20), authRoutes);
-  app.use("/api/academy/sso", authRateLimit(60 * 1000, 30), academySsoRoutes);
+  app.use("/api/academy/sso", academyRateLimit({serviceKey:()=>process.env.ACADEMY_INTEGRATION_KEY}), academySsoRoutes);
   app.use("/api", coreRoutes);
   app.use("/api/integration/academic-year", academicYearRoutes);
   app.use("/api/integration", integrationRoutes);

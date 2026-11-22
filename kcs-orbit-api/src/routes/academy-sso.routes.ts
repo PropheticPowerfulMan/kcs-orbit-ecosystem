@@ -1,3 +1,4 @@
+import {academySourceIdentity} from '../services/academy-identity';
 import { studentUserAccess } from '../services/student-access';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Router, type Request, type Response } from "express";
@@ -115,7 +116,8 @@ router.post("/validate", async (req, res, next) => {
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
     if (requiredOrganization && session.organizationId !== requiredOrganization) return res.status(403).json({ message: "Academy organization denied" });
     await prisma.academySession.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
-    return res.json({ userId: session.userId, orbitId: session.userId, organizationId: session.organizationId, role: session.role, displayName: session.user.fullName, email: session.user.email, expiresAt: session.expiresAt.toISOString() });
+    const binding=await prisma.auditLog.findFirst({where:{organizationId:session.organizationId,userId:session.userId,action:'ACADEMY_SERVICE_TICKET_CREATED'},orderBy:[{createdAt:'asc'},{id:'asc'}],select:{metadata:true}});
+    return res.json({ sourceIdentityId:academySourceIdentity(session.userId,binding?.metadata), userId: session.userId, orbitId: session.userId, organizationId: session.organizationId, role: session.role, displayName: session.user.fullName, email: session.user.email, expiresAt: session.expiresAt.toISOString() });
   } catch (error) { return next(error); }
 });
 router.post("/revoke", async (req, res, next) => {

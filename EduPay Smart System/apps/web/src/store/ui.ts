@@ -26,7 +26,7 @@ type UiState = {
 
 export const useUiStore = create<UiState>((set) => ({
   isDesktopSidebarOpen: readStoredFlag(DESKTOP_SIDEBAR_KEY, true),
-  isMobileNavOpen: readStoredFlag(MOBILE_NAV_KEY, true),
+  isMobileNavOpen: readStoredFlag(MOBILE_NAV_KEY, false),
   setDesktopSidebarOpen: (value) => {
     persistFlag(DESKTOP_SIDEBAR_KEY, value);
     set({ isDesktopSidebarOpen: value });

@@ -193,7 +193,7 @@ export function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-[linear-gradient(180deg,rgba(2,6,23,0.92),rgba(5,16,24,0.78))] shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-2xl">
+    <header data-edupay-renewal-header className="sticky top-0 z-50 bg-[linear-gradient(180deg,rgba(2,6,23,0.92),rgba(5,16,24,0.78))] shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-2xl">
       {showPasswordModal && <ChangePasswordModal temporaryPassword={mustChangePassword} onChanged={() => {
         setMustChangePassword(false);
         setShowPasswordModal(false);
@@ -204,8 +204,8 @@ export function Navbar() {
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <button
               type="button"
-              onClick={toggleMobileNav}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-300/20 bg-white/[0.07] text-brand-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-200 hover:border-brand-300/40 hover:bg-brand-500/10 md:hidden"
+              data-kcs-no-processing="true" onClick={toggleMobileNav}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-300/20 bg-white/[0.07] text-brand-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-200 hover:border-brand-300/40 hover:bg-brand-500/10 lg:hidden"
               aria-label={isMobileNavOpen ? L("Masquer la navigation mobile", "Hide mobile navigation") : L("Afficher la navigation mobile", "Show mobile navigation")}
               title={isMobileNavOpen ? L("Masquer la navigation", "Hide navigation") : L("Afficher la navigation", "Show navigation")}
             >
@@ -213,8 +213,8 @@ export function Navbar() {
             </button>
             <button
               type="button"
-              onClick={toggleDesktopSidebar}
-              className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-brand-300/20 bg-white/[0.07] text-brand-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-200 hover:border-brand-300/40 hover:bg-brand-500/10 md:inline-flex"
+              data-kcs-no-processing="true" onClick={toggleDesktopSidebar}
+              className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-brand-300/20 bg-white/[0.07] text-brand-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-200 hover:border-brand-300/40 hover:bg-brand-500/10 lg:inline-flex"
               aria-label={isDesktopSidebarOpen ? L("Masquer la navigation latérale", "Hide sidebar navigation") : L("Afficher la navigation latérale", "Show sidebar navigation")}
               title={isDesktopSidebarOpen ? L("Masquer la navigation", "Hide navigation") : L("Afficher la navigation", "Show navigation")}
             >
@@ -228,7 +228,7 @@ export function Navbar() {
                 className="relative h-11 w-11 rounded-full border border-white/25 bg-white p-1 shadow-glow transition-all duration-200 hover:scale-105" 
               />
             </div>
-            <div className="hidden sm:block">
+            <div className="ep-header-brand-label">
               <p className="font-display text-base font-semibold leading-tight text-white">{schoolBranding.appName}</p>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-300/95">{schoolBranding.shortName} - {L("Excellence", "Excellence")}</p>
             </div>
@@ -253,7 +253,8 @@ export function Navbar() {
             {/* User Menu */}
             <div className="relative z-[70]" ref={userMenuRef}>
               <button
-                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                data-kcs-no-processing="true" onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                aria-label={L("Ouvrir mon profil et les préférences", "Open my profile and preferences")}
                 aria-expanded={isUserMenuOpen}
                 aria-haspopup="menu"
                 className="flex items-center gap-2 rounded-full border border-brand-300/20 bg-white/[0.07] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-200 hover:border-brand-300/40 hover:bg-brand-500/10 sm:gap-3 sm:px-3"
@@ -296,6 +297,7 @@ export function Navbar() {
                     )}
                     {photoError && <p className="mt-2 text-xs text-danger">{photoError}</p>}
                   </div>
+                  <div className="ep-profile-preferences flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-3 lg:hidden"><FontSwitch/><LanguageSwitch/></div>
                   <label className="block w-full cursor-pointer px-4 py-2 text-sm text-ink-dim transition-all duration-200 hover:bg-brand-500/10 hover:text-white">
                     {photoUrl ? t("changeProfilePhoto") : t("addProfilePhoto")}
                     <input type="file" accept="image/*" className="hidden" onChange={(event) => void updatePhoto(event.target.files?.[0])} />
@@ -332,7 +334,7 @@ export function Navbar() {
           </div>
         </div>
 
-        <div className="mt-2 flex items-center justify-end gap-2 rounded-xl border border-brand-300/15 bg-white/[0.04] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] lg:hidden">
+        <div className="ep-old-mobile-preferences mt-2 flex items-center justify-end gap-2 rounded-xl border border-brand-300/15 bg-white/[0.04] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] lg:hidden">
           <FontSwitch />
           <LanguageSwitch />
         </div>

@@ -41,7 +41,7 @@ export function FontSwitch() {
 
   return (
     <div className="relative min-w-0">
-      <button
+      <button data-kcs-no-processing="true"
         onClick={() => setOpen((v) => !v)}
         className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-slate-700/50 bg-slate-900/50 px-2.5 py-1.5 backdrop-blur transition-all hover:border-brand-500/50 sm:gap-2 sm:px-3"
         aria-label={t("fontLabel")}
@@ -60,7 +60,7 @@ export function FontSwitch() {
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-ink-dim">{t("fontLabel")}</p>
           </div>
           {options.map((opt) => (
-            <button
+            <button data-kcs-no-processing="true"
               key={opt.value}
               onClick={() => pick(opt.value)}
               className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all hover:bg-slate-800/60 ${

@@ -5,7 +5,7 @@ export function LanguageSwitch() {
 
   return (
     <div className="inline-grid grid-cols-2 rounded-lg border border-slate-700/50 bg-slate-900/50 p-1 backdrop-blur">
-      <button
+      <button data-kcs-no-processing="true"
         type="button"
         onClick={() => setLang("fr")}
         className={`min-w-0 rounded-md px-2.5 py-1.5 text-[11px] font-bold leading-none transition-all duration-300 sm:px-3 sm:text-xs ${
@@ -16,7 +16,7 @@ export function LanguageSwitch() {
       >
         {t("langFr")}
       </button>
-      <button
+      <button data-kcs-no-processing="true"
         type="button"
         onClick={() => setLang("en")}
         className={`min-w-0 rounded-md px-2.5 py-1.5 text-[11px] font-bold leading-none transition-all duration-300 sm:px-3 sm:text-xs ${
