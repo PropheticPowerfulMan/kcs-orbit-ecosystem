@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import{verifiedSessionAccess}from'./sessionAccess.mjs';
+const admin=user=>({auth:{getUser:async()=>({data:{user:{id:'local-1'}}}),admin:{getUserById:async()=>({data:{user:{id:'local-1',...user}}})}}});
+test('trusted app metadata links the authenticated user only',async()=>assert.deepEqual(await verifiedSessionAccess('token',admin({app_metadata:{kcs_nexus_identity:{id:'nexus-1'}},user_metadata:{kcs_nexus_identity:{id:'victim'}}})),{status:200,body:{allowed:true,nexusUserId:'nexus-1'}}));
+test('editable profile metadata cannot claim a Nexus identity',async()=>assert.deepEqual(await verifiedSessionAccess('token',admin({user_metadata:{kcs_nexus_identity:{id:'victim'}}})),{status:200,body:{allowed:true}}));
+test('blocked accounts and empty bearer do not disclose a linked identity',async()=>{assert.deepEqual(await verifiedSessionAccess('',admin({})),{status:401,body:{allowed:false}});for(const user of[{app_metadata:{kcs_orbit_access:{blocked:true},kcs_nexus_identity:{id:'nexus-1'}}},{banned_until:'2050-01-01T00:00:00Z'}])assert.deepEqual(await verifiedSessionAccess('token',admin(user)),{status:403,body:{allowed:false}})});
+test('an inconsistent auth provider response fails closed',async()=>assert.rejects(verifiedSessionAccess('token',admin({id:'other'})),/identity mismatch/));

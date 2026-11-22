@@ -80,3 +80,12 @@ body{background:var(--ep-shell)!important;color:var(--ep-ink)}
 }
 
 @media screen and (max-width:767px){.ep-sidebar{visibility:hidden}.ep-sidebar[data-open=true]{visibility:visible}}
+
+@media screen{
+.ep-menu-button{display:grid;place-items:center;flex-shrink:0;width:40px;height:40px;border:1px solid var(--ep-line);border-radius:11px;background:var(--ep-soft);color:var(--ep-ink);cursor:pointer}.ep-context{margin-right:auto}
+.ep-portrait-sync{max-width:560px;font-size:12px;line-height:1.6;color:var(--ep-muted);padding:10px 12px;border:1px solid var(--ep-line);border-radius:10px;background:var(--ep-soft)}
+@media(min-width:768px){.ep-shell{transition:grid-template-columns .2s ease}.ep-shell[data-collapsed=true]{grid-template-columns:78px minmax(0,1fr)}.ep-shell[data-collapsed=true] .ep-sidebar{padding:25px 10px 18px}.ep-shell[data-collapsed=true] .ep-brand{justify-content:center;padding:0}.ep-shell[data-collapsed=true] .ep-brand>span,.ep-shell[data-collapsed=true] .ep-nav-caption,.ep-shell[data-collapsed=true] .ep-sidebar-note,.ep-shell[data-collapsed=true] .ep-nav-link>span,.ep-shell[data-collapsed=true] .ep-create>span,.ep-shell[data-collapsed=true] .ep-sidebar-footer span{display:none}.ep-shell[data-collapsed=true] .ep-sidebar nav{margin-top:34px}.ep-shell[data-collapsed=true] .ep-nav-link{justify-content:center;padding:13px 8px}.ep-shell[data-collapsed=true] .ep-create{padding:0;justify-content:center}.ep-shell[data-collapsed=true] .ep-sidebar-footer :is(a,button){justify-content:center;padding:12px 6px;min-height:43px}}
+@media(max-width:767px){.ep-topbar{gap:8px}.ep-menu-button{width:40px;height:40px}.ep-icon-button{min-width:36px;height:40px}.ep-profile>img,.ep-profile>span{width:34px;height:34px}.ep-drawer-close{width:40px;height:40px}.ep-sidebar{padding-bottom:max(20px,env(safe-area-inset-bottom))}.ep-sidebar-footer :is(a,button){min-height:43px}.ep-sidebar-note{margin-top:20px;padding:13px}.ep-sidebar{overscroll-behavior:contain}}
+@media(max-width:359px){.ep-topbar{padding:10px 8px;gap:6px}.ep-context small{font-size:6px}.ep-context h1{font-size:12px}.ep-icon-button{min-width:32px}.ep-profile{padding-left:5px;margin-left:0}.ep-profile>img,.ep-profile>span{width:30px;height:30px}}
+@media(prefers-reduced-motion:reduce){.ep-shell{transition:none}}
+}

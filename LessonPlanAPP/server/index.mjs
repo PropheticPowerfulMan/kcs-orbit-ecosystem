@@ -1,3 +1,4 @@
+import {verifiedSessionAccess} from './sessionAccess.mjs';
 import {institutionalLogin} from './institutionalLogin.mjs';
 import "dotenv/config";
 import http from "node:http";
@@ -266,7 +267,7 @@ const server = http.createServer(async (request, response) => {
     }catch(error){return sendJson(response,error.status||503,{error:'Institutional access synchronization could not be confirmed.'},corsOrigin)}
   }
   if(request.method==='POST'&&pathname==='/api/ecosystem/session-check'){
-    try{const bearer=String(request.headers.authorization||'').replace(/^Bearer /,'');if(!bearer)return sendJson(response,401,{allowed:false},corsOrigin);const admin=requireSupabaseAdmin();const {data,error}=await admin.auth.getUser(bearer);if(error||!data.user)return sendJson(response,401,{allowed:false},corsOrigin);const {data:identity,error:lookupError}=await admin.auth.admin.getUserById(data.user.id);if(lookupError)throw lookupError;const blocked=Boolean(identity.user?.app_metadata?.kcs_orbit_access?.blocked)||Boolean(identity.user?.banned_until&&Date.parse(identity.user.banned_until)>Date.now());return sendJson(response,blocked?403:200,{allowed:!blocked},corsOrigin)}catch{return sendJson(response,503,{error:'Institutional verification temporarily unavailable.'},corsOrigin)}
+    try{const bearer=String(request.headers.authorization||'').replace(/^Bearer /,'');const result=await verifiedSessionAccess(bearer,requireSupabaseAdmin());return sendJson(response,result.status,result.body,corsOrigin)}catch{return sendJson(response,503,{error:'Institutional verification temporarily unavailable.'},corsOrigin)}
   }
   if (request.method === "GET" && pathname === "/api/health") {
     return sendJson(response, 200, {

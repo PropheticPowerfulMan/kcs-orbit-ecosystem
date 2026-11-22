@@ -164,6 +164,16 @@ export const cloudAuthService = {
     const session = readSession();
     return session?.accessToken || supabaseAnonKey || "";
   },
+  async getNexusDashboardPhoto(signal?: AbortSignal) {
+    const session=readSession();
+    if(!session)throw new Error("An Eduplanner session is required.");
+    const response=await fetch(new URL("/api/lesson-plan/dashboard-avatar",productionAppUrl),{headers:{Authorization:"Bearer "+session.accessToken},cache:"no-store",signal});
+    if(response.status===404)return {linked:false,photoUrl:""};
+    if(!response.ok)throw new Error("The Nexus dashboard photo is temporarily unavailable.");
+    const payload=await response.json();const photo=payload?.data?.avatar;
+    if(photo!==null&&(typeof photo!=="string"||!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/s.test(photo)))throw new Error("Invalid dashboard photo.");
+    return {linked:true,photoUrl:photo||""};
+  },
   restUrl,
   baseHeaders,
   async listUsers() {

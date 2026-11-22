@@ -1,3 +1,4 @@
+import {useNexusDashboardPhoto} from "../hooks/useNexusDashboardPhoto";
 import {eduplannerNexusReturn} from "../utils/nexusReturn";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { FormEvent, useState, useEffect } from "react";
@@ -23,6 +24,11 @@ export const AppLayout = () => {
   const navigate = useNavigate();
   const location=useLocation();
   const [menuOpen,setMenuOpen]=useState(false);
+  const [compactMenu,setCompactMenu]=useState(()=>{try{return localStorage.getItem("eduplanner:compact-navigation:v1")==="1"}catch{return false}});
+  const [mobileNavigation,setMobileNavigation]=useState(()=>window.matchMedia("(max-width:767px)").matches);
+  const {photoUrl:dashboardPhoto,linked:photoFromNexus}=useNexusDashboardPhoto(currentUser);
+  useEffect(()=>{const media=window.matchMedia("(max-width:767px)");const change=()=>{setMobileNavigation(media.matches);setMenuOpen(false)};media.addEventListener("change",change);return()=>media.removeEventListener("change",change)},[]);
+  const toggleNavigation=()=>{if(mobileNavigation)setMenuOpen(v=>!v);else setCompactMenu(value=>{const next=!value;try{localStorage.setItem("eduplanner:compact-navigation:v1",next?"1":"0")}catch{}return next})};
   useEffect(()=>{
     if(!menuOpen||!window.matchMedia("(max-width:767px)").matches)return;
     const prior=document.activeElement as HTMLElement|null,bodyOverflow=document.body.style.overflow;document.body.style.overflow="hidden";
@@ -110,25 +116,25 @@ export const AppLayout = () => {
   const links=[{to:"/",label:tr("Overview","Vue d’ensemble"),Icon:LayoutDashboard},{to:"/plans",label:tr("Lesson plans","Préparations"),Icon:FileText},...(can("curriculum:read")?[{to:"/curriculum",label:tr("Curriculum","Programme"),Icon:BookOpen}]:[]),{to:"/messages",label:tr("Messages","Messages"),Icon:MessageSquare}];
   const current=links.find(link=>link.to==="/"?location.pathname==="/":location.pathname.startsWith(link.to))||links[1];
   return (
-    <div className="ep-shell" data-eduplanner-workspace>
+    <div className="ep-shell" data-collapsed={compactMenu} data-eduplanner-workspace>
       {menuOpen&&<button type="button" className="ep-nav-scrim" aria-label={tr("Close navigation","Fermer la navigation")} onClick={()=>setMenuOpen(false)}/>}
-      <aside id="eduplanner-navigation" className="ep-sidebar" data-open={menuOpen}>
+      <aside id="eduplanner-navigation" className="ep-sidebar" data-open={menuOpen} role={mobileNavigation&&menuOpen?"dialog":undefined} aria-modal={mobileNavigation&&menuOpen?true:undefined} aria-label={tr("Eduplanner navigation","Navigation Eduplanner")}>
         <NavLink to="/" className="ep-brand" onClick={()=>setMenuOpen(false)}><img src={imageUrl} alt="KCS"/><span><small>KCS ORBIT ECOSYSTEM</small><strong>Eduplanner<span>{tr("Teaching, thoughtfully.","Enseigner avec intention.")}</span></strong></span></NavLink>
         <button type="button" className="ep-drawer-close" aria-label={tr("Close navigation","Fermer la navigation")} onClick={()=>setMenuOpen(false)}><X size={19}/></button>
         <p className="ep-nav-caption">{tr("YOUR WORKSPACE","VOTRE ESPACE")}</p>
-        <nav aria-label={tr("Main navigation","Navigation principale")}>{links.map(({to,label,Icon})=><NavLink key={to} to={to} end={to==="/"} onClick={()=>setMenuOpen(false)} className={({isActive})=>isActive?"ep-nav-link is-active":"ep-nav-link"}><Icon size={19}/><span>{label}</span></NavLink>)}</nav>
-        {canCreateLessons&&<Button className="ep-create" onClick={()=>{const lesson=createLesson();setMenuOpen(false);navigate("/editor/"+lesson.id)}}><Plus size={18}/>{tr("New lesson plan","Nouvelle préparation")}</Button>}
+        <nav aria-label={tr("Main navigation","Navigation principale")}>{links.map(({to,label,Icon})=><NavLink key={to} to={to} end={to==="/"} onClick={()=>setMenuOpen(false)} title={label} aria-label={label} className={({isActive})=>isActive?"ep-nav-link is-active":"ep-nav-link"}><Icon size={19}/><span>{label}</span></NavLink>)}</nav>
+        {canCreateLessons&&<Button className="ep-create" title={tr("New lesson plan","Nouvelle préparation")} aria-label={tr("New lesson plan","Nouvelle préparation")} onClick={()=>{const lesson=createLesson();setMenuOpen(false);navigate("/editor/"+lesson.id)}}><Plus size={18}/><span>{tr("New lesson plan","Nouvelle préparation")}</span></Button>}
         <div className="ep-sidebar-note"><BookOpen size={22}/><strong>{tr("Every lesson, a step forward.","Chaque leçon, un pas de plus.")}</strong><p>{tr("Plan, review and share your teaching in one place.","Préparez, révisez et partagez votre enseignement au même endroit.")}</p></div>
-        <div className="ep-sidebar-footer"><a href={eduplannerNexusReturn(currentUser.role)} data-nexus-return><ArrowLeft size={16}/>{tr("Back to Nexus AI","Retour à Nexus AI")}</a>{showInstall&&<button type="button" onClick={()=>void install().then(ok=>notify(ok?tr("Eduplanner installed","Eduplanner installé"):tr("Use your browser’s installation menu.","Utilisez le menu d’installation du navigateur.")))}><Download size={16}/>{tr("Install app","Installer l’application")}</button>}<button type="button" onClick={()=>{signOut().finally(()=>navigate("/login",{replace:true}))}}><LogOut size={16}/>{tr("Sign out","Déconnexion")}</button></div>
+        <div className="ep-sidebar-footer"><a aria-label={tr("Back to Nexus AI","Retour à Nexus AI")} title={tr("Back to Nexus AI","Retour à Nexus AI")} href={eduplannerNexusReturn(currentUser.role)} data-nexus-return><ArrowLeft size={16}/><span>{tr("Back to Nexus AI","Retour à Nexus AI")}</span></a>{showInstall&&<button type="button" aria-label={tr("Install app","Installer l’application")} title={tr("Install app","Installer l’application")} onClick={()=>void install().then(ok=>notify(ok?tr("Eduplanner installed","Eduplanner installé"):tr("Use your browser’s installation menu.","Utilisez le menu d’installation du navigateur.")))}><Download size={16}/><span>{tr("Install app","Installer l’application")}</span></button>}<button type="button" aria-label={tr("Sign out","Déconnexion")} title={tr("Sign out","Déconnexion")} onClick={()=>{signOut().finally(()=>navigate("/login",{replace:true}))}}><LogOut size={16}/><span>{tr("Sign out","Déconnexion")}</span></button></div>
       </aside>
       <div className="ep-body">
         <header className="ep-topbar">
-          <button type="button" className="ep-menu-button" aria-expanded={menuOpen} aria-controls="eduplanner-navigation" aria-label={tr("Open navigation","Ouvrir la navigation")} onClick={()=>setMenuOpen(true)}><Menu size={21}/></button>
+          <button type="button" className="ep-menu-button" aria-expanded={mobileNavigation?menuOpen:!compactMenu} aria-controls="eduplanner-navigation" aria-label={mobileNavigation?tr("Open navigation","Ouvrir la navigation"):compactMenu?tr("Expand navigation","Développer la navigation"):tr("Collapse navigation","Réduire la navigation")} onClick={toggleNavigation}><Menu size={21}/></button>
           <div className="ep-context"><small>EDUPLANNER <span>/ KCS</span></small><h1>{current.label}</h1></div>
           <div className="ep-toolbar"><button type="button" className="ep-search" onClick={()=>navigate("/plans?focus=search")}><Search size={17}/><span>{tr("Find a lesson…","Rechercher une préparation…")}</span><kbd>⌕</kbd></button>
             <button type="button" aria-label={tr("Change language","Changer la langue")} onClick={toggleLanguage} className="ep-icon-button"><Languages size={17}/><b>{language==="en"?"FR":"EN"}</b></button>
             <button type="button" aria-label={tr("Change theme","Changer de thème")} onClick={toggleDark} className="ep-icon-button">{dark?<Sun size={18}/>:<Moon size={18}/>}</button>
-            <button type="button" className="ep-profile" aria-label={tr("Account security","Sécurité du compte")} onClick={openAccount}>{currentUser.photoUrl?<img src={currentUser.photoUrl} alt=""/>:<span><UserRound size={19}/></span>}<div><strong>{currentUser.name}</strong><small>{roleLabels[currentUser.role]}</small></div><ShieldCheck size={16}/></button>
+            <button type="button" className="ep-profile" aria-label={tr("Account security","Sécurité du compte")} onClick={openAccount}>{dashboardPhoto?<img src={dashboardPhoto} alt=""/>:<span><UserRound size={19}/></span>}<div><strong>{currentUser.name}</strong><small>{roleLabels[currentUser.role]}</small></div><ShieldCheck size={16}/></button>
           </div>
         </header>
         <main className="ep-main"><Outlet/></main>
@@ -139,8 +145,8 @@ export const AppLayout = () => {
           <div className="rounded-md border border-cyan-300/20 bg-card/80 p-4 lg:col-span-2">
             <h3 className="flex items-center gap-2 text-sm font-black text-foreground"><UserRound size={16} /> Profile Photo</h3>
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              {currentUser.photoUrl ? <img src={currentUser.photoUrl} alt="" className="h-16 w-16 rounded-full object-cover" /> : <div className="grid h-16 w-16 place-items-center rounded-full border border-cyan-300/20 bg-white/[0.06]"><UserRound size={26} /></div>}
-              <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-cyan-300/25 bg-white/[0.06] px-4 text-sm font-bold text-foreground hover:bg-cyan-500/15">
+              {dashboardPhoto ? <img src={dashboardPhoto} alt="" className="h-16 w-16 rounded-full object-cover" /> : <div className="grid h-16 w-16 place-items-center rounded-full border border-cyan-300/20 bg-white/[0.06]"><UserRound size={26} /></div>}
+              {!photoFromNexus&&<label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-cyan-300/25 bg-white/[0.06] px-4 text-sm font-bold text-foreground hover:bg-cyan-500/15">
                 <MessageSquare size={16} /> Choose photo
                 <input
                   type="file"
@@ -168,8 +174,9 @@ export const AppLayout = () => {
                     }).catch(() => setAccountError("Unable to read this image."));
                   }}
                 />
-              </label>
-              {currentUser.photoUrl && <Button variant="outline" onClick={() => updateProfile({ ...currentUser, photoUrl: "" })}>Remove photo</Button>}
+              </label>}
+              {photoFromNexus&&<p className="ep-portrait-sync">{tr("Personal dashboard photo synchronized from Nexus AI. Manage it in your Nexus settings; the official school portrait stays separate.","Photo personnelle synchronisée depuis Nexus AI. Gérez-la dans vos paramètres Nexus ; la photo officielle de l’école reste indépendante.")}</p>}
+              {!photoFromNexus&&currentUser.photoUrl && <Button variant="outline" onClick={() => updateProfile({ ...currentUser, photoUrl: "" })}>Remove photo</Button>}
             </div>
           </div>
           <div className="rounded-md border border-cyan-300/20 bg-card/80 p-4">
