@@ -1,3 +1,4 @@
+import {readAcademyPlans} from './academyPlans.mjs';
 import {verifiedSessionAccess} from './sessionAccess.mjs';
 import {institutionalLogin} from './institutionalLogin.mjs';
 import "dotenv/config";
@@ -242,6 +243,17 @@ const server = http.createServer(async (request, response) => {
   const corsOrigin = allowedOrigins.has(origin) ? origin : appUrl;
   const pathname = new URL(request.url || "/", "http://lesson-plan.local").pathname;
   if (request.method === "OPTIONS") return sendJson(response, 204, {}, corsOrigin);
+  if(request.method==='POST'&&pathname==='/api/academy/plans'){
+    try{
+      const admin=requireSupabaseAdmin(),body=await readJson(request);
+      const result=await readAcademyPlans(body.ticket,{
+        exchange:async ticket=>{const r=await fetch(new URL('/api/lesson-plan/academy-exchange',nexusApiUrl),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ticket}),signal:AbortSignal.timeout(8000)});const b=await r.json().catch(()=>null);if(!r.ok||!b?.data)throw Object.assign(new Error('Academy read ticket expired or not authorized'),{status:401});return b.data},
+        findProfile:async email=>{const{data,error}=await admin.from('profiles').select('id,status').ilike('email',email).limit(2);if(error)throw error;if(data?.length>1)throw new Error('Duplicate Eduplanner identity');return data?.[0]||null},
+        findAuthUser:async id=>{const{data,error}=await admin.auth.admin.getUserById(id);if(error)throw error;return data.user},
+        listPlans:async id=>{const{data,error}=await admin.from('lesson_plans').select('id,owner_id,status,payload,deleted_at,updated_at').eq('owner_id',id).is('deleted_at',null).order('updated_at',{ascending:false}).limit(200);if(error)throw error;return data||[]}
+      });return sendJson(response,200,result,corsOrigin);
+    }catch(error){console.error('Academy plan bridge failed',error?.status||503);return sendJson(response,[400,401,403].includes(error?.status)?error.status:503,{error:'Eduplanner plans are temporarily unavailable. No data has been changed.'},corsOrigin)}
+  }
   if (request.method === 'POST' && pathname === '/api/ecosystem/account-access') {
     try {
       const bearer=String(request.headers.authorization||'');

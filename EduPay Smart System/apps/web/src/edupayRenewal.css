@@ -1,0 +1,953 @@
+/* Screen-only financial workspace renewal. Receipt and PDF print styling remains unchanged. */
+@media screen {
+  :root {
+    --bg-main: #101b24;
+    --bg-panel: #172630;
+    --bg-panel-light: #1d323c;
+    --ink: #f0f3ee;
+    --ink-dim: #b0c3c8;
+    --ep-gold: #dec797;
+    --ep-green: #9ed3bc;
+    --ep-line: #ffffff12;
+    --ep-surface: #172630;
+    --ep-muted: #a5b9bd;
+  }
+  body {
+    background-color: #101b24;
+    background-image: none;
+  }
+  .edupay-app-shell,
+  .ep-login {
+    background: #101b24 !important;
+    color: #f0f3ee;
+  }
+  .edupay-app-shell {
+    background-image: radial-gradient(
+      ellipse at 100% 0,
+      #30514d23,
+      transparent 45%
+    ) !important;
+    min-width: 0;
+  }
+  .edupay-app-shell > main {
+    padding: 26px 28px 36px !important;
+    gap: 27px !important;
+    max-width: 2000px;
+    margin: auto;
+  }
+  .ep-workspace {
+    width: 0;
+    min-width: 0;
+    padding-bottom: 18px;
+  }
+  .ep-workspace h1 {
+    font-size: clamp(24px, 2.6vw, 33px) !important;
+    letter-spacing: -0.045em;
+    line-height: 1.2;
+  }
+  .ep-workspace h2 {
+    font-size: clamp(18px, 1.8vw, 23px) !important;
+    letter-spacing: -0.025em;
+  }
+  .ep-workspace h3 {
+    letter-spacing: -0.02em;
+  }
+  .edupay-app-shell .glass,
+  .ep-login .glass {
+    background: #172630 !important;
+    border-color: #ffffff12 !important;
+    box-shadow: 0 8px 25px #050b1220 !important;
+    backdrop-filter: none;
+  }
+  .ep-workspace .glass {
+    border-radius: 19px !important;
+  }
+  .ep-workspace p {
+    line-height: 1.65;
+  }
+  .ep-workspace .text-ink-dim {
+    color: #afc1c6;
+  }
+  .ep-workspace [class*="bg-slate-950"] {
+    background-color: #101b2499;
+  }
+  .ep-workspace [class*="border-white/10"] {
+    border-color: #ffffff12;
+  }
+  .ep-workspace .font-display {
+    font-weight: 650;
+  }
+  .ep-workspace [class*="text-brand-200"],
+  .ep-workspace [class*="text-brand-100"],
+  .edupay-app-shell header [class*="text-brand-100"] {
+    color: var(--ep-gold);
+  }
+  .ep-workspace .btn-primary,
+  .ep-login .btn-primary {
+    border: 1px solid #dfc799 !important;
+    background: linear-gradient(135deg, #dfc799, #c6aa73) !important;
+    color: #192831 !important;
+    font-weight: 750 !important;
+    box-shadow: 0 5px 18px #dbc08b13 !important;
+    text-shadow: none !important;
+    min-height: 40px;
+    border-radius: 11px;
+    transition:
+      filter 0.15s,
+      transform 0.15s;
+  }
+  .ep-workspace .btn-primary:hover,
+  .ep-login .btn-primary:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+  }
+  .ep-workspace .btn-primary:disabled,
+  .ep-login .btn-primary:disabled {
+    transform: none;
+    opacity: 0.5;
+  }
+  .edupay-app-shell input,
+  .edupay-app-shell select,
+  .edupay-app-shell textarea,
+  .ep-login input {
+    border-radius: 10px;
+    background-color: #10212b !important;
+    border-color: #3b515b !important;
+    color: #eef5f3 !important;
+    box-shadow: none;
+    min-width: 0;
+  }
+  .edupay-app-shell input:focus,
+  .edupay-app-shell select:focus,
+  .ep-login input:focus {
+    border-color: var(--ep-gold) !important;
+    box-shadow: 0 0 0 3px #dec79718 !important;
+  }
+  .edupay-app-shell :focus-visible,
+  .ep-login :focus-visible {
+    outline: 2px solid #dec797;
+    outline-offset: 3px;
+  }
+  .ep-workspace table {
+    font-size: 12px;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .ep-workspace thead {
+    background: #10212b;
+  }
+  .ep-workspace th {
+    padding-block: 12px;
+    color: #a8c2c7;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.065em;
+    text-transform: uppercase;
+    border-color: #ffffff10;
+  }
+  .ep-workspace td {
+    border-color: #ffffff0d;
+    font-size: 12px;
+    padding-block: 13px;
+  }
+  .ep-workspace tbody tr:hover {
+    background: #ffffff03;
+  }
+  .ep-workspace button:not(.btn-primary) {
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .ep-workspace button:disabled {
+    opacity: 0.45;
+  }
+  .edupay-app-shell * {
+    scrollbar-width: thin;
+    scrollbar-color: #748b80 #15242e;
+  }
+  .edupay-app-shell ::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+  }
+  .edupay-app-shell ::-webkit-scrollbar-thumb {
+    background: #738d81;
+    border-radius: 10px;
+    border: 2px solid #172630;
+  }
+  [data-edupay-renewal-header] {
+    background: #101b24ed !important;
+    border-bottom: 1px solid #ffffff0c !important;
+    box-shadow: none !important;
+    backdrop-filter: blur(18px);
+  }
+  [data-edupay-renewal-header] > div {
+    padding: 13px 30px !important;
+    max-width: 2000px;
+    margin: auto;
+  }
+  [data-edupay-renewal-header] img {
+    box-shadow: none !important;
+  }
+  [data-edupay-renewal-header] > div > div:first-child {
+    min-height: 40px;
+  }
+  [data-edupay-renewal-header] [data-edupay-header-actions] button {
+    border-color: #ffffff18;
+  }
+  [data-edupay-renewal-header] .blur-md {
+    display: none;
+  }
+  [data-edupay-renewal-header] .tracking-\[0\.24em\] {
+    letter-spacing: 0.14em;
+  }
+  [data-edupay-renewal-header] > div > div:last-child:not(:first-child) {
+    border-color: #ffffff0c;
+  }
+  .ep-workspace > section:first-child {
+    background: #182d35 !important;
+    border-color: #ffffff12 !important;
+    border-radius: 17px !important;
+    padding: 20px 24px !important;
+    margin-bottom: 22px !important;
+  }
+  .ep-sidebar {
+    width: 228px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 103px;
+    align-self: flex-start;
+    height: calc(100dvh - 130px);
+    display: flex;
+    flex-direction: column;
+    padding: 22px 14px 12px;
+    background: #0c171f;
+    border: 1px solid #ffffff0b;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px #0001;
+  }
+  .ep-side-brand {
+    display: flex;
+    gap: 11px;
+    align-items: center;
+    padding: 0 8px 19px;
+  }
+  .ep-side-brand img {
+    width: 39px;
+    height: 39px;
+    object-fit: contain;
+    border-radius: 50%;
+    padding: 2px;
+    background: #fff;
+  }
+  .ep-side-brand b {
+    font-size: 22px;
+    letter-spacing: -0.04em;
+    font-weight: 600;
+    color: #f1f2eb;
+  }
+  .ep-side-brand small {
+    font-size: 7px;
+    letter-spacing: 0.15em;
+    display: block;
+    color: #7c969e;
+    margin-top: 2px;
+  }
+  .ep-workspace-tag {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    padding: 13px 7px;
+    border-top: 1px solid #ffffff0b;
+    font-size: 10px;
+    color: #9fb6ba;
+  }
+  .ep-workspace-tag > span {
+    width: 5px;
+    height: 5px;
+    background: #c9b07a;
+    border-radius: 50%;
+  }
+  .ep-nav-search {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #8ba4ab;
+    border: 1px solid #ffffff10;
+    border-radius: 9px;
+    padding: 0 9px;
+    margin: 8px 1px 19px;
+    background: #13232c;
+  }
+  .edupay-app-shell .ep-nav-search input {
+    border: 0 !important;
+    background: transparent !important;
+    color: #c2d2d4 !important;
+    padding: 9px 0;
+    font-size: 10px;
+    min-height: 34px;
+    width: 100%;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  .ep-sidebar > nav {
+    overflow-y: auto;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 0 0 10px;
+  }
+  .ep-nav-item {
+    color: #a5bbc2 !important;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    text-decoration: none;
+    font-size: 11px;
+    line-height: 1.45;
+    min-width: 0;
+  }
+  .ep-nav-item > svg {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+  }
+  .ep-nav-item > span {
+    flex: 1;
+  }
+  .ep-nav-item .ep-nav-chevron {
+    color: #5b737c;
+    width: 11px;
+  }
+  .ep-nav-item:hover {
+    background: #ffffff05;
+    color: #edf3ef !important;
+  }
+  .ep-nav-item.ep-active {
+    color: #efdcb5 !important;
+    background: #dec79712;
+    border-color: #dec79725;
+    box-shadow: inset 3px 0 0 #dec797;
+  }
+  .ep-nav-item.ep-active > svg:first-child {
+    color: #dec797;
+  }
+  .ep-nav-item.ep-active .ep-nav-chevron {
+    color: #c3b288;
+  }
+  .ep-sidebar-foot {
+    padding: 14px 7px 0;
+    border-top: 1px solid #ffffff0b;
+    display: grid;
+    gap: 11px;
+  }
+  .ep-sidebar-foot > a {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    color: #9db7bc;
+    font-size: 10px;
+  }
+  .ep-sidebar-foot > button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: #718e97;
+    min-height: 28px;
+  }
+  .ep-sidebar-foot > button:hover {
+    color: #edd7ad;
+  }
+  .ep-rail {
+    width: 73px;
+    padding-inline: 10px;
+  }
+  .ep-rail .ep-side-brand {
+    padding: 0 6px 19px;
+  }
+  .ep-rail .ep-side-brand img {
+    width: 37px;
+    height: 37px;
+  }
+  .ep-rail .ep-side-brand > div,
+  .ep-rail .ep-nav-item > span,
+  .ep-rail .ep-nav-chevron {
+    display: none;
+  }
+  .ep-rail .ep-nav-item {
+    justify-content: center;
+    padding: 13px 10px;
+  }
+  .ep-rail .ep-sidebar-foot {
+    padding: 14px 5px 0;
+  }
+  .ep-nav-empty {
+    color: #8da8ae;
+    padding: 10px;
+    font-size: 11px;
+  }
+  .ep-mobile-dock {
+    display: none;
+  }
+  .ep-mobile-sheet {
+    border: 1px solid #4a6268;
+    background: #14242d;
+    color: #edf3ef;
+    padding: 20px;
+    border-radius: 21px;
+    max-height: 85dvh;
+    overflow: auto;
+    width: min(92vw, 450px);
+  }
+  .ep-mobile-sheet::backdrop {
+    background: #030b12b8;
+    backdrop-filter: blur(5px);
+  }
+  .ep-sheet-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .ep-sheet-heading b {
+    display: block;
+    font-size: 22px;
+    letter-spacing: -0.035em;
+  }
+  .ep-sheet-heading small {
+    color: #8ea9b0;
+    font-size: 10px;
+  }
+  .ep-sheet-close {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    color: #b1c4c7;
+    border: 1px solid #ffffff1a;
+    border-radius: 9px;
+  }
+  .ep-mobile-sheet .ep-nav-search {
+    margin-bottom: 16px;
+  }
+  .ep-mobile-sheet .ep-nav-item {
+    padding: 12px;
+    font-size: 12px;
+  }
+  .ep-sheet-nexus {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: #dec797;
+    font-size: 11px;
+    border-top: 1px solid #ffffff12;
+    padding: 18px 8px 0;
+    margin-top: 13px;
+  }
+  [data-edupay-finance-hero] {
+    border: 1px solid #64817738 !important;
+    border-radius: 21px !important;
+    background: linear-gradient(
+      118deg,
+      #203c40,
+      #1b303c 65%,
+      #243640
+    ) !important;
+    box-shadow: none !important;
+    padding: 29px 30px !important;
+  }
+  [data-edupay-finance-hero] h1 {
+    font-size: clamp(25px, 2.7vw, 36px) !important;
+    max-width: 580px;
+    line-height: 1.18;
+  }
+  [data-edupay-finance-hero] > div:first-child {
+    background: none !important;
+  }
+  [data-edupay-finance-hero] p {
+    max-width: 590px;
+    font-size: 12px !important;
+  }
+  [data-edupay-finance-hero] .max-w-4xl {
+    max-width: 670px;
+  }
+  [data-edupay-finance-hero] .mt-5 {
+    gap: 7px;
+    margin-top: 20px;
+  }
+  [data-edupay-finance-hero] .mt-5 span {
+    font-size: 9px;
+    border-color: #ffffff12;
+    background: #ffffff06;
+    color: #bacfd0;
+    padding: 5px 9px;
+  }
+  [data-edupay-finance-hero] .grid > div {
+    border-color: #a0c1b02e;
+    background: #ffffff04;
+    box-shadow: none;
+    padding: 14px 16px;
+  }
+  [data-edupay-finance-hero] .grid > div p:first-child {
+    font-size: 8px !important;
+    letter-spacing: 0.13em;
+  }
+  [data-edupay-finance-hero] .grid > div p:nth-child(2) {
+    font-size: 23px !important;
+    color: #e3d7b9;
+    font-weight: 600;
+  }
+  [data-edupay-finance-hero] .grid > div p:last-child {
+    font-size: 9px !important;
+    color: #9fb9c1;
+  }
+  .edupay-finance-erp {
+    gap: 20px;
+  }
+  .edupay-finance-erp > section {
+    margin-top: 20px !important;
+  }
+  [data-edupay-kpis] {
+    gap: 12px !important;
+  }
+  [data-edupay-kpis] > div {
+    background: #172630 !important;
+    border: 1px solid #ffffff10 !important;
+    border-radius: 15px !important;
+    box-shadow: none !important;
+    padding: 18px 16px !important;
+  }
+  [data-edupay-kpis] .font-display {
+    font-size: 22px !important;
+    letter-spacing: -0.045em;
+  }
+  [data-edupay-kpis] [class*="text-xs"] {
+    font-size: 10px;
+  }
+  [data-edupay-kpis] svg {
+    width: 18px;
+    height: 18px;
+  }
+  [data-edupay-kpis] > div > div:first-child {
+    gap: 5px;
+  }
+  .ep-workspace .recharts-wrapper {
+    max-width: 100%;
+  }
+  .ep-workspace .recharts-responsive-container {
+    min-width: 0 !important;
+  }
+  .ep-workspace [role="dialog"] {
+    background: #172630 !important;
+    border-color: #ffffff1c;
+    color: #edf4f1;
+    box-shadow: 0 20px 80px #0008;
+    border-radius: 20px;
+  }
+  .ep-workspace [role="dialog"] h2 {
+    font-size: 23px !important;
+  }
+  .ep-workspace .fixed [class*="bg-slate-900"] {
+    background: #172630 !important;
+  }
+  .ep-login {
+    background:
+      radial-gradient(ellipse at 0% 100%, #34534d40, transparent 60%), #101b24 !important;
+    padding: 30px !important;
+  }
+  .ep-login > .pointer-events-none {
+    display: none;
+  }
+  .ep-login > .max-w-md {
+    max-width: 970px;
+  }
+  .ep-login > .max-w-md > .glass {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    overflow: hidden;
+    border-radius: 25px;
+    border: 1px solid #4f6b6b40 !important;
+    box-shadow: 0 25px 90px #0002 !important;
+  }
+  .ep-login > .max-w-md > .glass > div:first-child {
+    padding: 50px 30px !important;
+    background: linear-gradient(145deg, #243f40, #152a34);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ep-login > .max-w-md > .glass > div:first-child > .absolute {
+    display: none;
+  }
+  .ep-login > .max-w-md > .glass > div:first-child .relative {
+    width: 100%;
+  }
+  .ep-login > .max-w-md > .glass > div:first-child img {
+    box-shadow: none;
+  }
+  .ep-login > .max-w-md > .glass > div:first-child h1 {
+    font-size: 29px !important;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.04em;
+    max-width: 280px;
+    margin: 12px auto;
+  }
+  .ep-login > .max-w-md > .glass > div:first-child .logo-glass {
+    background: #ffffff0b;
+    box-shadow: none;
+    border-color: #ffffff20;
+    height: 82px;
+    width: 82px;
+  }
+  .ep-login > .max-w-md > .glass > div:first-child:after {
+    content: "EduPay";
+    position: absolute;
+    bottom: 30px;
+    left: 30px;
+    color: #dec797;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+  }
+  .ep-login > .max-w-md > .glass > div:nth-child(2) {
+    padding: 36px 32px !important;
+  }
+  .ep-login input {
+    min-height: 43px;
+    font-size: 13px;
+  }
+  .ep-login .font-display {
+    letter-spacing: -0.035em;
+  }
+  .ep-login .text-brand-300 {
+    color: #dec797;
+  }
+  .ep-login .text-xs {
+    font-size: 10px;
+  }
+  .ep-login .btn-primary {
+    min-height: 44px;
+    font-size: 12px;
+  }
+  .ep-login .logo-glass {
+    animation: none;
+  }
+  .ep-login .relative > button[aria-label] {
+    transition: none;
+  }
+  @media (max-width: 1350px) {
+    .ep-sidebar {
+      width: 205px;
+    }
+    .ep-rail {
+      width: 70px;
+    }
+    .edupay-app-shell > main {
+      gap: 20px !important;
+      padding-inline: 22px !important;
+    }
+    [data-edupay-kpis] {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+    [data-edupay-finance-hero] .max-w-4xl {
+      max-width: 550px;
+    }
+  }
+  @media (max-width: 1023px) {
+    .ep-sidebar {
+      display: none;
+    }
+    .edupay-app-shell > main {
+      padding: 22px 20px 100px !important;
+    }
+    .ep-mobile-dock {
+      display: flex;
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: max(12px, env(safe-area-inset-bottom));
+      z-index: 50;
+      background: #13252ff5;
+      border: 1px solid #5f777c55;
+      box-shadow: 0 8px 35px #0005;
+      backdrop-filter: blur(15px);
+      border-radius: 18px;
+      padding: 7px;
+      gap: 5px;
+      width: min(calc(100vw - 28px), 470px);
+    }
+    .ep-mobile-dock .ep-nav-item,
+    .ep-dock-menu {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      border-radius: 11px;
+      padding: 7px 5px;
+      font-size: 8px;
+      min-width: 0;
+      background: none;
+      color: #a7c0c6;
+      line-height: 1.25;
+    }
+    .ep-mobile-dock .ep-nav-item > span {
+      flex: none;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ep-mobile-dock .ep-nav-item > svg {
+      height: 18px;
+      width: 18px;
+    }
+    .ep-mobile-dock .ep-nav-chevron {
+      display: none;
+    }
+    .ep-mobile-dock .ep-active {
+      box-shadow: none;
+      background: #dec79717;
+      border-color: #dec79722;
+    }
+    .ep-dock-menu svg {
+      height: 18px;
+    }
+    .ep-dock-menu:hover {
+      color: #dec797;
+      background: #ffffff08;
+    }
+    [data-edupay-renewal-header] > div {
+      padding: 12px 21px !important;
+    }
+    [data-edupay-renewal-header] > div > div:last-child {
+      margin-top: 8px !important;
+      padding: 6px !important;
+    }
+    .ep-workspace {
+      width: 100%;
+    }
+  }
+  @media (max-width: 640px) {
+    .edupay-app-shell > main {
+      padding: 17px 12px 100px !important;
+    }
+    .ep-workspace {
+      font-size: 11px;
+    }
+    .ep-workspace h1 {
+      font-size: 23px !important;
+      line-height: 1.18;
+    }
+    .ep-workspace h2 {
+      font-size: 18px !important;
+    }
+    .ep-workspace h3 {
+      font-size: 15px !important;
+    }
+    .ep-workspace .text-sm {
+      font-size: 11px !important;
+    }
+    .ep-workspace .text-xs {
+      font-size: 10px !important;
+    }
+    .ep-workspace .text-base {
+      font-size: 12px !important;
+    }
+    .ep-workspace .text-lg {
+      font-size: 16px !important;
+    }
+    .ep-workspace .text-3xl {
+      font-size: 25px !important;
+    }
+    .ep-workspace .text-4xl {
+      font-size: 30px !important;
+    }
+    .ep-workspace button,
+    .ep-workspace input,
+    .ep-workspace select {
+      font-size: 11px;
+    }
+    .ep-workspace input,
+    .ep-workspace select,
+    .ep-workspace textarea {
+      min-height: 37px;
+    }
+    .ep-workspace input:focus,
+    .ep-workspace textarea:focus {
+      font-size: 16px !important;
+    }
+    .ep-workspace .glass {
+      border-radius: 14px !important;
+    }
+    .ep-workspace .p-6 {
+      padding: 17px !important;
+    }
+    .ep-workspace .p-5 {
+      padding: 15px !important;
+    }
+    .ep-workspace .gap-6 {
+      gap: 15px !important;
+    }
+    .ep-workspace .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 16px;
+    }
+    .ep-workspace table {
+      font-size: 11px !important;
+    }
+    .ep-workspace th {
+      font-size: 8px !important;
+      padding: 10px !important;
+    }
+    .ep-workspace td {
+      font-size: 10px !important;
+      padding: 11px 10px !important;
+    }
+    .ep-workspace > section:first-child {
+      padding: 17px !important;
+    }
+    [data-edupay-finance-hero] {
+      padding: 22px 20px !important;
+      border-radius: 17px !important;
+    }
+    [data-edupay-finance-hero] h1 {
+      font-size: 27px !important;
+      max-width: 310px;
+    }
+    [data-edupay-finance-hero] p {
+      font-size: 11px !important;
+    }
+    [data-edupay-finance-hero] .mt-5 {
+      margin-top: 16px;
+      gap: 6px;
+    }
+    [data-edupay-finance-hero] .mt-5 span {
+      font-size: 8px;
+    }
+    [data-edupay-finance-hero] .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 9px;
+      width: 100%;
+    }
+    [data-edupay-finance-hero] .grid > div {
+      padding: 12px;
+    }
+    [data-edupay-finance-hero] .grid > div p:nth-child(2) {
+      font-size: 20px !important;
+    }
+    [data-edupay-finance-hero] .grid > div p:last-child {
+      font-size: 8px !important;
+    }
+    [data-edupay-kpis] {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 9px !important;
+    }
+    [data-edupay-kpis] > div {
+      padding: 14px 12px !important;
+      border-radius: 12px !important;
+    }
+    [data-edupay-kpis] .font-display {
+      font-size: 20px !important;
+    }
+    [data-edupay-kpis] [class*="text-xs"] {
+      font-size: 9px !important;
+    }
+    [data-edupay-kpis] svg {
+      width: 16px !important;
+      height: 16px !important;
+    }
+    [data-edupay-renewal-header] > div {
+      padding: 10px 13px !important;
+    }
+    [data-edupay-renewal-header] img {
+      height: 35px !important;
+      width: 35px !important;
+    }
+    [data-edupay-renewal-header] [data-edupay-header-actions] {
+      gap: 6px;
+    }
+    [data-edupay-renewal-header] [data-edupay-header-actions] > div > button {
+      padding: 5px !important;
+    }
+    .ep-workspace .fixed [role="dialog"] {
+      padding: 17px;
+      border-radius: 16px;
+    }
+    .ep-login {
+      padding: 18px !important;
+      align-items: start !important;
+      overflow: auto !important;
+    }
+    .ep-login > .max-w-md {
+      max-width: 450px;
+    }
+    .ep-login > .max-w-md > .glass {
+      display: flex;
+      flex-direction: column;
+      border-radius: 21px;
+    }
+    .ep-login > .max-w-md > .glass > div:first-child {
+      padding: 23px 20px !important;
+    }
+    .ep-login > .max-w-md > .glass > div:first-child > .relative {
+      flex-direction: row;
+      text-align: left;
+      gap: 15px;
+    }
+    .ep-login > .max-w-md > .glass > div:first-child .logo-glass {
+      height: 58px;
+      width: 58px;
+      flex-shrink: 0;
+    }
+    .ep-login > .max-w-md > .glass > div:first-child .logo-glass > div {
+      height: 48px;
+      width: 48px;
+    }
+    .ep-login > .max-w-md > .glass > div:first-child .mt-3 {
+      margin-top: 0;
+      max-width: 240px;
+    }
+    .ep-login > .max-w-md > .glass > div:first-child h1 {
+      font-size: 18px !important;
+      margin: 3px 0;
+    }
+    .ep-login > .max-w-md > .glass > div:first-child p {
+      font-size: 9px;
+    }
+    .ep-login > .max-w-md > .glass > div:first-child:after {
+      display: none;
+    }
+    .ep-login > .max-w-md > .glass > div:nth-child(2) {
+      padding: 25px 23px !important;
+    }
+    .ep-login input {
+      font-size: 16px !important;
+    }
+    .ep-login .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 20px;
+    }
+    .ep-login .font-display.text-2xl {
+      font-size: 24px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .edupay-app-shell *,
+    .ep-login * {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@media screen{[data-edupay-kpis] .ep-kpi-top{display:flex;align-items:flex-start;gap:8px}[data-edupay-kpis] .ep-kpi-top>p{flex:1;text-transform:none;letter-spacing:0;font-size:11px;line-height:1.45;overflow-wrap:normal;word-break:normal}[data-edupay-kpis] .ep-kpi-icon{display:grid;place-items:center;height:26px;width:26px;flex-shrink:0;border:1px solid currentColor;border-radius:8px;background:transparent}[data-edupay-kpis] .ep-kpi-icon svg{width:14px;height:14px}[data-edupay-kpis] .ep-kpi-value{font-size:clamp(17px,1.8vw,25px)!important;letter-spacing:-.03em;margin-top:16px;line-height:1.2;overflow-wrap:anywhere}[data-edupay-kpis] .ep-kpi-detail{margin-top:7px;font-size:10px!important;line-height:1.5}.ep-header-brand-label{display:block}@media(max-width:640px){.ep-header-brand-label>p:first-child{font-size:12px!important;line-height:1.2;max-width:86px}.ep-header-brand-label>p:last-child{display:none}[data-edupay-renewal-header]>div>div:first-child{padding:6px!important;min-height:48px}[data-edupay-renewal-header]>div>div:first-child>div:first-child{gap:8px}[data-edupay-renewal-header]>div>div:last-child{margin-top:5px!important;padding:4px!important}[data-edupay-kpis] .ep-kpi-top>p{font-size:10px!important;min-height:29px}[data-edupay-kpis] .ep-kpi-icon{width:23px;height:23px;border-radius:7px}[data-edupay-kpis] .ep-kpi-icon svg{width:12px!important;height:12px!important}[data-edupay-kpis] .ep-kpi-value{margin-top:12px;font-size:20px!important}[data-edupay-kpis] .ep-kpi-detail{font-size:9px!important}}}
+
+@media screen{.ep-old-mobile-preferences{display:none!important}.ep-profile-preferences>*{max-width:100%}@media(max-width:640px){[data-edupay-renewal-header]>div{padding-block:8px!important}.ep-profile-preferences{padding:12px;gap:8px}.ep-profile-preferences .text-sm{font-size:11px}.ep-profile-preferences .text-xs{font-size:10px}}}

@@ -281,17 +281,10 @@ function MetricCard({
   tone: string;
 }) {
   return (
-    <div className="card glass border border-white/10 shadow-lg">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-dim">{label}</p>
-          <p className="mt-3 font-display text-2xl font-bold text-white">{value}</p>
-          <p className="mt-2 text-xs text-ink-dim">{detail}</p>
-        </div>
-        <div className={`rounded-2xl border p-3 ${tone}`}>
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
+    <div className="ep-kpi card glass border border-white/10 shadow-lg">
+      <div className="ep-kpi-top"><p className="text-xs font-semibold text-ink-dim">{label}</p><span className={`ep-kpi-icon ${tone}`}><Icon aria-hidden="true" /></span></div>
+      <p className="ep-kpi-value font-display font-bold text-white">{value}</p>
+      <p className="ep-kpi-detail text-xs text-ink-dim">{detail}</p>
     </div>
   );
 }
@@ -1375,16 +1368,16 @@ export function FinanceDashboardPage() {
           {expenseOverviewNotice}
         </div>
       )}
-      <section className="relative overflow-hidden rounded-[2rem] border border-brand-300/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_30%),radial-gradient(circle_at_top_right,rgba(59,130,246,0.18),transparent_35%),linear-gradient(160deg,rgba(15,23,42,0.98),rgba(2,6,23,0.96))] px-6 py-6 shadow-2xl">
+      <section data-edupay-finance-hero className="relative overflow-hidden rounded-[2rem] border border-brand-300/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_30%),radial-gradient(circle_at_top_right,rgba(59,130,246,0.18),transparent_35%),linear-gradient(160deg,rgba(15,23,42,0.98),rgba(2,6,23,0.96))] px-6 py-6 shadow-2xl">
         <div className="absolute inset-y-0 right-0 w-1/3 bg-[linear-gradient(90deg,transparent,rgba(125,232,255,0.07))]" />
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-4xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-200">{L("Tableau financier EduPay 2026-2027", "EduPay Financial overview 2026-2027")}</p>
-            <h1 className="mt-2 font-display text-3xl font-bold text-white">{L("Pilotage unifié des revenus, des dépenses, de la paie et de la trésorerie", "Unified control of revenue, expenses, payroll and cash")}</h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-200">{L("FINANCES SCOLAIRES", "SCHOOL FINANCE")} · {revenueOverview.academicYear.name}</p>
+            <h1 className="mt-2 font-display text-3xl font-bold text-white">{L("Une vision claire. Des décisions éclairées.", "Clear numbers. Informed decisions.")}</h1>
             <p className="mt-3 max-w-3xl text-sm text-ink-dim">
               {L(
-                "EduPay devient un écosystème financier scolaire complet : encaissements, dettes des parents, dépenses institutionnelles, budgétisation, workflow d'approbation, paie et intelligence de trésorerie, tout en conservant le cadre de facturation parentale.",
-                "EduPay becomes a complete school finance ecosystem: collections, parent debts, institutional expenses, budgeting, approval workflow, payroll and cash-flow intelligence while preserving parent billing logic."
+                "Suivez les encaissements, les engagements et la trésorerie de l’école. Ouvrez une analyse pour retrouver chaque opération.",
+                "Follow school collections, commitments and cash flow. Open an analysis to trace the transactions behind each figure."
               )}
             </p>
             <div className="mt-5 flex flex-wrap gap-3 text-xs">
@@ -1408,11 +1401,11 @@ export function FinanceDashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+      <section data-edupay-kpis className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <MetricCard
-          label="Encaissements"
+          label={L("Encaissements", "Collections")}
           value={money.format(revenueOverview.collectedRevenue)}
-          detail={`${formatPercent(revenueOverview.paymentCompletionRate)} du net attendu`}
+          detail={L(`${formatPercent(revenueOverview.paymentCompletionRate)} du net attendu`, `${formatPercent(revenueOverview.paymentCompletionRate)} of expected net`)}
           icon={WalletCards}
           tone="border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
         />
@@ -1424,30 +1417,30 @@ export function FinanceDashboardPage() {
           tone="border-cyan-500/30 bg-cyan-500/10 text-cyan-300"
         />
         <MetricCard
-          label="Dépenses approuvées"
+          label={L("Dépenses approuvées", "Approved expenses")}
           value={money.format(expenseOverview.expenses.totalExpenses)}
-          detail={`${expenseOverview.expenses.approvedExpenses} dépenses validées`}
+          detail={L(`${expenseOverview.expenses.approvedExpenses} dépenses validées`, `${expenseOverview.expenses.approvedExpenses} approved expenses`)}
           icon={BadgeDollarSign}
           tone="border-red-500/30 bg-red-500/10 text-red-300"
         />
         <MetricCard
-          label="Trésorerie disponible"
+          label={L("Trésorerie disponible", "Available cash")}
           value={money.format(expenseOverview.cashflow.availableCash)}
-          detail={`${formatPercent(Math.max(0, 100 - spendCoverage))} de marge sur les encaissements`}
+          detail={L(`${formatPercent(Math.max(0, 100 - spendCoverage))} de marge sur les encaissements`, `${formatPercent(Math.max(0, 100 - spendCoverage))} collection headroom`)}
           icon={Landmark}
           tone="border-brand-500/30 bg-brand-500/10 text-brand-200"
         />
         <MetricCard
-          label="Masse salariale"
+          label={L("Masse salariale", "Payroll")}
           value={money.format(expenseOverview.payroll.totalPayroll)}
-          detail={`${expenseOverview.payroll.activeProfiles} profils salariés actifs`}
+          detail={L(`${expenseOverview.payroll.activeProfiles} profils salariés actifs`, `${expenseOverview.payroll.activeProfiles} active salary profiles`)}
           icon={TrendingUp}
           tone="border-cyan-500/30 bg-cyan-500/10 text-cyan-300"
         />
         <MetricCard
-          label="Passifs"
+          label={L("Passifs", "Liabilities")}
           value={money.format(expenseOverview.liabilities.supplierDebt + expenseOverview.liabilities.payrollLiability)}
-          detail={`${expenseOverview.expenses.pendingApprovalSteps} étapes d'approbation en attente`}
+          detail={L(`${expenseOverview.expenses.pendingApprovalSteps} étapes d’approbation en attente`, `${expenseOverview.expenses.pendingApprovalSteps} approval steps pending`)}
           icon={ShieldAlert}
           tone="border-amber-500/30 bg-amber-500/10 text-amber-300"
         />
@@ -2252,7 +2245,7 @@ export function FinanceDashboardPage() {
             <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
                 <ScienceIndicator label="Profils salaries" value={String(expenseOverview.payroll.activeProfiles)} detail="Employes actifs dans le perimetre RH financier." />
-                <ScienceIndicator label="Masse salariale" value={money.format(expenseOverview.payroll.totalPayroll)} detail="Total net traite dans les runs de paie." tone="text-brand-100" />
+                <ScienceIndicator label={L("Masse salariale", "Payroll")} value={money.format(expenseOverview.payroll.totalPayroll)} detail="Total net traite dans les runs de paie." tone="text-brand-100" />
                 <ScienceIndicator label="Passif salarial" value={money.format(expenseOverview.payroll.salaryLiability)} detail="Obligation RH restant a couvrir." tone="text-amber-300" />
                 <ScienceIndicator label="Passifs institutionnels" value={money.format(totalInstitutionalLiabilities)} detail="Fournisseurs, paie et obligations cumulees." tone="text-red-300" />
               </div>

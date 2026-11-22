@@ -335,7 +335,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen grid place-items-center relative overflow-hidden px-4 py-8">
+    <div className="ep-login min-h-screen grid place-items-center relative overflow-hidden px-4 py-8">
       {showForgot && <ForgotPasswordModal initialResetToken={resetTokenFromUrl} onClose={() => setShowForgot(false)} t={t} lang={lang} />}
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
