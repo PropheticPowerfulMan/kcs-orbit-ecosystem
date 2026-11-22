@@ -104,6 +104,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/admin/communications', label: t('portalNav.communications'), icon: Megaphone },
         { to: '/admin/discipline', label: t('portalNav.discipline'), icon: AlertTriangle },
         { to: '/admin/suspensions', label: language === 'fr' ? 'Suspensions' : 'Suspensions', icon: Ban },
+        { to: '/admin/school-history', label: language === 'fr' ? 'Historique scolaire' : 'School history', icon: LibraryBig },
         { to: '/admin/student-archives', label: language === 'fr' ? 'Archives élèves' : 'Learner Archives', icon: Archive },
         { to: '/admin/employees', label: t('portalNav.employees'), icon: Users },
         { to: '/admin/admissions', label: t('portalNav.admissions'), icon: ClipboardList },

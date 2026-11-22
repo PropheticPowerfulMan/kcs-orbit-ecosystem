@@ -1,3 +1,6 @@
+import {preserveCourseHistory} from '../services/schoolHistory.service.js'
+import {databaseActorId} from '../utils/databaseActor.js'
+import type {AuthenticatedRequest} from '../middleware/auth.js'
 import { Router } from 'express'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles } from '../middleware/auth.js'
@@ -35,8 +38,8 @@ coursesRouter.put('/:id', authenticate, requireRoles('admin'), asyncHandler(asyn
   return success(res, course, 'Course updated')
 }))
 
-coursesRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
-  const courseId = getRouteParam(req.params.id)
-  await prisma.course.delete({ where: { id: courseId } })
+coursesRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req:AuthenticatedRequest, res) => {
+  const courseId = getRouteParam(req.params.id),actorId=await databaseActorId(req.user!.sub)
+  await prisma.$transaction(async tx=>{await preserveCourseHistory(tx,courseId,actorId);await tx.course.delete({where:{id:courseId}})},{maxWait:10000,timeout:30000})
   return success(res, null, 'Course deleted')
 }))

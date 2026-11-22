@@ -27,7 +27,7 @@ test('approved records retain the official English transcript and verification Q
  const doc=await officialTranscriptDocument(fixture(true))
  assert.equal(doc.preview,false)
  assert.doesNotMatch(doc.documentId,/PREVIEW/)
- assert.match(doc.html,/Official Academic Transcript/)
+ assert.match(doc.html,/Official Academic <b>Transcript/)
  assert.match(doc.html,/Official · Verified source/)
  assert.match(doc.html,/alt="Verification QR code"/)
  assert.match(doc.html,/Algebra/)
@@ -46,3 +46,8 @@ test('verification links use the configured staging frontend without changing of
   }
  }finally{if(previous===undefined)delete process.env.FRONTEND_URL;else process.env.FRONTEND_URL=previous}
 })
+
+
+test('transcript edition includes full coverage, progression and exact official averages',async()=>{
+ const doc=await officialTranscriptDocument(fixture(true));assert.match(doc.html,/Academic progression/);assert.match(doc.html,/88.00/);assert.match(doc.html,/Credit-weighted average/);assert.match(doc.html,/Not yet on file/);assert.match(doc.html,/table-header-group/);assert.match(doc.html,/Digital document identity/);assert.doesNotMatch(doc.html,/https?:[^<]*fonts\.googleapis/);
+});
