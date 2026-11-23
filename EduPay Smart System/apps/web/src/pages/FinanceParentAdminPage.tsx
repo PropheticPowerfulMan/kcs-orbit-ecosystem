@@ -1,3 +1,4 @@
+import {FinanceAlertMessage} from '../components/FinanceAlertMessage';
 import { uiText, uiStatus } from "../uiText";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1340,7 +1341,7 @@ export function FinanceParentAdminPage() {
                       {snapshot.alerts.map((alert) => (
                         <article key={alert.id} className={`rounded-2xl border p-4 ${tone(alert.severity)}`}>
                           <p className="font-semibold text-white">{alert.title}</p>
-                          <p className="mt-1 text-sm opacity-90">{alert.message}</p>
+                          <FinanceAlertMessage message={alert.message} lang={lang}/>
                         </article>
                       ))}
                     </div>
@@ -1737,30 +1738,7 @@ export function FinanceParentAdminPage() {
                     </div>
                   </div>
 
-                  <div className="card glass border border-white/10 shadow-lg">
-                    <h3 className="font-display text-xl font-bold text-white">{copy.alertsAndDebts}</h3>
-                    <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                      <div className="space-y-3">
-                        {snapshot.alerts.length === 0 && <p className="text-sm text-ink-dim">{copy.noAlert}</p>}
-                        {snapshot.alerts.map((alert) => (
-                          <div key={alert.id} className={`rounded-2xl border p-4 ${tone(alert.severity)}`}>
-                            <p className="font-semibold text-white">{alert.title}</p>
-                            <p className="mt-1 text-sm opacity-90">{alert.message}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="space-y-3">
-                        {snapshot.debts.length === 0 && <p className="text-sm text-ink-dim">{copy.noActiveDebt}</p>}
-                        {snapshot.debts.map((debt) => (
-                          <div key={debt.id} className={`rounded-2xl border p-4 ${tone(debt.status)}`}>
-                            <p className="font-semibold text-white">{debt.title}</p>
-                            <p className="mt-1 text-sm opacity-90">{formatCopy(copy.remaining, { amount: money.format(debt.amountRemaining) })}</p>
-                            {debt.carriedOverFromYearId && <p className="mt-1 text-xs opacity-80">{formatCopy(copy.carryOverFrom, { year: debt.carriedOverFromYearId })}</p>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+
                 </div>
 
                 <div className="space-y-6">
@@ -1801,6 +1779,30 @@ export function FinanceParentAdminPage() {
                     </div>
                   </div>
                 </div>
+                  <div className="ep-alerts-debts xl:col-span-2 card glass border border-white/10 shadow-lg">
+                    <h3 className="font-display text-xl font-bold text-white">{copy.alertsAndDebts}</h3>
+                    <div className="ep-alerts-debts-grid">
+                      <div className="ep-alert-list edupay-scrollbar" tabIndex={0} aria-label={lang === "fr" ? "Alertes du parent" : "Parent alerts"}><h4>{lang === "fr" ? "Alertes" : "Alerts"} <span>{snapshot.alerts.length}</span></h4>
+                        {snapshot.alerts.length === 0 && <p className="text-sm text-ink-dim">{copy.noAlert}</p>}
+                        {snapshot.alerts.map((alert) => (
+                          <div key={alert.id} className={`rounded-2xl border p-4 ${tone(alert.severity)}`}>
+                            <p className="font-semibold text-white">{alert.title}</p>
+                            <FinanceAlertMessage message={alert.message} lang={lang}/>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="ep-debt-list edupay-scrollbar" tabIndex={0} aria-label={lang === "fr" ? "Dettes du parent" : "Parent debts"}><h4>{lang === "fr" ? "Dettes" : "Debts"} <span>{snapshot.debts.length}</span></h4>
+                        {snapshot.debts.length === 0 && <p className="text-sm text-ink-dim">{copy.noActiveDebt}</p>}
+                        {snapshot.debts.map((debt) => (
+                          <div key={debt.id} className={`rounded-2xl border p-4 ${tone(debt.status)}`}>
+                            <p className="font-semibold text-white">{debt.title}</p>
+                            <p className="mt-1 text-sm opacity-90">{formatCopy(copy.remaining, { amount: money.format(debt.amountRemaining) })}</p>
+                            {debt.carriedOverFromYearId && <p className="mt-1 text-xs opacity-80">{formatCopy(copy.carryOverFrom, { year: debt.carriedOverFromYearId })}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
               </div>
               </details>
             </>

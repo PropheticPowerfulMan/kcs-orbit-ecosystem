@@ -262,6 +262,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const language = useUIStore((state) => state.language)
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const sectionTitles: Record<string, { title: string; subtitle: string; icon: React.ElementType }> = {
+    pedagogy: { title: tr('Curriculum et progression','Curriculum & progress'), subtitle: tr('Le programme officiel du ST, votre avancement et vos ressources partagées.','The ST’s official curriculum, your progress and shared resources.'), icon: BookOpen },
     courses: { title: 'My Courses', subtitle: 'Assigned classes, rooms, schedules, and teaching load.', icon: BookOpen },
     students: { title: 'Students', subtitle: 'Academic profile, risk level, strengths, and support needs for each learner.', icon: Users },
     'course-attendance': { title: tr('Présences par cours','Course attendance'), subtitle: tr('Pointages des séances et régularité de vos élèves.','Session check-ins and learner course regularity.'), icon: ClipboardCheck },
