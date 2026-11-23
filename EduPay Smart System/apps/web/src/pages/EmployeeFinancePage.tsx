@@ -1,3 +1,4 @@
+import { uiText, uiLocale, uiStatus } from "../uiText";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, CircleDollarSign, MailCheck, MessageSquareText, ShieldAlert, WalletCards } from "lucide-react";
 import { api } from "../services/api";
@@ -103,32 +104,32 @@ type EmployeeFinanceSnapshot = {
 };
 
 function money(amount: number, currency = "USD") {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency }).format(Number.isFinite(amount) ? amount : 0);
+  return new Intl.NumberFormat(uiLocale(), { style: "currency", currency }).format(Number.isFinite(amount) ? amount : 0);
 }
 
 function dateLabel(value?: string | null) {
-  if (!value) return "Non defini";
+  if (!value) return uiText("Non defini");
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Non defini";
-  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(date);
+  if (Number.isNaN(date.getTime())) return uiText("Non defini");
+  return new Intl.DateTimeFormat(uiLocale(), { dateStyle: "medium" }).format(date);
 }
 
 function typeLabel(value: string) {
-  if (value === "SALARY_ADVANCE") return "Avance sur salaire";
-  if (value === "SCHOOL_DEBT") return "Dette envers l'ecole";
-  return "Autre engagement";
+  if (value === "SALARY_ADVANCE") return uiText("Avance sur salaire");
+  if (value === "SCHOOL_DEBT") return uiText("Dette envers l'ecole");
+  return uiText("Autre engagement");
 }
 
 function methodLabel(value: string) {
-  if (value === "SALARY_DEDUCTION") return "Deduction salaire";
-  if (value === "EXTERNAL_PAYMENT") return "Paiement hors salaire";
-  return "Mixte";
+  if (value === "SALARY_DEDUCTION") return uiText("Deduction salaire");
+  if (value === "EXTERNAL_PAYMENT") return uiText("Paiement hors salaire");
+  return uiText("Mixte");
 }
 
 function modeLabel(value?: string) {
-  if (value === "MANUAL") return "Manuel";
-  if (value === "HYBRID") return "Hybride";
-  return "Automatique";
+  if (value === "MANUAL") return uiText("Manuel");
+  if (value === "HYBRID") return uiText("Hybride");
+  return uiText("Automatique");
 }
 
 export function EmployeeFinancePage() {
@@ -171,7 +172,7 @@ export function EmployeeFinancePage() {
   }
 
   if (error) {
-    return <div className="rounded-2xl border border-danger/40 bg-danger/10 p-5 text-sm text-danger">{error}</div>;
+    return <div className="rounded-2xl border border-danger/40 bg-danger/10 p-5 text-sm text-danger">{uiText(error)}</div>;
   }
 
   if (!snapshot) return null;
@@ -204,7 +205,7 @@ export function EmployeeFinancePage() {
           { label: L("Salaire mensuel", "Monthly salary"), value: money(snapshot.salaryProjection.grossSalary, currency), sub: modeLabel(snapshot.salaryProjection.mode), icon: WalletCards, color: "text-white" },
           { label: L("Net prévisionnel", "Projected net"), value: money(snapshot.salaryProjection.netSalary, currency), sub: `${snapshot.salaryProjection.salaryPressure.toFixed(1)}% deduit`, icon: CircleDollarSign, color: "text-emerald-300" },
           { label: L("Déductions du mois", "Monthly deductions"), value: money(snapshot.salaryProjection.totalDeductions, currency), sub: `Plafond ${snapshot.salaryProjection.maxDeductionRate.toFixed(0)}%`, icon: ShieldAlert, color: "text-amber-300" },
-          { label: L("Transparence", "Transparency"), value: `${snapshot.communicationHistory.length} avis`, sub: "SMS / email / dashboard", icon: MailCheck, color: "text-cyan-300" },
+          { label: L("Transparence", "Transparency"), value: `${snapshot.communicationHistory.length} ${L("avis", "notices")}`, sub: uiText("SMS / email / dashboard"), icon: MailCheck, color: "text-cyan-300" },
         ].map((card) => (
           <div key={card.label} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
             <card.icon className={`h-5 w-5 ${card.color}`} />
@@ -273,7 +274,7 @@ export function EmployeeFinancePage() {
                 </div>
               </div>
               <div className="text-xs text-ink-dim sm:text-right">
-                <p>{message.channel} - {message.status}</p>
+                <p>{uiStatus(message.channel)} - {uiStatus(message.status)}</p>
                 <p>{dateLabel(message.createdAt)}</p>
               </div>
             </div>
@@ -304,12 +305,12 @@ export function EmployeeFinancePage() {
                 <tr key={item.id} className="border-t border-white/5">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-white">{item.title}</p>
-                    <p className="text-xs text-ink-dim">{typeLabel(item.type)} - {L("risque", "risk")} {item.riskLevel}</p>
+                    <p className="text-xs text-ink-dim">{typeLabel(item.type)} - {L("risque", "risk")} {uiStatus(item.riskLevel)}</p>
                   </td>
                   <td className="px-4 py-3 text-ink-dim">{methodLabel(item.repaymentMethod)}</td>
                   <td className="px-4 py-3 font-semibold text-white">{money(item.balance, item.currency)}</td>
                   <td className="px-4 py-3 text-ink-dim">{dateLabel(item.dueDate)}</td>
-                  <td className="px-4 py-3 text-ink-dim">{item.status}</td>
+                  <td className="px-4 py-3 text-ink-dim">{uiStatus(item.status)}</td>
                 </tr>
               ))}
               {filteredObligations.length === 0 ? (

@@ -1,3 +1,4 @@
+import { uiText } from "../uiText";
 import { ArrowRight, ArrowUpRight, LockKeyhole, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
@@ -186,7 +187,7 @@ function ForgotPasswordModal({ onClose, t, lang, initialResetToken = "" }: { onC
                   className="w-full"
                   autoFocus
                 />
-                {error && <p className="text-xs text-danger">{error}</p>}
+                {error && <p className="text-xs text-danger">{uiText(error)}</p>}
               </div>
               <button
                 type="submit"
@@ -224,8 +225,8 @@ function ForgotPasswordModal({ onClose, t, lang, initialResetToken = "" }: { onC
               <input type="password" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} placeholder={t("adminRecoveryCode")} className="w-full" />
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t("newPasswordField")} className="w-full" />
               <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={t("confirmNewPassword")} className="w-full" />
-              {error && <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-              {successMessage && <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{successMessage}</p>}
+              {error && <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{uiText(error)}</p>}
+              {successMessage && <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{uiText(successMessage)}</p>}
               <button type="submit" disabled={loading} className="w-full btn-primary py-3 font-semibold disabled:opacity-50">
                 {loading ? t("forgotSending") : t("adminRecoverySubmit")}
               </button>
@@ -270,10 +271,10 @@ function ForgotPasswordModal({ onClose, t, lang, initialResetToken = "" }: { onC
               />
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t("newPasswordField")} className="w-full" />
               <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={t("confirmNewPassword")} className="w-full" />
-              {error && <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-              {successMessage && resetToken === "" && <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{successMessage}</p>}
+              {error && <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{uiText(error)}</p>}
+              {successMessage && resetToken === "" && <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{uiText(successMessage)}</p>}
               <button type="submit" disabled={loading} className="w-full btn-primary py-3 font-semibold disabled:opacity-50">
-                {loading ? t("forgotSending") : "Reinitialiser le mot de passe"}
+                {loading ? t("forgotSending") : uiText("Reinitialiser le mot de passe")}
               </button>
               <button type="button" onClick={onClose} className="w-full rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">{t("forgotClose")}</button>
             </form>
@@ -395,7 +396,7 @@ export function LoginPage() {
               </div>
               {errors.password && <p className="ep-login-error">{errors.password.message}</p>}
             </div>
-            {apiError && <div className="ep-login-api-error" role="alert">{apiError}</div>}
+            {apiError && <div className="ep-login-api-error" role="alert">{uiText(apiError)}</div>}
             <button disabled={isSubmitting} className="ep-login-submit btn-primary">
               {isSubmitting ? <span className="ep-login-spinner" aria-hidden="true" /> : <LockKeyhole size={18} />}
               <span>{isSubmitting ? t("signingIn") : t("signIn")}</span>

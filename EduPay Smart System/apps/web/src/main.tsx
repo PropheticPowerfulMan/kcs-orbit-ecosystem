@@ -1,3 +1,4 @@
+import {AppUpdateNotice} from "./components/AppUpdateNotice";
 import './buttonProcessingFeedback.js'
 import InstallAppButton from "./components/InstallAppButton";
 import React from "react";
@@ -48,11 +49,6 @@ if (shouldDisableServiceWorker && "serviceWorker" in navigator) {
   });
 }
 
-if (!shouldDisableServiceWorker && import.meta.env.PROD && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
-  });
-}
 
 forceFavicon();
 applyStoredFont();
@@ -67,6 +63,7 @@ if (!isReceiptRedirecting) {
           <HashRouter>
             <App />
             <MutationFeedback />
+            {!shouldDisableServiceWorker && <AppUpdateNotice />}
             <InstallAppButton />
           </HashRouter>
         </I18nProvider>

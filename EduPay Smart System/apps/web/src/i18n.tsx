@@ -1,3 +1,4 @@
+import { getUiLanguage, persistUiLanguage } from "./uiText";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 export type Lang = "fr" | "en";
@@ -542,19 +543,15 @@ type I18nValue = {
 const I18nContext = createContext<I18nValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(() => {
-    const saved = localStorage.getItem("edupay_lang");
-    return saved === "en" ? "en" : "fr";
-  });
+  const [lang, setLangState] = useState<Lang>(getUiLanguage);
 
   useEffect(() => {
-    localStorage.setItem("edupay_lang", lang);
-    document.documentElement.lang = lang;
+    persistUiLanguage(lang);
   }, [lang]);
 
   const value = useMemo<I18nValue>(() => ({
     lang,
-    setLang: (next) => setLangState(next),
+    setLang: (next) => { persistUiLanguage(next); setLangState(next); },
     t: (key) => dictionaries[lang][key] || dictionaries.fr[key] || key
   }), [lang]);
 

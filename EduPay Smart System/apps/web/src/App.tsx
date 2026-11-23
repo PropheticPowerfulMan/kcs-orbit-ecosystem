@@ -1,3 +1,5 @@
+import { useI18n } from "./i18n";
+import { uiText } from "./uiText";
 import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { DashboardGreeting } from "./components/DashboardGreeting";
@@ -30,12 +32,12 @@ const ReportsPage = lazy(() => import("./pages/ReportsPage").then((module) => ({
 const StudentsDirectoryPage = lazy(() => import("./pages/StudentsDirectoryPage").then((module) => ({ default: module.StudentsDirectoryPage })));
 
 function PageLoadingFallback() {
+  useI18n();
   return (
     <div className="flex min-h-[40vh] items-center justify-center px-4">
       <div className="glass flex items-center gap-3 rounded-2xl border border-brand-300/20 px-5 py-4 text-sm font-semibold text-ink-dim shadow-xl">
         <div className="h-3 w-3 animate-pulse rounded-full bg-brand-300" />
-        Chargement sécurisé de la page EduPay…
-      </div>
+        {uiText("Chargement sécurisé de la page EduPay…")}</div>
     </div>
   );
 }
@@ -109,6 +111,7 @@ function RoleHome() {
 }
 
 function NotFoundPage() {
+  useI18n();
   const role = useAuthStore((s) => s.role);
   const token = useAuthStore((s) => s.token);
   const homePath = token ? getHomePathByRole(role) : "/login";
@@ -116,14 +119,12 @@ function NotFoundPage() {
   return (
     <div className="flex min-h-[65vh] items-center justify-center px-4">
       <div className="glass max-w-md rounded-2xl border border-brand-500/20 p-8 text-center shadow-xl">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-300">Page introuvable</p>
-        <h1 className="mt-3 font-display text-3xl font-bold text-white">Cette section n'existe pas</h1>
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-300">{uiText("Page introuvable")}</p>
+        <h1 className="mt-3 font-display text-3xl font-bold text-white">{uiText("Cette section n'existe pas")}</h1>
         <p className="mt-3 text-sm text-ink-dim">
-          La navigation EduPay est toujours disponible. Revenez a l'espace adapte a votre role.
-        </p>
+          {uiText("La navigation EduPay est toujours disponible. Revenez a l'espace adapte a votre role.")}</p>
         <a href={`#${homePath}`} className="btn-primary mt-6 inline-flex px-5 py-3 text-sm font-semibold">
-          Retour a l'accueil
-        </a>
+          {uiText("Retour a l'accueil")}</a>
       </div>
     </div>
   );
@@ -140,6 +141,7 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<ProtectedLayout />}>
           <Route index element={<RoleHome />} />
+          <Route path="dashboard" element={<Navigate to="/" replace />} />
           <Route element={<RoleRoute allowedRoles={STAFF_ROLES} />}>
             <Route path="operations" element={withPageLoader(<FinancialOperationsPage />)} />
             <Route path="reports" element={withPageLoader(<ReportsPage />)} />
@@ -166,4 +168,3 @@ export function App() {
     </Routes>
   );
 }
-

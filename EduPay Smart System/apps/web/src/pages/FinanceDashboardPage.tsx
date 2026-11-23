@@ -1,3 +1,4 @@
+import { uiText, uiStatus } from "../uiText";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
@@ -1537,12 +1538,12 @@ export function FinanceDashboardPage() {
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {[
-              ["Profit / perte", money.format(expenseOverview.cashflow.profitLoss), expenseOverview.cashflow.profitLoss >= 0 ? "text-emerald-300" : "text-red-300"],
-              ["Dette fournisseurs", money.format(expenseOverview.liabilities.supplierDebt), "text-amber-200"],
-              ["Passif salarial", money.format(expenseOverview.liabilities.payrollLiability), "text-cyan-200"],
-              ["Dettes parents", money.format(revenueOverview.totalDebt), "text-red-300"],
-              ["Budgets sous tension", String(expenseOverview.budgetAlerts.length), "text-white"],
-              ["Alertes revenus", String(revenueOverview.activeAlerts), "text-brand-100"]
+              [uiText("Profit / perte"), money.format(expenseOverview.cashflow.profitLoss), expenseOverview.cashflow.profitLoss >= 0 ? "text-emerald-300" : "text-red-300"],
+              [uiText("Dette fournisseurs"), money.format(expenseOverview.liabilities.supplierDebt), "text-amber-200"],
+              [uiText("Passif salarial"), money.format(expenseOverview.liabilities.payrollLiability), "text-cyan-200"],
+              [uiText("Dettes parents"), money.format(revenueOverview.totalDebt), "text-red-300"],
+              [uiText("Budgets sous tension"), String(expenseOverview.budgetAlerts.length), "text-white"],
+              [uiText("Alertes revenus"), String(revenueOverview.activeAlerts), "text-brand-100"]
             ].map(([label, value, color]) => (
               <div key={label} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{label}</p>
@@ -1579,9 +1580,9 @@ export function FinanceDashboardPage() {
           </div>
           <div className="mt-5 space-y-3">
             {[
-              ["1", "Officier financier", "Contrôle catégorie, budget, pièce justificative et période comptable."],
-              ["2", "Administration", "Autorise la sortie de fonds et la cohérence départementale."],
-              ["3", "Owner / Direction", "Valide les dépenses sensibles, urgentes ou stratégiques."]
+              ["1", uiText("Officier financier"), uiText("Contrôle catégorie, budget, pièce justificative et période comptable.")],
+              ["2", uiText("Administration"), uiText("Autorise la sortie de fonds et la cohérence départementale.")],
+              ["3", uiText("Owner / Direction"), uiText("Valide les dépenses sensibles, urgentes ou stratégiques.")]
             ].map(([step, label, detail]) => (
               <div key={step} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <div className="flex gap-3">
@@ -1705,7 +1706,7 @@ export function FinanceDashboardPage() {
                     <p className="mt-1 text-xs text-ink-dim">{budget.department} • {budget.periodName} • {budget.categoryName ?? "Global"}</p>
                   </div>
                   <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${budgetStatusTone[budget.status] ?? budgetStatusTone.ACTIVE}`}>
-                    {budget.status}
+                    {uiStatus(budget.status)}
                   </span>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
@@ -1763,7 +1764,7 @@ export function FinanceDashboardPage() {
                       <p className="mt-1 text-xs text-ink-dim">{run.department ?? "RH"} • {run.periodName ?? "Période non definie"}</p>
                     </div>
                     <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${payrollStatusTone[run.status] ?? payrollStatusTone.DRAFT}`}>
-                      {run.status}
+                      {uiStatus(run.status)}
                     </span>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-sm">
@@ -1792,7 +1793,7 @@ export function FinanceDashboardPage() {
                       <p className="mt-1 text-xs text-ink-dim">{expense.department} • {expense.categoryName}</p>
                     </div>
                     <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${expenseStatusTone[expense.status] ?? expenseStatusTone.PENDING}`}>
-                      {expense.status}
+                      {uiStatus(expense.status)}
                     </span>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-sm">
@@ -2207,7 +2208,7 @@ export function FinanceDashboardPage() {
                         <p className="font-semibold text-white">{expense.title}</p>
                         <p className="text-xs text-ink-dim">{expense.department} · {expense.categoryName}</p>
                       </div>
-                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${expenseStatusTone[expense.status] ?? expenseStatusTone.PENDING}`}>{expense.status}</span>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${expenseStatusTone[expense.status] ?? expenseStatusTone.PENDING}`}>{uiStatus(expense.status)}</span>
                     </div>
                     <p className="mt-3 font-mono text-sm font-bold text-white">{money.format(expense.amount)}</p>
                   </div>
@@ -2225,7 +2226,7 @@ export function FinanceDashboardPage() {
                       <p className="font-semibold text-white">{budget.name}</p>
                       <p className="text-xs text-ink-dim">{budget.department} · {budget.periodName} · {budget.categoryName ?? "Global"}</p>
                     </div>
-                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${budgetStatusTone[budget.status] ?? budgetStatusTone.ACTIVE}`}>{budget.status}</span>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${budgetStatusTone[budget.status] ?? budgetStatusTone.ACTIVE}`}>{uiStatus(budget.status)}</span>
                   </div>
                   <div className="mt-3 grid gap-3 sm:grid-cols-4 text-sm">
                     <span className="text-ink-dim">{L("Prévu", "Planned")}: <b className="text-white">{money.format(budget.plannedAmount)}</b></span>
@@ -2257,7 +2258,7 @@ export function FinanceDashboardPage() {
                         <p className="font-semibold text-white">{run.title}</p>
                         <p className="text-xs text-ink-dim">{run.department ?? "RH"} · {run.periodName ?? "Période non definie"}</p>
                       </div>
-                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${payrollStatusTone[run.status] ?? payrollStatusTone.DRAFT}`}>{run.status}</span>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${payrollStatusTone[run.status] ?? payrollStatusTone.DRAFT}`}>{uiStatus(run.status)}</span>
                     </div>
                     <p className="mt-3 font-mono text-sm font-bold text-white">{money.format(run.totalNet)}</p>
                   </div>

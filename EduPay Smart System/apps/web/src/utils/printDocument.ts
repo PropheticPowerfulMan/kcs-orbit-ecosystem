@@ -1,3 +1,4 @@
+import {uiText,getUiLanguage} from "../uiText";
 export function printHtmlDocument(html: string) {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
@@ -28,6 +29,13 @@ export function printHtmlDocument(html: string) {
   frameDocument.open();
   frameDocument.write(html);
   frameDocument.close();
+  frameDocument.documentElement.lang=getUiLanguage();
+  // Translate only exact approved labels. Names, amounts and user-authored prose remain intact.
+  const walker=frameDocument.createTreeWalker(frameDocument.body,NodeFilter.SHOW_TEXT);
+  let node:Node|null;while((node=walker.nextNode())){
+   if(node.parentElement?.closest("script,style,code,pre,[data-user-content]"))continue;
+   if(node.textContent)node.textContent=uiText(node.textContent);
+  }
 
   const inlinePrintableImages = Promise.all(
     Array.from(frameDocument.images).map(async (image) => {

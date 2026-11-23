@@ -1,3 +1,4 @@
+import { responseCacheKey, clearResponseCaches } from "./responseCacheScope";
 import {
   buildDemoFinanceCatalog,
   buildDemoFinanceOverview,
@@ -34,7 +35,7 @@ const DEMO_PAYROLL_RUNS_KEY = "edupay_demo_payroll_runs_v1";
 const DEMO_EMPLOYEE_OBLIGATIONS_KEY = "edupay_demo_employee_obligations_v1";
 const DEMO_EMPLOYEES_KEY = "edupay_demo_employees_v2";
 const DEMO_EMPLOYEE_MESSAGES_KEY = "edupay_demo_employee_messages_v1";
-const API_RESPONSE_CACHE_PREFIX = "edupay_api_cache_v1:";
+const API_RESPONSE_CACHE_PREFIX = "edupay_api_cache_v1:"; // Remove legacy unscoped caches only.
 const OFFLINE_MUTATION_QUEUE_KEY = "edupay_offline_mutation_queue_v1";
 const LOCAL_DEMO_STORAGE_KEYS = [
   DEMO_PARENTS_KEY,
@@ -471,12 +472,14 @@ function isCacheableRequest(path: string, init?: RequestInit) {
 }
 
 function cacheKeyFor(path: string) {
-  return `${API_RESPONSE_CACHE_PREFIX}${path}`;
+  return responseCacheKey(path, localStorage.getItem(TOKEN_STORAGE_KEY));
 }
 
 function readCachedResponse<T>(path: string): T | null {
   try {
-    const raw = localStorage.getItem(cacheKeyFor(path));
+    const key = cacheKeyFor(path);
+    if (!key) return null;
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { value: T };
     return parsed.value;
@@ -491,7 +494,8 @@ export function getCachedApiResponse<T>(path: string): T | null {
 
 function writeCachedResponse(path: string, value: unknown) {
   try {
-    localStorage.setItem(cacheKeyFor(path), JSON.stringify({ cachedAt: new Date().toISOString(), value }));
+    const key = cacheKeyFor(path);
+    if (key) localStorage.setItem(key, JSON.stringify({ cachedAt: new Date().toISOString(), value }));
   } catch {
     // Storage may be full or unavailable; live API response still wins.
   }
@@ -502,6 +506,11 @@ const DIRECTORY_MEMORY_CACHE_TTL_MS = 30_000;
 const API_OFFLINE_FLUSH_THROTTLE_MS = 15_000;
 const memoryResponseCache = new Map<string, { expiresAt: number; value: unknown }>();
 const inFlightGetRequests = new Map<string, Promise<unknown>>();
+let memoryGeneration = 0;
+export function peekApiResponse<T>(path: string): T | null {
+ const token=localStorage.getItem(TOKEN_STORAGE_KEY)??"anonymous", cached=memoryResponseCache.get(`${token}:${path}`);
+ return cached && cached.expiresAt>Date.now() ? cached.value as T : null;
+}
 let offlineFlushPromise: Promise<unknown> | null = null;
 let lastOfflineFlushAt = 0;
 
@@ -3210,6 +3219,7 @@ function canUseParentSessionFallback(path: string, init?: RequestInit) {
 async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (shouldUseDemoApi(path)) return demoApi<T>(path, init);
 
+  const responseGeneration = memoryGeneration;
   const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
   if (LOCAL_API_FALLBACK_ENABLED && isLocalSessionToken(storedToken) && canFallbackToDemo(path, init)) {
     return demoApi<T>(path, init);
@@ -3220,12 +3230,16 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const token = storedToken ?? "";
+  const assertSameSession = () => { if ((localStorage.getItem(TOKEN_STORAGE_KEY) ?? "") !== token) throw new Error("Session changed. Please retry with the current account."); };
   const url = resolveApiUrl(path);
 
   let response: Response;
+  const readController = (init?.method ?? "GET").toUpperCase() === "GET" && !init?.signal ? new AbortController() : null;
+  const readDeadline = readController ? setTimeout(() => readController.abort(), 15000) : null;
   try {
     response = await fetch(url, {
       ...init,
+      ...(readController ? {signal:readController.signal} : {}),
       headers: {
         ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -3233,6 +3247,8 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
       }
     });
   } catch {
+    if(readDeadline)clearTimeout(readDeadline);
+    assertSameSession();
     const cached = isCacheableRequest(path, init) ? readCachedResponse<T>(path) : null;
     if (cached !== null) return cached;
     const queued = queueOfflineMutation(path, init);
@@ -3253,6 +3269,8 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error("Impossible de joindre l'API. Verifiez que le backend est demarre.");
   }
 
+  if(readDeadline)clearTimeout(readDeadline);
+  assertSameSession();
   if (!response.ok) {
     if (response.status === 401) {
       if (path === "/api/auth/login") {
@@ -3290,11 +3308,12 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (response.status === 204) return undefined as T;
 
   const text = await response.text();
+  assertSameSession();
   if (!text) return undefined as T;
 
   try {
     const parsed = JSON.parse(text) as T;
-    if (isCacheableRequest(path, init)) writeCachedResponse(path, parsed);
+    if (isCacheableRequest(path, init) && responseGeneration === memoryGeneration) writeCachedResponse(path, parsed);
     return parsed;
   } catch {
     return undefined as T;
@@ -3312,20 +3331,29 @@ export async function apiBlob(path: string): Promise<Blob> {
 }
 
 export function invalidateApiMemoryCache() {
+  memoryGeneration++;
   memoryResponseCache.clear();
   inFlightGetRequests.clear();
 }
 
+let pendingWrites=0;
+export const getPendingApiWrites=()=>pendingWrites;
+function writeState(delta:number){pendingWrites=Math.max(0,pendingWrites+delta);if(typeof window!=="undefined")window.dispatchEvent(new CustomEvent("edupay:write-state",{detail:pendingWrites}));}
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
   if (method !== "GET" || !path.startsWith("/api/")) {
+    writeState(1);
+    try {
     const result = await requestApi<T>(path, init);
     invalidateApiMemoryCache();
-    if (["PUT", "PATCH", "DELETE"].includes(method)) {
+    const queued = Boolean(result && typeof result === "object" && "offlineQueued" in result && result.offlineQueued);
+    if (!queued) clearResponseCaches();
+    if (!queued && ["PUT", "PATCH", "DELETE"].includes(method)) {
       const responseMessage = result && typeof result === "object" && "message" in result ? String((result as { message?: unknown }).message || "") : "";
       window.dispatchEvent(new CustomEvent("ecosystem:mutation-success", { detail: { message: responseMessage || (method === "DELETE" ? "Entité supprimée dans tout l’écosystème." : "Modification enregistrée et synchronisée dans l’écosystème.") } }));
     }
     return result;
+    } finally { writeState(-1); }
   }
 
   const token = localStorage.getItem(TOKEN_STORAGE_KEY) ?? "anonymous";
@@ -3337,19 +3365,19 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const inFlight = inFlightGetRequests.get(cacheKey);
   if (inFlight) return inFlight as Promise<T>;
 
+  const generation = memoryGeneration;
   const request = requestApi<T>(path, init)
     .then((value) => {
-      memoryResponseCache.set(cacheKey, {
+      if (generation === memoryGeneration && token === (localStorage.getItem(TOKEN_STORAGE_KEY) ?? "anonymous") && value !== undefined) memoryResponseCache.set(cacheKey, {
         expiresAt: Date.now() + getMemoryCacheTtl(path),
         value,
       });
       return value;
     })
     .finally(() => {
-      inFlightGetRequests.delete(cacheKey);
+      if (inFlightGetRequests.get(cacheKey) === request) inFlightGetRequests.delete(cacheKey);
     });
 
   inFlightGetRequests.set(cacheKey, request);
   return request;
 }
-

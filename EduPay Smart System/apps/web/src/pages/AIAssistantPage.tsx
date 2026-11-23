@@ -1,3 +1,4 @@
+import { uiText, uiLocale, uiStatus } from "../uiText";
 import { useMemo, useState } from "react";
 import { Bot, Eye, EyeOff, Lightbulb, MessageSquareText, Send, Sparkles, Trash2, Zap, Printer } from "lucide-react";
 import { useI18n } from "../i18n";
@@ -869,7 +870,7 @@ export function AIAssistantPage() {
       {error && (
         <div className="animate-fadeInUp rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-400">
           <p className="mb-1 font-semibold">{t("aiLocalMode")}</p>
-          <p>{error}</p>
+          <p>{uiText(error)}</p>
         </div>
       )}
 
@@ -887,7 +888,7 @@ export function AIAssistantPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-700/60 px-3 py-2 text-xs font-semibold text-ink-dim hover:bg-slate-800/60 hover:text-white"
               >
                 {historyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                {historyVisible ? "Masquer" : "Afficher"}
+                {historyVisible ? uiText("Masquer") : uiText("Afficher")}
               </button>
               <button
                 type="button"

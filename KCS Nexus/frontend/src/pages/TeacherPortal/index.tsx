@@ -1,3 +1,4 @@
+import NexusPedagogy from '@/components/shared/NexusPedagogy'
 import TeachingAttendanceWorkspace from '@/components/teachingAttendance/TeachingAttendanceWorkspace'
 import SubjectEnrollmentWorkspace from '@/components/teacher/SubjectEnrollmentWorkspace'
 import DashboardPanels from '@/components/shared/DashboardPanels'
@@ -465,7 +466,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   })
 
   useEffect(() => {
-    if (!user?.id || ['attendance', 'course-attendance', 'assignments', 'report-card', 'messages'].includes(segment)) return
+    if (!user?.id || ['attendance', 'course-attendance', 'assignments', 'report-card', 'messages', 'pedagogy'].includes(segment)) return
     if (workspaceLoadedUserRef.current === user.id) return
     const requestToken = ++workspaceRequestTokenRef.current
     let active = true
@@ -525,7 +526,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }
 
   useEffect(() => {
-    if (['attendance', 'course-attendance', 'assignments', 'report-card', 'messages'].includes(segment)) {
+    if (['attendance', 'course-attendance', 'assignments', 'report-card', 'messages', 'pedagogy'].includes(segment)) {
       setRegistryStatus('ready')
       return
     }
@@ -1535,6 +1536,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     document.addEventListener('keydown', saveWithKeyboard)
     return () => document.removeEventListener('keydown', saveWithKeyboard)
   }, [segment])
+
+  if (segment === 'pedagogy') return <NexusPedagogy />
 
   if (segment === 'course-attendance') return <TeachingAttendanceWorkspace />
 

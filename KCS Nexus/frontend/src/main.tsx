@@ -1,3 +1,4 @@
+import {ApplicationUpdateNotice} from '@/components/shared/ApplicationUpdateNotice'
 import '@/components/shared/portalWorkspace.css'
 import PortalActionDialogs from '@/components/shared/PortalActionDialogs'
 import './buttonProcessingFeedback.js'
@@ -50,6 +51,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <BrowserRouter basename={routerBasePath}>
         <App />
         <ConnectionGuard />
+        <ApplicationUpdateNotice />
         <MutationFeedback />
         <PortalActionDialogs />
         <InstallAppButton />

@@ -68,6 +68,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/portal/teacher/courses', label: t('portalNav.myCourses'), icon: BookOpen },
         { to: '/portal/teacher/students', label: t('portalNav.students'), icon: Users },
         { to: '/portal/teacher/attendance', label: t('portalNav.attendance'), icon: ClipboardCheck },
+        { to: '/portal/teacher/pedagogy', label: language === 'fr' ? 'Curriculum et progression' : 'Curriculum & progress', icon: BookOpen },
         { to: '/portal/teacher/course-attendance', label: language === 'fr' ? 'Présences par cours' : 'Course attendance', icon: Clock3 },
         { to: '/portal/teacher/assignments', label: t('portalNav.assignments'), icon: FileText },
         { to: '/portal/teacher/grades', label: t('portalNav.gradebook'), icon: BarChart3 },
@@ -252,6 +253,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const mediaAccount=isMediaAccount(user)
   const navItems: NavItem[] = seniorWorkspace?[
    {to:'/portal/senior',label:language==='fr'?'Vue d’ensemble ST':'ST overview',icon:LayoutDashboard},
+   {to:'/portal/senior/pedagogy',label:language==='fr'?'Pilotage pédagogique':'Pedagogical oversight',icon:BookOpen},
    {to:'/portal/senior/cohort',label:language==='fr'?'Cohorte Grade 12':'Grade 12 cohort',icon:Users},
    {to:'/portal/senior/applications',label:language==='fr'?'Candidatures universitaires':'University applications',icon:GraduationCap},
    {to:'/portal/senior/roadmap',label:language==='fr'?'Échéances et rendez-vous':'Deadlines & meetings',icon:Calendar},

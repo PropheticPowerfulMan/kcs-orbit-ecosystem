@@ -1,5 +1,6 @@
-const CACHE_NAME = 'kcs-nexus-shell-mobile-network-20261121-v51'
-const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
+const CACHE_NAME = 'kcs-nexus-shell-safe-updates-20261123-v52'
+const isSibling=(pathname)=>SIBLING_APP_PREFIXES.some(prefix=>pathname===prefix.slice(0,-1)||pathname.startsWith(prefix));
+const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/lesson-plan/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -16,7 +17,7 @@ self.addEventListener('activate', (event) => {
         const previous = await caches.open(name)
         for (const request of await previous.keys()) {
           const url = new URL(typeof request === 'string' ? request : request.url, self.location.origin)
-          if (url.origin !== self.location.origin || SIBLING_APP_PREFIXES.some(prefix => url.pathname.startsWith(prefix))) continue
+          if (url.origin !== self.location.origin || isSibling(url.pathname)) continue
           const pdf = (url.pathname.includes('/documents/handbooks/') && url.pathname.endsWith('.pdf')) || /^\/(?:nexus\/)?api\/school-documents\/files\/[a-f0-9-]{36}$/.test(url.pathname)
           const shell = url.pathname === '/' || url.pathname === '/index.html'
           const asset = url.pathname.startsWith('/assets/') || url.pathname.startsWith('/images/') || url.pathname.startsWith('/icons/')
@@ -41,11 +42,12 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+  if(url.pathname.endsWith('/app-version.json'))return;
 
   // Ne pas intercepter les applications indÃ©pendantes.
   if (
     url.origin === self.location.origin &&
-    SIBLING_APP_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
+    isSibling(url.pathname)
   ) {
     return;
   }
@@ -74,7 +76,7 @@ self.addEventListener('fetch', (event) => {
   // Navigation : toujours privilÃ©gier la version rÃ©seau.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(request,{cache:'no-store'})
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();

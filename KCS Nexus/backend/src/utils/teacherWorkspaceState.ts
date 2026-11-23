@@ -54,6 +54,14 @@ export function mergeTeacherWorkspaceState(previous: unknown, incoming: Record<s
             throw new ApiError(409, 'Reload the updated Gradebook and confirm the academic year and quarter before creating an assessment in a new quarter.')
           }
         }
+        const archivedIds = new Set((Array.isArray(after.archivedAssignments) ? after.archivedAssignments : [])
+          .map(entry => record(record(entry).assignment).id))
+        const nextIds = new Set((Array.isArray(after.assignments) ? after.assignments : []).map(task => record(task).id))
+        const missingTasks = (Array.isArray(before.assignments) ? before.assignments : [])
+          .filter(task => !nextIds.has(record(task).id) && !archivedIds.has(record(task).id))
+        if (missingTasks.length) {
+          throw new ApiError(409, 'An incomplete gradebook cannot remove saved assessments without their recovery archive. Reload the gradebook before saving again.')
+        }
         const archived = Array.isArray(after.archivedAssignments) && after.archivedAssignments.length > 0
         const hadMarks = Object.values(record(before.scores)).some((value) => String(value ?? '').trim() !== '')
         const hasMarks = Object.values(record(after.scores)).some((value) => String(value ?? '').trim() !== '')

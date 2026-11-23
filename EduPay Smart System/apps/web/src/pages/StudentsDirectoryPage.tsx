@@ -1,3 +1,4 @@
+import { uiText } from "../uiText";
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import { BulkImportLink } from "../components/BulkImportLink";
 import DateSelect from '../components/DateSelect';
@@ -1321,7 +1322,7 @@ function StudentEditModal({
         <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg p-2 text-slate-200 hover:bg-white/10 hover:text-white">
           <X className="h-4 w-4" />
         </button>
-        <h2 className="pr-10 font-display text-2xl font-bold text-white">{creating ? "Ajouter un élève" : "Modifier l'élève"}</h2>
+        <h2 className="pr-10 font-display text-2xl font-bold text-white">{creating ? uiText("Ajouter un élève") : uiText("Modifier l'élève")}</h2>
         <form className="mt-6 grid gap-5" onSubmit={(event) => { event.preventDefault(); void onSave(form); }}>
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Nom de famille *", "Last name *")}<input className="input text-base" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder={L("Ex. Ilunga", "E.g. Ilunga")} required /></label>
@@ -1329,7 +1330,7 @@ function StudentEditModal({
             <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Prénom *", "First name *")}<input className="input text-base" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder={L("Ex. Marie", "E.g. Marie")} required /></label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Adresse e-mail scolaire", "School email address")}<input className="input text-base font-mono" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder={L("prenom.nom@ourkcs.org", "first.last@ourkcs.org")} readOnly={creating} /><span className="text-xs font-normal text-cyan-200">{creating ? "Attribuée automatiquement selon le nom, postnom et prénom." : "Adresse scolaire actuelle de l’élève."}</span></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Adresse e-mail scolaire", "School email address")}<input className="input text-base font-mono" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder={L("prenom.nom@ourkcs.org", "first.last@ourkcs.org")} readOnly={creating} /><span className="text-xs font-normal text-cyan-200">{creating ? uiText("Attribuée automatiquement selon le nom, postnom et prénom.") : uiText("Adresse scolaire actuelle de l’élève.")}</span></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Téléphone de l’élève", "Student phone")}<InternationalPhoneInput value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} /></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Date de naissance", "Date of birth")}<DateSelect className="input text-base" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} /></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Genre", "Gender")}<select className="input text-base" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))}><option value="">{L("Sélectionner le genre", "Select gender")}</option><option value="F">{L("Fille", "Female")}</option><option value="M">{L("Garçon", "Male")}</option><option value="O">{L("Autre", "Other")}</option></select></label>
@@ -1345,7 +1346,7 @@ function StudentEditModal({
               </optgroup>
             </select></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Plan de scolarité *", "Tuition plan *")}<select className="input text-base" value={form.paymentOptionType} onChange={(event) => applyTuitionPlan(event.target.value)} disabled={!form.classId || matchingPlans.length === 0} required>
-              {matchingPlans.length === 0 ? <option value={form.paymentOptionType}>{form.classId ? "Aucun plan compatible" : "Choisissez d'abord une classe"}</option> : matchingPlans.map((plan) => <option key={plan.id} value={plan.paymentOptionType}>{getPaymentOptionLabel(plan.paymentOptionType, lang) || plan.name}{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? " · À définir" : ` · $ ${Number(plan.finalAmount).toFixed(2)}`}</option>)}
+              {matchingPlans.length === 0 ? <option value={form.paymentOptionType}>{form.classId ? uiText("Aucun plan compatible") : uiText("Choisissez d'abord une classe")}</option> : matchingPlans.map((plan) => <option key={plan.id} value={plan.paymentOptionType}>{getPaymentOptionLabel(plan.paymentOptionType, lang) || plan.name}{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? " · À définir" : ` · $ ${Number(plan.finalAmount).toFixed(2)}`}</option>)}
             </select></label>
           </div>
           <div className="grid gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/5 p-4 sm:grid-cols-[1fr_0.7fr] sm:items-end">
@@ -1355,7 +1356,7 @@ function StudentEditModal({
             </div>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Frais scolaires annuels (USD)", "Annual tuition fees (USD)")}<input className="input text-base bg-slate-950/70 font-mono font-bold text-cyan-100" type="number" min="0" step="0.01" value={form.annualFee} readOnly required />{form.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? <button type="button" onClick={() => setSpecialAgreementOpen(true)} className="mt-2 rounded-lg border border-amber-300/40 px-3 py-2 text-xs font-bold text-amber-200">{L("Ouvrir accord spécial", "Open special agreement")}</button> : null}</label>
           </div>
-          <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Numéro élève / identifiant", "Student number / ID")}<input className="input text-base font-mono" value={form.studentNumber} onChange={(event) => setForm((current) => ({ ...current, studentNumber: event.target.value }))} placeholder={creating ? "Attribué automatiquement après création" : "Identifiant actuel"} readOnly={creating} /></label>
+          <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Numéro élève / identifiant", "Student number / ID")}<input className="input text-base font-mono" value={form.studentNumber} onChange={(event) => setForm((current) => ({ ...current, studentNumber: event.target.value }))} placeholder={creating ? uiText("Attribué automatiquement après création") : uiText("Identifiant actuel")} readOnly={creating} /></label>
           <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Parent responsable *", "Responsible parent *")}<select className="input text-base" value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))} required>
             <option value="">{L("Parent", "Parent")}</option>
             {parents.map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}
@@ -1363,7 +1364,7 @@ function StudentEditModal({
           <div className="flex flex-col gap-3 sm:flex-row">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-slate-200 hover:text-white">{L("Annuler", "Cancel")}</button>
             <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-400 disabled:opacity-60">
-              {saving ? "Enregistrement..." : "Enregistrer"}
+              {saving ? uiText("Enregistrement...") : uiText("Enregistrer")}
             </button>
           </div>
         </form>
@@ -1376,7 +1377,7 @@ function StudentEditModal({
                 <label className="grid gap-1 text-sm font-semibold text-slate-200 md:col-span-2">{L("Nom du plan spécial", "Special plan name")}<input className="input" value={normalizeSpecialAgreementDraft(form).title} onChange={(event) => updateSpecialAgreement("title", event.target.value)} placeholder={L("Accord spécial parent-école", "Special parent-school agreement")} /></label>
                 <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Montant convenu (USD)", "Agreed amount (USD)")}<input className="input" type="number" min="0" step="0.01" value={normalizeSpecialAgreementDraft(form).customTotal} onChange={(event) => updateSpecialAgreement("customTotal", event.target.value)} placeholder="650" /></label>
                 <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Réduction spéciale (USD)", "Special discount (USD)")}<input className="input" type="number" min="0" step="0.01" value={normalizeSpecialAgreementDraft(form).reductionAmount} onChange={(event) => updateSpecialAgreement("reductionAmount", event.target.value)} placeholder="0" /></label>
-                <div className="md:col-span-2"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300">{L("Cadence de paiement", "Payment schedule")}</p><div className="mt-2 grid gap-3 sm:grid-cols-3">{([{ value: "ONE_TIME", label: "Versement unique" }, { value: "TWO_INSTALLMENTS", label: "2 tranches" }, { value: "THREE_INSTALLMENTS", label: "3 tranches" }] as const).map((option) => <button key={option.value} type="button" onClick={() => updateSpecialAgreement("installmentMode", option.value)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black ${normalizeSpecialAgreementDraft(form).installmentMode === option.value ? "border-amber-300 bg-amber-400/15 text-white" : "border-white/10 bg-slate-900/60 text-slate-300"}`}>{option.label}</button>)}</div></div>
+                <div className="md:col-span-2"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300">{L("Cadence de paiement", "Payment schedule")}</p><div className="mt-2 grid gap-3 sm:grid-cols-3">{([{ value: "ONE_TIME", label: uiText("Versement unique") }, { value: "TWO_INSTALLMENTS", label: uiText("2 tranches") }, { value: "THREE_INSTALLMENTS", label: uiText("3 tranches") }] as const).map((option) => <button key={option.value} type="button" onClick={() => updateSpecialAgreement("installmentMode", option.value)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black ${normalizeSpecialAgreementDraft(form).installmentMode === option.value ? "border-amber-300 bg-amber-400/15 text-white" : "border-white/10 bg-slate-900/60 text-slate-300"}`}>{option.label}</button>)}</div></div>
                 <label className="grid gap-1 text-sm font-semibold text-slate-200 md:col-span-2">{L("Notes internes", "Internal notes")}<textarea className="input min-h-24" value={normalizeSpecialAgreementDraft(form).notes} onChange={(event) => updateSpecialAgreement("notes", event.target.value)} placeholder={L("Accord approuvé par la direction, conditions particulières...", "Agreement approved by management, special terms...")} /></label>
               </div>
               <div className="mt-5 grid gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 sm:grid-cols-3"><div><p className="text-xs text-slate-300">{L("Montant convenu", "Agreed amount")}</p><p className="text-lg font-black text-white">{formatCurrency(Number(normalizeSpecialAgreementDraft(form).customTotal || 0))}</p></div><div><p className="text-xs text-slate-300">{L("Réduction", "Discount")}</p><p className="text-lg font-black text-emerald-300">{formatCurrency(Number(normalizeSpecialAgreementDraft(form).reductionAmount || 0))}</p></div><div><p className="text-xs text-slate-300">{L("Net à payer", "Net payable")}</p><p className="text-lg font-black text-cyan-200">{formatCurrency(Math.max(Number(normalizeSpecialAgreementDraft(form).customTotal || 0) - Number(normalizeSpecialAgreementDraft(form).reductionAmount || 0), 0))}</p></div></div>
@@ -1752,7 +1753,7 @@ export function StudentsDirectoryPage() {
 
       {apiError && (
         <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
-          {apiError}
+          {uiText(apiError)}
         </div>
       )}
 

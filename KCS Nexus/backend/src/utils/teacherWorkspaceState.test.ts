@@ -14,7 +14,7 @@ test('saving a different course preserves every existing course and school year'
   assert.ok(next.previousGradebook)
 })
 test('an unloaded empty gradebook cannot replace saved marks', () => {
-  assert.throws(() => mergeTeacherWorkspaceState(existing, { advancedGradebookByCourse: { algebra: { assignments: [], scores: {} } } }), /empty gradebook/)
+  assert.throws(() => mergeTeacherWorkspaceState(existing, { advancedGradebookByCourse: { algebra: { assignments: [], scores: {} } } }), /empty gradebook|incomplete gradebook/)
 })
 test('intentional assessment deletion remains available through its archive', () => {
   const next = mergeTeacherWorkspaceState(existing, { advancedGradebookByCourse: { algebra: { assignments: [], scores: {}, archivedAssignments: [{ assignment: snapshot.assignments[0], scores: snapshot.scores }] } } })
@@ -22,7 +22,7 @@ test('intentional assessment deletion remains available through its archive', ()
 })
 
 test('blank score maps cannot erase previously saved grades', () => {
-  assert.throws(() => mergeTeacherWorkspaceState(existing, { advancedGradebookByCourse: { algebra: { assignments: snapshot.assignments, scores: {} } } }), /empty gradebook/)
+  assert.throws(() => mergeTeacherWorkspaceState(existing, { advancedGradebookByCourse: { algebra: { assignments: snapshot.assignments, scores: {} } } }), /empty gradebook|incomplete gradebook/)
 })
 
 test('ordinary workspace saves cannot revert server-managed per-course weighting',()=>{
@@ -72,9 +72,9 @@ test('authorized browser-only recovery moves only the designated course and pres
  const stale=mergeTeacherWorkspaceState(result,incoming,{academicYear:'2026-2027',term:q2}).state as any
  assert.equal(stale.advancedGradebookByCycle[cycle].assignments[0].term,q1)
  const future=structuredClone(incoming)
- future.advancedGradebookByCycle[cycle].assignments=[{id:'legitimate-q2',term:q2,confirmedCycle:'2026-2027::'+q2} as any]
+ future.advancedGradebookByCycle[cycle].assignments=[...((result as any).advancedGradebookByCycle[cycle].assignments),{id:'legitimate-q2',term:q2,confirmedCycle:'2026-2027::'+q2} as any]
  const activated=mergeTeacherWorkspaceState(result,future,{academicYear:'2026-2027',term:q2}).state as any
- assert.equal(activated.advancedGradebookByCycle[cycle].assignments[0].term,q2)
+ assert.equal(activated.advancedGradebookByCycle[cycle].assignments.find((a:any)=>a.id==='legitimate-q2').term,q2)
 })
 
 test('browser-retargeted Q1 columns keep their correction identity after the next quarter opens',()=>{
@@ -88,3 +88,11 @@ test('browser-retargeted Q1 columns keep their correction identity after the nex
  assert.equal(next.advancedGradebookByCycle[cycle].assignments[0].term,q1)
  assert.equal(next.advancedGradebookByCycle[cycle].scores['recovered:s1'],'0')
 })
+
+test('a partial browser snapshot cannot silently remove one saved column',()=>{
+ const before={advancedGradebookByCycle:{'course::2026-2027':{assignments:[{id:'one'},{id:'two'}],scores:{'one:s':'0','two:s':'90'}}}};
+ const after={advancedGradebookByCycle:{'course::2026-2027':{assignments:[{id:'one'}],scores:{'one:s':'0'},archivedAssignments:[{assignment:{id:'unrelated'},scores:{}}]}}};
+ assert.throws(()=>mergeTeacherWorkspaceState(before,after),/incomplete gradebook/);
+ after.advancedGradebookByCycle['course::2026-2027'].archivedAssignments=[{assignment:{id:'two'},scores:{}}];
+ assert.doesNotThrow(()=>mergeTeacherWorkspaceState(before,after));
+});

@@ -1,3 +1,4 @@
+import { uiText } from "../uiText";
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import { BulkImportLink } from "../components/BulkImportLink";
 import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -1438,7 +1439,7 @@ function CredentialsModal({ credentials, onClose }: { credentials: ParentCredent
 
         <div className="flex gap-3">
           <button onClick={copy} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 transition-all">
-            {copied ? "Copié" : "Copier les accès"}
+            {copied ? uiText("Copié") : uiText("Copier les accès")}
           </button>
           <button onClick={onClose} className="rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">
             {L("Fermer", "Close")}
@@ -1515,7 +1516,7 @@ function AccessNotificationModal({
             disabled={disabled}
             className="flex-1 rounded-lg bg-gradient-to-r from-brand-600 to-brand-500 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Envoi..." : "Envoyer les accès"}
+            {loading ? uiText("Envoi...") : uiText("Envoyer les accès")}
           </button>
         </div>
       </div>
@@ -2334,8 +2335,8 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
           <p className="mt-1 text-xs text-ink-dim">{L("Les SMS, e-mails et messages du compte parent suivront cette langue.", "SMS, emails and messages in the parent account will use this language.")}</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {[
-              { value: "fr", label: "Francais", detail: "Messages en francais" },
-              { value: "en", label: "English", detail: "Messages in English" }
+              { value: "fr", label: uiText("Francais"), detail: uiText("Messages en francais") },
+              { value: "en", label: uiText("English"), detail: uiText("Messages in English") }
             ].map((option) => (
               <button
                 key={option.value}
@@ -2406,7 +2407,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                       </span>
                     </span>
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${selected ? "bg-cyan-200 text-slate-950" : "bg-white/10 text-ink-dim"}`}>
-                      {selected ? "Choisi" : "Choisir"}
+                      {selected ? uiText("Choisi") : uiText("Choisir")}
                     </span>
                   </span>
                 </button>
@@ -2488,7 +2489,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                   <p className="text-[11px] text-ink-dim">
                     {st.classId
                       ? `Segment : ${GRADE_GROUP_LABELS[resolveGradeGroup(getClassName(st.classId))] || "À définir"}`
-                      : "Sélectionnez d'abord la classe de l'enfant pour filtrer les plans compatibles."}
+                      : uiText("Sélectionnez d'abord la classe de l'enfant pour filtrer les plans compatibles.")}
                   </p>
                   {st.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" && (
                     <p className="text-[11px] leading-relaxed text-amber-100/90">{L("Option 5 sélectionnée : la configuration détaillée s'ouvre dans une fenêtre dédiée afin d'éviter les libellés trop longs dans la liste.", "Option 5 selected: detailed configuration opens in a dedicated window to keep the list concise.")}</p>
@@ -2515,7 +2516,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Montant convenu", "Agreed amount")}</p>
                         <p className="mt-1 text-sm font-black text-white">
-                          {parseAmount(normalizeSpecialAgreementDraft(st).customTotal) > 0 ? formatMoney(parseAmount(normalizeSpecialAgreementDraft(st).customTotal)) : "À définir"}
+                          {parseAmount(normalizeSpecialAgreementDraft(st).customTotal) > 0 ? formatMoney(parseAmount(normalizeSpecialAgreementDraft(st).customTotal)) : uiText("À définir")}
                         </p>
                       </div>
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
@@ -2525,7 +2526,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Cadence", "Schedule")}</p>
                         <p className="mt-1 text-sm font-black text-cyan-200">
-                          {normalizeSpecialAgreementDraft(st).installmentMode === "ONE_TIME" ? "Versement unique" : normalizeSpecialAgreementDraft(st).installmentMode === "TWO_INSTALLMENTS" ? "2 tranches" : "3 tranches"}
+                          {normalizeSpecialAgreementDraft(st).installmentMode === "ONE_TIME" ? uiText("Versement unique") : normalizeSpecialAgreementDraft(st).installmentMode === "TWO_INSTALLMENTS" ? uiText("2 tranches") : uiText("3 tranches")}
                         </p>
                       </div>
                     </div>
@@ -2552,7 +2553,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                       <div>
                         <p className="text-sm font-bold text-white">{L("Choix détaillé du mode de paiement", "Detailed payment method selection")}</p>
                         <p className="text-xs text-ink-dim">
-                          {catalog?.academicYear?.name ? `Barème officiel ${catalog.academicYear.name}` : "Barème officiel EduPay"} {L("pour", "for")} {GRADE_GROUP_LABELS[resolveGradeGroup(getClassName(st.classId))] || "ce segment"}.
+                          {catalog?.academicYear?.name ? `Barème officiel ${catalog.academicYear.name}` : uiText("Barème officiel EduPay")} {L("pour", "for")} {GRADE_GROUP_LABELS[resolveGradeGroup(getClassName(st.classId))] || "ce segment"}.
                         </p>
                       </div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-300">
@@ -2574,29 +2575,29 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                               <div className="min-w-0">
                                 <p className="break-words text-sm font-black leading-snug text-white">{getPaymentOptionLabel(plan.paymentOptionType)}</p>
-                                <p className="mt-1 break-words text-[11px] leading-relaxed text-ink-dim">{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? "Accord spécial parent-école: ouvrez la fiche dédiée pour définir le montant, la réduction et l'échéancier propres à cet enfant." : plan.name}</p>
+                                <p className="mt-1 break-words text-[11px] leading-relaxed text-ink-dim">{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? uiText("Accord spécial parent-école: ouvrez la fiche dédiée pour définir le montant, la réduction et l'échéancier propres à cet enfant.") : plan.name}</p>
                               </div>
                               <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${isActive ? "bg-brand-300 text-slate-950" : "bg-white/10 text-ink-dim"}`}>
-                                {isActive ? "Choisi" : "Choisir"}
+                                {isActive ? uiText("Choisi") : uiText("Choisir")}
                               </span>
                             </div>
 
                             <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                               <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
                                 <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Montant initial", "Original amount")}</p>
-                                <p className="mt-1 break-words font-bold text-white">{Number(plan.originalAmount || plan.finalAmount) > 0 ? formatMoney(Number(plan.originalAmount || plan.finalAmount)) : "À saisir"}</p>
+                                <p className="mt-1 break-words font-bold text-white">{Number(plan.originalAmount || plan.finalAmount) > 0 ? formatMoney(Number(plan.originalAmount || plan.finalAmount)) : uiText("À saisir")}</p>
                               </div>
                               <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
                                 <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Réduction", "Discount")}</p>
-                                <p className="mt-1 break-words font-bold text-emerald-300">{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? "Selon accord" : formatMoney(Number(plan.reductionAmount || 0))}</p>
+                                <p className="mt-1 break-words font-bold text-emerald-300">{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? uiText("Selon accord") : formatMoney(Number(plan.reductionAmount || 0))}</p>
                               </div>
                               <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
                                 <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Remise", "Discount")}</p>
-                                <p className="mt-1 break-words font-bold text-white">{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? "Manuelle" : `${Number(plan.discountRate || 0).toFixed(0)}%`}</p>
+                                <p className="mt-1 break-words font-bold text-white">{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? uiText("Manuelle") : `${Number(plan.discountRate || 0).toFixed(0)}%`}</p>
                               </div>
                               <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
                                 <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Net à payer", "Net payable")}</p>
-                                <p className="mt-1 break-words font-black text-brand-200">{plan.finalAmount > 0 ? formatMoney(plan.finalAmount) : "À saisir"}</p>
+                                <p className="mt-1 break-words font-black text-brand-200">{plan.finalAmount > 0 ? formatMoney(plan.finalAmount) : uiText("À saisir")}</p>
                               </div>
                             </div>
 
@@ -2730,9 +2731,9 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                   <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">{L("Cadence de paiement", "Payment schedule")}</label>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {[
-                      { value: "ONE_TIME", label: "Versement unique", detail: "Un seul règlement avant la rentrée" },
-                      { value: "TWO_INSTALLMENTS", label: "2 tranches", detail: "Répartition début et milieu d'année" },
-                      { value: "THREE_INSTALLMENTS", label: "3 tranches", detail: "Cadence recommandée pour un accord manuel" }
+                      { value: "ONE_TIME", label: uiText("Versement unique"), detail: uiText("Un seul règlement avant la rentrée") },
+                      { value: "TWO_INSTALLMENTS", label: uiText("2 tranches"), detail: uiText("Répartition début et milieu d'année") },
+                      { value: "THREE_INSTALLMENTS", label: uiText("3 tranches"), detail: uiText("Cadence recommandée pour un accord manuel") }
                     ].map((option) => {
                       const selected = normalizeSpecialAgreementDraft(form.students[specialAgreementTarget]).installmentMode === option.value;
                       return (
@@ -3181,7 +3182,7 @@ export function ParentsManagementPage() {
 
       {apiError && (
         <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger animate-fadeInUp">
-          {apiError}
+          {uiText(apiError)}
         </div>
       )}
 

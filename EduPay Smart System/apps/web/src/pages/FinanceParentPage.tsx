@@ -1,3 +1,4 @@
+import { uiText } from "../uiText";
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
@@ -713,7 +714,7 @@ export function FinanceParentPage() {
               {activeAgreement && (
                 <p className="mt-1 text-sm text-amber-200">{L("Accord spécial actif", "Active special agreement")} : {activeAgreement.title}</p>
               )}
-              {photoError && <p className="mt-2 text-xs text-red-300">{photoError}</p>}
+              {photoError && <p className="mt-2 text-xs text-red-300">{uiText(photoError)}</p>}
               <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20">
                 <Camera className="h-4 w-4" />
                 {photoSaving ? L("Mise à jour de la photo...", "Updating photo...") : L("Mettre à jour la photo", "Update photo")}
@@ -976,9 +977,9 @@ export function FinanceParentPage() {
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3"><p className="text-xs text-ink-dim">{L("Solde restant", "Remaining balance")}</p><p className="mt-1 font-mono font-bold text-red-300">{money.format(debt.amountRemaining)}</p></div>
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3"><p className="text-xs text-ink-dim">{L("Année de la dette", "Debt year")}</p><p className="mt-1 font-semibold text-white">{debt.academicYearName || debt.academicYearId || snapshot.academicYear.name}</p></div>
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3"><p className="text-xs text-ink-dim">{L("Origine report", "Carry-over source")}</p><p className="mt-1 font-semibold text-white">{debt.carriedOverFromYearName || debt.carriedOverFromYearId || "Non reportee"}</p></div>
-                      <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3"><p className="text-xs text-ink-dim">{L("Échéance", "Due date")}</p><p className="mt-1 font-semibold text-white">{debt.dueDate ? new Date(debt.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : "Non définie"}</p></div>
+                      <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3"><p className="text-xs text-ink-dim">{L("Échéance", "Due date")}</p><p className="mt-1 font-semibold text-white">{debt.dueDate ? new Date(debt.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : uiText("Non définie")}</p></div>
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3"><p className="text-xs text-ink-dim">{L("Créée le", "Created on")}</p><p className="mt-1 font-semibold text-white">{new Date(debt.createdAt).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</p></div>
-                      <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3"><p className="text-xs text-ink-dim">{L("Réglée le", "Settled on")}</p><p className="mt-1 font-semibold text-white">{debt.settledAt ? new Date(debt.settledAt).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : "Non réglée"}</p></div>
+                      <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3"><p className="text-xs text-ink-dim">{L("Réglée le", "Settled on")}</p><p className="mt-1 font-semibold text-white">{debt.settledAt ? new Date(debt.settledAt).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : uiText("Non réglée")}</p></div>
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3"><p className="text-xs text-ink-dim">{L("ID dette", "Debt ID")}</p><p className="mt-1 break-all font-mono text-xs font-semibold text-cyan-200">{debt.id}</p></div>
                     </div>
                   </article>
@@ -1139,7 +1140,7 @@ export function FinanceParentPage() {
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                       <p className="text-xs text-ink-dim">{L("Prochaine échéance", "Next due")}</p>
-                      <p className="mt-2 text-sm font-semibold text-white">{nextDue ? new Date(nextDue.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : "Fully covered"}</p>
+                      <p className="mt-2 text-sm font-semibold text-white">{nextDue ? new Date(nextDue.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : uiText("Fully covered")}</p>
                     </div>
                   </div>
                 </div>

@@ -1,3 +1,4 @@
+import { uiText } from "../uiText";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { FontSwitch } from "./FontSwitch";
@@ -110,7 +111,7 @@ function ChangePasswordModal({ onClose, onChanged, temporaryPassword = false }: 
           placeholder={t("confirmNewPassword")}
           className="w-full"
         />
-        {error && <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+        {error && <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{uiText(error)}</p>}
         {message && <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{message}</p>}
         <div className="flex gap-3">
           <button disabled={saving} className="flex-1 btn-primary py-3 text-sm font-bold disabled:opacity-60">
@@ -295,7 +296,7 @@ export function Navbar() {
                         {L("Mot de passe temporaire détecté. Vous pouvez le changer maintenant ou plus tard depuis ce menu.", "Temporary password detected. You can change it now or later from this menu.")}
                       </p>
                     )}
-                    {photoError && <p className="mt-2 text-xs text-danger">{photoError}</p>}
+                    {photoError && <p className="mt-2 text-xs text-danger">{uiText(photoError)}</p>}
                   </div>
                   <div className="ep-profile-preferences flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-3 lg:hidden"><FontSwitch/><LanguageSwitch/></div>
                   <label className="block w-full cursor-pointer px-4 py-2 text-sm text-ink-dim transition-all duration-200 hover:bg-brand-500/10 hover:text-white">

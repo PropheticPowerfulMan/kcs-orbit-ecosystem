@@ -1,5 +1,6 @@
+import { uiText, uiStatus } from "../uiText";
 import DateSelect from '../components/DateSelect';
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CalendarClock,
@@ -15,7 +16,7 @@ import {
   X
 } from "lucide-react";
 import { useI18n } from "../i18n";
-import { api } from "../services/api";
+import { api, peekApiResponse } from "../services/api";
 
 type Parent = {
   id: string;
@@ -139,7 +140,7 @@ function getReductionOrigin(row: Pick<ReductionDisplayRow, "scope" | "title" | "
   if (scope === "PARENT" || title.includes("family")) return "Réduction familiale";
   if (scope === "PAYMENT_OPTION" || row.paymentOptionType) return "Réduction du plan de scolarité";
   if (scope === "MANUAL" || title.includes("bourse") || title.includes("scholarship")) return "Bourse / accord manuel";
-  if (scope === "AGREEMENT" || title.includes("agreement") || title.includes("accord")) return "Accord spécial";
+  if (scope === "AGREEMENT" || title.includes("agreement") || title.includes("accord")) return "Accord special";
   if (scope === "GRADE_GROUP") return "Réduction par niveau";
   if (scope === "STUDENT") return "Réduction individuelle";
   return "Autre réduction";
@@ -154,7 +155,7 @@ function getReductionScopeLabel(scope: string) {
     case "MANUAL":
       return "Bourse / ajustement manuel";
     case "AGREEMENT":
-      return "Accord spécial";
+      return "Accord special";
     case "GRADE_GROUP":
       return "Niveau / classe";
     case "STUDENT":
@@ -171,7 +172,7 @@ function getPaymentOptionLabel(paymentOptionType: string) {
     case "STANDARD_MONTHLY":
       return "Mensualité standard";
     case "SPECIAL_OWNER_AGREEMENT":
-      return "Accord spécial parent-école";
+      return "Accord special parent-école";
     case "ANNUAL":
       return "Paiement annuel";
     default:
@@ -226,9 +227,9 @@ const pageCopy = {
     loadFinanceError: "Impossible de charger les données financières.",
     assignmentSuccess: "Plan officiel affecté avec succès.",
     assignmentError: "Impossible d'affecter le plan officiel.",
-    agreementValidationError: "Complétez le titre, le total et au moins une échéance valide pour l'accord spécial.",
-    agreementSuccess: "Accord spécial enregistré avec succès.",
-    agreementError: "Impossible de créer l'accord spécial.",
+    agreementValidationError: "Complétez le titre, le total et au moins une échéance valide pour l'accord special.",
+    agreementSuccess: "Accord special enregistré avec succès.",
+    agreementError: "Impossible de créer l'accord special.",
     loading: "Chargement du suivi parent financier...",
     emptyEyebrow: "Finance parent",
     emptyTitle: "Aucun parent disponible",
@@ -322,7 +323,7 @@ const pageCopy = {
     noReductionApplied: "Aucune réduction appliquée.",
     noReductionTracked: "Aucune réduction tracée.",
     parentAccount: "Compte parent",
-    noAgreement: "Aucun accord spécial.",
+    noAgreement: "Aucun accord special.",
     noHistoricalPayment: "Aucun paiement historique disponible.",
     noLinkedStudent: "Aucun élève lié",
     selectedParent: "Parent sélectionné",
@@ -334,7 +335,7 @@ const pageCopy = {
     assignmentNotesPlaceholder: "Notes d'affectation, justification, commentaire administratif...",
     assigning: "Affectation...",
     assignPlanButton: "Affecter le plan officiel",
-    agreementSubtitleFor: "Accord spécial créé dans le dossier de {{name}}.",
+    agreementSubtitleFor: "Accord special créé dans le dossier de {{name}}.",
     assignmentSubtitleFor: "Plan officiel rattaché au dossier de {{name}}.",
     status: "Statut",
     title: "Titre",
@@ -351,7 +352,7 @@ const pageCopy = {
     publicNotesPlaceholder: "Notes visibles pour le dossier financier",
     privateNotesPlaceholder: "Notes privées du propriétaire / direction",
     creating: "Création...",
-    saveAgreement: "Enregistrer l'accord spécial",
+    saveAgreement: "Enregistrer l'accord special",
     studentsAssignedPlans: "Enfants et plans affectés",
     coverageText: "{{rate}}% couvert",
     overdueInstallments: "{{count}} échéance(s) en retard",
@@ -399,16 +400,16 @@ const pageCopy = {
     loadFinanceError: "Unable to load finance data.",
     assignmentSuccess: "Official plan assigned successfully.",
     assignmentError: "Unable to assign the official plan.",
-    agreementValidationError: "Complete the title, total, and at least one valid installment for the spécial agreement.",
+    agreementValidationError: "Complete the title, total, and at least one valid installment for the special agreement.",
     agreementSuccess: "Special agreement saved successfully.",
-    agreementError: "Unable to create the spécial agreement.",
+    agreementError: "Unable to create the special agreement.",
     loading: "Loading parent financial tracking...",
     emptyEyebrow: "Parent finance",
     emptyTitle: "No parent available",
     emptyBody: "Add a parent to activate detailed financial tracking.",
     pageEyebrow: "Financial administration",
     pageTitle: "Detailed parent financial tracking",
-    pageSubtitle: "Module-based view: active plans, scholarships, historical debts, alerts, spécial agreements, and payments.",
+    pageSubtitle: "Module-based view: active plans, scholarships, historical debts, alerts, special agreements, and payments.",
     searchPlaceholder: "Search by parent, phone, email...",
     profileLoading: "Loading financial profile...",
     phoneMissing: "Phone not provided",
@@ -424,7 +425,7 @@ const pageCopy = {
     overdue: "Overdue installments",
     paidHelp: "Amount already collected on the tuition plan.",
     debtHelp: "Remaining amount due under the active plan and adjustments.",
-    réductionsHelp: "Scholarships, discounts, and réductions applied to the file.",
+    réductionsHelp: "Scholarships, discounts, and reductions applied to the file.",
     carryOverHelp: "Debt from a previous year brought into the current tracking view.",
     overdueHelp: "Installments in the payment plan that are not settled yet.",
     coveredMetric: "{{rate}}% covered",
@@ -433,10 +434,10 @@ const pageCopy = {
     studentsPlansTitle: "Children and plans",
     studentsPlansSubtitle: "Active plans, progress, balances, and overdue items by child.",
     historicalDebtsTitle: "Historical debts",
-    historicalDebtsSubtitle: "Detailed summary of the parent's debts: amounts, years, due dates, création dates, settlements, and balances.",
+    historicalDebtsSubtitle: "Detailed summary of the parent's debts: amounts, years, due dates, creation dates, settlements, and balances.",
     alertsTitle: "Alerts",
     alertsSubtitle: "Late-payment alerts, anomalies, and collection pressure.",
-    réductionsTitle: "Scholarships and réductions",
+    réductionsTitle: "Scholarships and reductions",
     réductionsSubtitle: "Scholarships, official discounts, and benefits applied to the file.",
     agreementsTitle: "Special agreements",
     agreementsSubtitle: "Owner/management agreements, statuses, and remaining balances.",
@@ -444,7 +445,7 @@ const pageCopy = {
     paymentsSubtitle: "Payment history and receipts linked to the parent.",
     open: "Open",
     adminFileEyebrow: "Parent administrative file",
-    adminFileTitle: "Official plans and spécial agreements",
+    adminFileTitle: "Official plans and special agreements",
     adminFileSubtitle: "Sensitive actions remain attached to the selected parent and open in a dedicated window.",
     plans: "Plans",
     agreements: "Agreements",
@@ -495,7 +496,7 @@ const pageCopy = {
     noReductionApplied: "No reduction applied.",
     noReductionTracked: "No reduction tracked.",
     parentAccount: "Parent account",
-    noAgreement: "No spécial agreement.",
+    noAgreement: "No special agreement.",
     noHistoricalPayment: "No historical payment available.",
     noLinkedStudent: "No linked student",
     selectedParent: "Selected parent",
@@ -524,7 +525,7 @@ const pageCopy = {
     publicNotesPlaceholder: "Visible notes for the financial file",
     privateNotesPlaceholder: "Private owner / management notes",
     creating: "Creating...",
-    saveAgreement: "Save spécial agreement",
+    saveAgreement: "Save special agreement",
     studentsAssignedPlans: "Students and assigned plans",
     coverageText: "{{rate}}% covered",
     overdueInstallments: "{{count}} overdue installment(s)",
@@ -644,10 +645,12 @@ function AdminParentDialog({
   onClose: () => void;
   copy: PageCopy;
 }) {
+  const modal=useRef<HTMLElement>(null),closeRef=useRef(onClose);closeRef.current=onClose;
+  useEffect(()=>{const before=document.activeElement as HTMLElement|null,overflow=document.body.style.overflow;document.body.style.overflow="hidden";modal.current?.focus();const keys=(e:KeyboardEvent)=>{if(e.key==="Escape"){e.preventDefault();closeRef.current();}if(e.key==="Tab"){const nodes=[...modal.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]')||[]].filter(n=>n.offsetParent!==null);const first=nodes[0],last=nodes[nodes.length-1];if(!first){e.preventDefault();return;}if(e.shiftKey&&(document.activeElement===first||document.activeElement===modal.current)){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}};document.addEventListener("keydown",keys,true);return()=>{document.body.style.overflow=overflow;document.removeEventListener("keydown",keys,true);before?.focus();};},[]);
   return (
     <div className="edupay-parent-tracking-dialog fixed inset-0 z-50 flex items-end justify-center px-3 py-4 sm:items-center sm:px-5">
       <button aria-label={copy.close} className="absolute inset-0 bg-slate-950/78 backdrop-blur-md" onClick={onClose} />
-      <section className="edupay-parent-tracking-modal relative flex max-h-[98vh] w-full max-w-8xl flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-slate-950/95 shadow-2xl">
+      <section ref={modal} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} className="edupay-parent-tracking-modal relative flex max-h-[98vh] w-full max-w-8xl flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-slate-950/95 shadow-2xl">
         <header className="flex flex-col gap-4 border-b border-white/10 bg-white/[0.04] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">{copy.dialogEyebrow}</p>
@@ -707,6 +710,7 @@ export function FinanceParentAdminPage() {
   const [parents, setParents] = useState<Parent[]>([]);
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [selectedId, setSelectedId] = useState("");
+  const snapshotRequest = useRef(0), selectedIdRef = useRef(selectedId);selectedIdRef.current=selectedId;
   const [snapshot, setSnapshot] = useState<FinanceSnapshot | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -741,49 +745,20 @@ export function FinanceParentAdminPage() {
   );
 
   const loadSnapshot = async (parentId: string) => {
-    setDetailLoading(true);
-    try {
-      const result = await api<FinanceSnapshot>(`/api/finance/parents/${parentId}/profile`);
-      setSnapshot(result);
-      setError(null);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : copy.loadProfileError);
-    } finally {
-      setDetailLoading(false);
-    }
+    if(parentId!==selectedIdRef.current)return;
+    const requestId=++snapshotRequest.current,path=`/api/finance/parents/${parentId}/profile`,cached=peekApiResponse<FinanceSnapshot>(path);
+    setSnapshot(cached);setDetailLoading(!cached);setError(null);
+    try { const result=await api<FinanceSnapshot>(path);if(requestId===snapshotRequest.current){setSnapshot(result);setError(null);} }
+    catch(e){if(requestId===snapshotRequest.current)setError(e instanceof Error?e.message:copy.loadProfileError);}
+    finally{if(requestId===snapshotRequest.current)setDetailLoading(false);}
   };
-
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      api<Parent[]>("/api/parents").catch(() => []),
-      api<CatalogResponse>("/api/finance/catalog").catch(() => null)
-    ])
-      .then(([rows, catalogResult]) => {
-        if (!active) return;
-        setParents(rows);
-        setCatalog(catalogResult);
-        setSelectedId(rows[0]?.id ?? "");
-      })
-      .catch((loadError) => {
-        if (!active) return;
-        setError(loadError instanceof Error ? loadError.message : copy.loadFinanceError);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!selectedId) {
-      setSnapshot(null);
-      return;
-    }
-    void loadSnapshot(selectedId);
-  }, [selectedId]);
+  useEffect(()=>{
+    let active=true;
+    void api<Parent[]>("/api/parents").then(rows=>{if(active){setParents(rows);setSelectedId(rows[0]?.id??"");}}).catch(e=>{if(active)setError(e instanceof Error?e.message:copy.loadFinanceError)}).finally(()=>{if(active)setLoading(false)});
+    void api<CatalogResponse>("/api/finance/catalog").then(value=>{if(active)setCatalog(value)}).catch(()=>{});
+    return()=>{active=false;snapshotRequest.current++};
+  },[]);
+  useEffect(()=>{setActiveModule(null);setActiveAction(null);if(!selectedId){snapshotRequest.current++;setSnapshot(null);return;}void loadSnapshot(selectedId);return()=>{snapshotRequest.current++}},[selectedId]);
 
   const filteredParents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -1056,7 +1031,7 @@ export function FinanceParentAdminPage() {
       </div>
 
       {success && <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{success}</div>}
-      {error && <div className="rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</div>}
+      {error && <div className="rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">{uiText(error)}</div>}
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(250px,320px)_minmax(0,1fr)]">
         <aside className="card glass min-w-0 border border-brand-500/10 shadow-lg">
@@ -1069,11 +1044,13 @@ export function FinanceParentAdminPage() {
               className="w-full !pl-10"
             />
           </div>
-          <div className="edupay-scrollbar mt-4 max-h-[720px] space-y-2 overflow-y-auto pr-1">
+          <div className="edupay-scrollbar mt-4 max-h-[24vh] xl:max-h-[66vh] space-y-2 overflow-y-auto pr-1">
             {filteredParents.map((parent) => (
               <button
                 key={parent.id}
                 type="button"
+                onMouseEnter={() => { void api(`/api/finance/parents/${parent.id}/profile`).catch(()=>{}); }}
+                onFocus={() => { void api(`/api/finance/parents/${parent.id}/profile`).catch(()=>{}); }}
                 onClick={() => setSelectedId(parent.id)}
                 className={`w-full rounded-2xl border p-3 text-left transition-all ${
                   selectedId === parent.id
@@ -1376,11 +1353,11 @@ export function FinanceParentAdminPage() {
                         <article key={group.key} className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
-                              <p className="break-words font-semibold text-white">{group.origin}</p>
-                              <p className="mt-1 break-words text-sm text-ink-dim">{group.beneficiary}</p>
+                              <p className="break-words font-semibold text-white">{uiText(group.origin)}</p>
+                              <p className="mt-1 break-words text-sm text-ink-dim">{uiText(group.beneficiary)}</p>
                               <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-ink-dim">
-                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{getReductionScopeLabel(group.scope)}</span>
-                                {group.paymentOptionType && <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-cyan-100">{getPaymentOptionLabel(group.paymentOptionType)}</span>}
+                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{uiText(getReductionScopeLabel(group.scope))}</span>
+                                {group.paymentOptionType && <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-cyan-100">{uiText(getPaymentOptionLabel(group.paymentOptionType))}</span>}
                                 {group.gradeGroup && <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{copy.gradeK}: {group.gradeGroup}</span>}
                                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{group.rows.length} {lang === "fr" ? "ligne(s)" : "line(s)"}</span>
                               </div>
@@ -1395,7 +1372,7 @@ export function FinanceParentAdminPage() {
                                   <p className="shrink-0 font-mono text-sm font-bold text-cyan-200">{money.format(row.amount)}</p>
                                 </div>
                                 <p className="mt-1 text-xs text-ink-dim">
-                                  {row.effectiveDate ? new Date(row.effectiveDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : "Date non renseignee"}
+                                  {row.effectiveDate ? new Date(row.effectiveDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : uiText("Date non renseignee")}
                                   {row.percentage ? ` - ${row.percentage}%` : ""}
                                 </p>
                               </div>
@@ -1538,7 +1515,7 @@ export function FinanceParentAdminPage() {
                         <Save className="h-4 w-4" />
                         {assignmentSubmitting || agreementSubmitting
                           ? copy.assigning
-                          : isManualScholarshipPlan ? "Configurer l'accord" : copy.assignPlanButton}
+                          : isManualScholarshipPlan ? uiText("Configurer l'accord") : copy.assignPlanButton}
                       </button>
                     </div>
                   </div>
@@ -1568,9 +1545,9 @@ export function FinanceParentAdminPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">{copy.status}</label>
+                        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">{uiStatus(copy.status)}</label>
                         <select
-                          value={agreementForm.status}
+                          value={uiStatus(agreementForm.status)}
                           onChange={(event) => setAgreementForm((current) => ({ ...current, status: event.target.value }))}
                           className="w-full"
                         >
@@ -1729,6 +1706,7 @@ export function FinanceParentAdminPage() {
                 </AdminParentDialog>
               )}
 
+              <details className="ep-parent-overview"><summary>{lang === "fr" ? "Détails complémentaires · enfants, alertes, dettes et accords" : "Additional details · children, alerts, debts & agreements"}</summary>
               <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-6">
                   <div className="card glass border border-white/10 shadow-lg">
@@ -1794,8 +1772,8 @@ export function FinanceParentAdminPage() {
                         <div key={group.key} className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
-                              <p className="break-words font-semibold text-white">{group.origin}</p>
-                              <p className="mt-1 break-words text-xs text-ink-dim">{group.beneficiary}</p>
+                              <p className="break-words font-semibold text-white">{uiText(group.origin)}</p>
+                              <p className="mt-1 break-words text-xs text-ink-dim">{uiText(group.beneficiary)}</p>
                               <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim">{group.rows.length} {lang === "fr" ? "ligne(s) détaillée(s)" : "detailed line(s)"}</p>
                             </div>
                             <span className="shrink-0 font-mono font-semibold text-cyan-200">{money.format(group.amount)}</span>
@@ -1824,6 +1802,7 @@ export function FinanceParentAdminPage() {
                   </div>
                 </div>
               </div>
+              </details>
             </>
           ) : (
             <div className="card glass border border-white/10 shadow-lg">
@@ -1835,4 +1814,3 @@ export function FinanceParentAdminPage() {
     </div>
   );
 }
-
