@@ -1,6 +1,6 @@
 import {teachingGpsRequired} from '../utils/teachingGpsPolicy.js'
 import {campusPolicy,saveCampusPolicy,issuePresenceChallenge,verifyTeachingPresence} from '../services/teachingPresenceProof.service.js'
-import {resolvePlanned} from '../services/teachingAttendance.service.js'
+import {resolvePlanned,studentCourseAttendance} from '../services/teachingAttendance.service.js'
 import {teachingScheduleEditor,publishTeachingSchedule} from '../services/teachingSchedule.service.js'
 import { Router } from 'express'
 import { z } from 'zod'
@@ -15,6 +15,10 @@ import { courseRegularity, markTeachingTime, reviewTeachingSession, saveSessionS
 export const teachingAttendanceRouter = Router()
 teachingAttendanceRouter.use(authenticate)
 teachingAttendanceRouter.use((_req,res,next)=>{res.setHeader('Cache-Control','private, no-store');next()})
+teachingAttendanceRouter.get('/student',requireRoles('student'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const query=z.object({academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().regex(/^(Annual final|Semester [12]( · Quarter [1-4])?)$/)}).strict().parse(req.query)
+ return success(res,await studentCourseAttendance(req.user!.sub,query.academicYear,query.term))
+}))
 const date=z.string().refine(validTeachingDate,'Invalid school date')
 const locator=z.object({courseId:z.string().min(1).max(150),scheduleKey:z.string().min(1).max(200),date})
 const filters=z.object({

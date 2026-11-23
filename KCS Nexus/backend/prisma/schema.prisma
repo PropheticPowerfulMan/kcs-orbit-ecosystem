@@ -1590,9 +1590,108 @@ model ElectiveAllocation {
   @@index([offeringId])
 }
 
-/// Official KCS student-government election. Identity is verified by Nexus,
-/// while each ballot stores only the institutional voter id and immutable
-/// candidate snapshots needed for an auditable result.
+/// Central institutional elections. Participation and ballot choices have no linking foreign key.
+model SchoolElection {
+  id                String @id @default(cuid())
+  audience          String
+  title             String
+  academicYear      String
+  startAt           DateTime
+  endAt             DateTime
+  status            String @default("DRAFT")
+  eligibleGrades    String[] @default([])
+  eligibleUserIds   String[] @default([])
+  eligibilityMode   String @default("ALL")
+  showInterimResults Boolean @default(false)
+  allowAbstention   Boolean @default(false)
+  createdById       String
+  publishedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  offices           SchoolElectionOffice[]
+  candidates        SchoolElectionCandidate[]
+  participations    SchoolElectionParticipation[]
+  ballots           SchoolElectionBallot[]
+  @@index([audience,status,startAt])
+  @@index([academicYear])
+}
+
+model SchoolElectionOffice {
+  id           String @id @default(cuid())
+  electionId   String
+  name         String
+  scope        String @default("GLOBAL")
+  grade        String?
+  section      String?
+  displayOrder Int @default(0)
+  createdAt    DateTime @default(now())
+  election     SchoolElection @relation(fields:[electionId],references:[id],onDelete:Restrict)
+  candidates   SchoolElectionCandidate[]
+  choices      SchoolElectionChoice[]
+  @@index([electionId,displayOrder])
+}
+
+model SchoolElectionCandidate {
+  id           String @id @default(cuid())
+  electionId   String
+  officeId     String
+  memberUserId String
+  firstName    String
+  middleName   String?
+  lastName     String
+  grade        String?
+  section      String?
+  biography    String @default("")
+  photoUrl     String?
+  status       String @default("PENDING")
+  ballotNumber Int @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  election     SchoolElection @relation(fields:[electionId],references:[id],onDelete:Restrict)
+  office       SchoolElectionOffice @relation(fields:[officeId],references:[id],onDelete:Restrict)
+  choices      SchoolElectionChoice[]
+  @@unique([officeId,memberUserId])
+  @@index([electionId,status])
+}
+
+/// Proof of participation is separate from every ballot and candidate choice.
+model SchoolElectionParticipation {
+  id               String @id @default(cuid())
+  electionId       String
+  voterKey         String
+  receiptCode      String @unique
+  grade            String?
+  section          String?
+  submittedAt      DateTime @default(now())
+  election         SchoolElection @relation(fields:[electionId],references:[id],onDelete:Restrict)
+  @@unique([electionId,voterKey])
+  @@index([electionId,submittedAt])
+}
+
+/// No account identifier, participation identifier or receipt is stored here.
+model SchoolElectionBallot {
+  id             String @id @default(uuid())
+  electionId     String
+  idempotencyKey String @unique
+  submittedAt    DateTime @default(now())
+  election       SchoolElection @relation(fields:[electionId],references:[id],onDelete:Restrict)
+  choices        SchoolElectionChoice[]
+  @@index([electionId])
+}
+
+model SchoolElectionChoice {
+  id          String @id @default(uuid())
+  ballotId    String
+  officeId    String
+  candidateId String?
+  abstained   Boolean @default(false)
+  ballot      SchoolElectionBallot @relation(fields:[ballotId],references:[id],onDelete:Restrict)
+  office      SchoolElectionOffice @relation(fields:[officeId],references:[id],onDelete:Restrict)
+  candidate   SchoolElectionCandidate? @relation(fields:[candidateId],references:[id],onDelete:Restrict)
+  @@unique([ballotId,officeId])
+  @@index([candidateId])
+}
+
 model StudentGovernmentElection {
   id           String                              @id @default(cuid())
   title        String

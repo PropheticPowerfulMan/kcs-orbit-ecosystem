@@ -1,3 +1,5 @@
+import {earlyYearsRouter} from './early-years.routes.js'
+import {electionsRouter} from './elections.routes.js'
 import {pedagogyRouter} from './pedagogy.routes.js'
 import {schoolHistoryRouter} from './school-history.routes.js'
 import {transcriptReceiptsRouter} from './transcript-receipts.routes.js'
@@ -89,6 +91,8 @@ router.use('/attendance', attendanceRouter)
 router.use('/teaching-attendance', teachingAttendanceRouter)
 router.use('/senior-teacher', seniorTeacherRouter)
 router.use('/pedagogy', pedagogyRouter)
+router.use('/early-years', earlyYearsRouter)
+router.use('/elections', electionsRouter)
 router.use('/electives', electivesRouter)
 router.use('/shining-students', shiningStudentsRouter)
 router.use('/syllabi', syllabiRouter)

@@ -72,6 +72,8 @@ app.use(cors({
 app.use(express.json({ limit: '8mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'))
+// Approved election profiles are rendered on the school's separate election origin.
+app.use('/api/uploads/elections',(_req,res,next)=>{res.setHeader('Cross-Origin-Resource-Policy','cross-origin');next()})
 app.use('/api/uploads', express.static(uploadRoot, { immutable: true, maxAge: '7d', fallthrough: true }), notFoundHandler)
 
 app.get('/health', (_req, res) => {

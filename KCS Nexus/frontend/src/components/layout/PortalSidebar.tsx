@@ -1,4 +1,5 @@
 import './portalSidebar.css'
+import {useEarlyYearsContext} from '@/hooks/useEarlyYearsContext'
 import {isMediaAccount,canUseStaffWorkspace,canUsePrincipalWorkspace,canUseSeniorWorkspace,workspaceRole} from '@/utils/accountScope'
 import {loadPersonalAvatar} from '@/utils/personalAvatarCache'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -44,6 +45,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/portal/student/assignments', label: t('portalNav.assignments'), icon: FileText },
         { to: '/portal/student/timetable', label: t('portalNav.timetable'), icon: Calendar },
         { to: '/portal/student/attendance', label: t('portalNav.attendance'), icon: ClipboardCheck },
+        { to: '/portal/student/course-attendance', label: language==='fr'?'Présences par cours':'Course attendance', icon: Clock3 },
         { to: '/portal/student/ai-tutor', label: t('portalNav.aiTutor'), icon: Brain },
         { to: '/portal/student/forum', label: t('portalNav.studentForum'), icon: MessageSquare },
         { to: '/portal/student/messages', label: t('portalNav.messages'), icon: MessageSquare },
@@ -128,6 +130,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
 }
 
 const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
+  const earlyYears=useEarlyYearsContext()
   const { t, i18n } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
@@ -288,7 +291,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     { to: '/admin/academic-calendar', label: language === 'fr' ? 'Calendrier académique' : 'Academic Calendar', icon: Calendar },
     { to: '/admin/settings', label: t('portalNav.settings'), icon: Settings },
   ] : getNavItems(activeRole, t, language)
-  const navItemsWithBadges = navItems.map((item) => ({ ...item, badge: badges[item.to] ?? item.badge }))
+  const navItemsWithBadges = (earlyYears.enabled&&activeRole==='teacher'?[navItems[0],{to:'/portal/teacher/early-years',label:language==='fr'?'Espace maternelle':'Early years studio',icon:BookOpen,badge:undefined},...navItems.slice(1)]:navItems).map((item) => ({ ...item, badge: badges[item.to] ?? item.badge }))
   const currentLanguage = (i18n.resolvedLanguage || i18n.language || language).startsWith('fr') ? 'fr' : 'en'
   const nextLanguage = currentLanguage === 'en' ? 'fr' : 'en'
   const toggleLanguage = () => {
