@@ -139,7 +139,9 @@ export function useAcademicPeriodAccess(
 }
 
 export function isFutureGradebookPeriod(access: Access | null, year: string, term: string) {
-  if (!access || access.activeAcademicYear !== year) return false;
+  if (!access?.activeAcademicYear) return false;
+  if (Number(year.slice(0,4)) > Number(access.activeAcademicYear.slice(0,4))) return true;
+  if (access.activeAcademicYear !== year) return false;
   const active = /Quarter (\d)/.exec(access.activeEntryTerm || '');
   const selected = /Quarter (\d)/.exec(term.replace(/Trimester/gi, 'Quarter'));
   return Boolean(active && selected && Number(selected[1]) > Number(active[1]));

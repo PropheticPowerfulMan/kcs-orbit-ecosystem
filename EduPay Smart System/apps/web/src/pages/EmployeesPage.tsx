@@ -1,3 +1,4 @@
+import { uiText, uiLocale, uiStatus } from "../uiText";
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import { BulkImportLink } from "../components/BulkImportLink";
 import DateSelect from '../components/DateSelect';
@@ -347,7 +348,7 @@ function normalizeComparable(value?: string | null) {
 }
 
 function formatCurrency(amount: number, currency = "USD") {
-  return new Intl.NumberFormat("fr-FR", {
+  return new Intl.NumberFormat(uiLocale(), {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
@@ -356,10 +357,10 @@ function formatCurrency(amount: number, currency = "USD") {
 }
 
 function formatDateTimeLabel(value?: string | null) {
-  if (!value) return "Non disponible";
+  if (!value) return uiText("Non disponible");
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Non disponible";
-  return new Intl.DateTimeFormat("fr-FR", {
+  if (Number.isNaN(date.getTime())) return uiText("Non disponible");
+  return new Intl.DateTimeFormat(uiLocale(), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
@@ -368,13 +369,13 @@ function formatDateTimeLabel(value?: string | null) {
 function labelizeFrequency(value?: string | null) {
   switch (String(value ?? "").toUpperCase()) {
     case "MONTHLY":
-      return "Mensuelle";
+      return uiText("Mensuelle");
     case "BI_MONTHLY":
-      return "Bimensuelle";
+      return uiText("Bimensuelle");
     case "QUARTERLY":
-      return "Trimestrielle";
+      return uiText("Trimestrielle");
     case "ANNUAL":
-      return "Annuelle";
+      return uiText("Annuelle");
     default:
       return infoValue(value);
   }
@@ -383,22 +384,22 @@ function labelizeFrequency(value?: string | null) {
 function labelizeObligationType(value?: string | null) {
   switch (String(value ?? "").toUpperCase()) {
     case "SALARY_ADVANCE":
-      return "Avance sur salaire";
+      return uiText("Avance sur salaire");
     case "SCHOOL_DEBT":
-      return "Dette envers l'ecole";
+      return uiText("Dette envers l'ecole");
     default:
-      return "Autre dette";
+      return uiText("Autre dette");
   }
 }
 
 function labelizeRepaymentMethod(value?: string | null) {
   switch (String(value ?? "").toUpperCase()) {
     case "SALARY_DEDUCTION":
-      return "Deduction salaire";
+      return uiText("Deduction salaire");
     case "EXTERNAL_PAYMENT":
-      return "Paiement hors salaire";
+      return uiText("Paiement hors salaire");
     case "MIXED":
-      return "Mixte";
+      return uiText("Mixte");
     default:
       return infoValue(value);
   }
@@ -1162,7 +1163,7 @@ export function EmployeesPage() {
 
       {error ? (
         <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger animate-fadeInUp">
-          {error}
+          {uiText(error)}
         </div>
       ) : null}
 
@@ -1268,7 +1269,7 @@ export function EmployeesPage() {
                 disabled={submitting}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 text-xs font-semibold text-amber-100 transition-colors hover:bg-amber-400/20 disabled:opacity-50"
               >
-                <KeyRound className="h-4 w-4" /> {submitting ? "Réinitialisation..." : "Réinitialiser le mot de passe"}
+                <KeyRound className="h-4 w-4" /> {submitting ? uiText("Réinitialisation...") : uiText("Réinitialiser le mot de passe")}
               </button>
               <button
                 type="button"
@@ -1416,12 +1417,12 @@ export function EmployeesPage() {
                             <tr key={obligation.id} className="border-b border-white/5 last:border-b-0">
                               <td className="px-4 py-3">
                                 <p className="font-medium text-white">{obligation.title}</p>
-                                <p className="text-xs text-ink-dim">{labelizeObligationType(obligation.type)} - {obligation.status}</p>
+                                <p className="text-xs text-ink-dim">{labelizeObligationType(obligation.type)} - {uiStatus(obligation.status)}</p>
                               </td>
                               <td className="px-4 py-3 text-ink-dim">{labelizeRepaymentMethod(obligation.repaymentMethod)}</td>
                               <td className="px-4 py-3 font-semibold text-white">{formatCurrency(Number(obligation.balance || 0), obligation.currency)}</td>
                               <td className="px-4 py-3 text-ink-dim">{formatDateTimeLabel(obligation.dueDate)}</td>
-                              <td className="px-4 py-3 text-ink-dim">{obligation.riskLevel} ({Number(obligation.riskScore || 0).toFixed(0)})</td>
+                              <td className="px-4 py-3 text-ink-dim">{uiStatus(obligation.riskLevel)} ({Number(obligation.riskScore || 0).toFixed(0)})</td>
                             </tr>
                           )) : (
                             <tr>
@@ -1467,7 +1468,7 @@ export function EmployeesPage() {
                         disabled={employeeNoticeSending || !employeeFinanceSnapshot.primaryProfile}
                         className="mt-2 w-full rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {employeeNoticeSending ? "Envoi..." : "Notifier"}
+                        {employeeNoticeSending ? uiText("Envoi...") : uiText("Notifier")}
                       </button>
                     </div>
                   </div>
@@ -1624,7 +1625,7 @@ export function EmployeesPage() {
               disabled={submitting || !form.fullName.trim()}
               className="rounded-2xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? "Enregistrement..." : "Enregistrer les modifications"}
+              {submitting ? uiText("Enregistrement...") : uiText("Enregistrer les modifications")}
             </button>
           </div>
         </ModalShell>
@@ -1644,7 +1645,7 @@ export function EmployeesPage() {
               disabled={submitting}
               className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? "Suppression..." : "Supprimer définitivement"}
+              {submitting ? uiText("Suppression...") : uiText("Supprimer définitivement")}
             </button>
           </div>
         </ModalShell>

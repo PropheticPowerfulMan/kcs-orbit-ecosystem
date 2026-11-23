@@ -1,3 +1,4 @@
+import { uiText, uiStatus } from "../uiText";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { Eye, Mail, MessageSquare, Send, Trash2, Users, X } from "lucide-react";
@@ -378,7 +379,7 @@ export function MessagesPage() {
                         ) : null}
                       </div>
                       <span className={`rounded-full px-3 py-1 text-xs font-bold ${active ? "bg-brand-300 text-slate-950" : "bg-white/[0.08] text-ink-dim"}`}>
-                        {active ? "Sélectionné" : "Choisir"}
+                        {active ? uiText("Sélectionné") : uiText("Choisir")}
                       </span>
                     </div>
                   </button>
@@ -433,7 +434,7 @@ export function MessagesPage() {
               </span>
             </div>
 
-            {error ? <p className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</p> : null}
+            {error ? <p className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{uiText(error)}</p> : null}
             {status ? <p className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{status}</p> : null}
 
             <button
@@ -442,7 +443,7 @@ export function MessagesPage() {
               disabled={sending}
               className="btn-primary mt-5 inline-flex items-center gap-2 px-5 py-3 text-sm font-bold disabled:opacity-60"
             >
-              <Send className="h-4 w-4" /> {sending ? "Envoi en cours..." : "Envoyer le message"}
+              <Send className="h-4 w-4" /> {sending ? uiText("Envoi en cours...") : uiText("Envoyer le message")}
             </button>
           </div>
         </div>
@@ -484,7 +485,7 @@ export function MessagesPage() {
               <select value={historyLanguage} onChange={(event) => setHistoryLanguage(event.target.value)} className="w-full">
                 <option value="ALL">{L("Toutes", "All")}</option>
                 <option value="fr">{L("Français", "French")}</option>
-                <option value="en">{L("English", "English")}</option>
+                <option value="en">{L("Anglais", "English")}</option>
               </select>
             </label>
             <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">
@@ -587,7 +588,7 @@ export function MessagesPage() {
                     disabled={deletingId === log.id}
                     className="inline-flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100 disabled:opacity-60"
                   >
-                    <Trash2 className="h-4 w-4" /> {deletingId === log.id ? "Suppression..." : "Supprimer"}
+                    <Trash2 className="h-4 w-4" /> {deletingId === log.id ? uiText("Suppression...") : uiText("Supprimer")}
                   </button>
                 </div>
               </article>
@@ -636,7 +637,7 @@ export function MessagesPage() {
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">{L("Trace technique", "Technical trace")}</p>
                   <p className="mt-2 text-white">{L("Type:", "Type:")} {messageTypeLabel(selectedLog.type)}</p>
                   <p className="mt-1 text-white">{L("Langue:", "Language:")} {messageLanguageLabel(selectedLog.language)}</p>
-                  <p className="mt-1 text-white">{L("Canal principal:", "Primary channel:")} {selectedLog.channel}</p>
+                  <p className="mt-1 text-white">{L("Canal principal:", "Primary channel:")} {uiStatus(selectedLog.channel)}</p>
                   <p className="mt-1 text-cyan-200">{deliveryStatusLabel(selectedLog.status)}</p>
                 </div>
               </div>

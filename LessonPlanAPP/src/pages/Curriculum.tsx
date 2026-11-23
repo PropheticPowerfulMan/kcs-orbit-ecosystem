@@ -1,3 +1,5 @@
+import {useApp} from "../contexts/AppContext";
+import {OfficialCurriculum} from "../components/OfficialCurriculum";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { BookOpen, Download, Edit3, FileJson, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -39,6 +41,7 @@ const defaultGrades = ["K3", "K4", "K5", ...Array.from({ length: 12 }, (_, i) =>
 
 export const Curriculum = () => {
   const { can } = useAuth();
+  const {language}=useApp();
   const { notify } = useToast();
   const [items, setItems] = useState(() => curriculumRepository.list());
   const [filters, setFilters] = useState(initialFilters);
@@ -110,7 +113,7 @@ export const Curriculum = () => {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5"><OfficialCurriculum/><details><summary className="cursor-pointer rounded-xl border border-border p-4 font-bold">{language==='fr'?'Ressources personnelles et existantes':'Personal and existing resources'}</summary><div className="mt-4 space-y-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-black uppercase text-cyan-200">Version 1.3</p>
@@ -193,7 +196,7 @@ export const Curriculum = () => {
           <datalist id="curriculum-grade-options">{grades.map((value) => <option key={value} value={value} />)}</datalist>
         </Card>
       </div>
-    </div>
+    </div></details></div>
   );
 };
 

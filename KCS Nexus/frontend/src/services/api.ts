@@ -1,3 +1,4 @@
+import {beginNexusWrite,finishNexusWrite} from '@/utils/applicationUpdateSafety'
 import {READ_RETRY_BUDGET_MS,readRetryDelay,isTemporaryFailure,isSessionRejection} from '@/utils/networkPolicy'
 import { useUIStore } from '@/store/uiStore'
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
@@ -51,6 +52,7 @@ const accessTokenNeedsRefresh = (token: string) => {
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const feedbackExcludedPaths = ['/auth/login', '/auth/refresh']
 type ResilientRequestConfig = InternalAxiosRequestConfig & {
+  _applicationWriteKey?: string
   _retry?: boolean
   _networkRetryCount?: number
   _networkStartedAt?: number
@@ -94,6 +96,8 @@ const mutationErrorMessage = (error: AxiosError) => {
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     const resilient=config as ResilientRequestConfig
+    if(mutationMethods.has((config.method||'GET').toUpperCase()))resilient._applicationWriteKey=beginNexusWrite(resilient._applicationWriteKey)
+    try {
     resilient._networkStartedAt ??= performance.now()
     if(resilient._networkRetryCount)config.timeout=Math.max(1,Math.min(config.timeout||40000,READ_RETRY_BUDGET_MS-(performance.now()-resilient._networkStartedAt)))
     // Capture URL context before a refresh awaits; retries keep the original request's scope.
@@ -124,6 +128,7 @@ api.interceptors.request.use(
       delete config.headers['Content-Type']
     }
     return config
+    } catch(error) {finishNexusWrite(resilient._applicationWriteKey);throw error}
   },
   (error) => Promise.reject(error)
 )
@@ -131,6 +136,7 @@ api.interceptors.request.use(
 // Response interceptor - handle token refresh
 api.interceptors.response.use(
   (response) => {
+    finishNexusWrite((response.config as ResilientRequestConfig)._applicationWriteKey)
     dispatchConnectionRestored()
     const method = response.config.method?.toUpperCase()
     if (expectsMutationFeedback(response.config)) {
@@ -140,6 +146,7 @@ api.interceptors.response.use(
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as ResilientRequestConfig
+    try {
     const skipAuthLogout = originalRequest?.headers?.['x-skip-auth-logout'] === 'true'
 
     // A 410 returned by a dashboard resource means that resource is gone; it
@@ -169,7 +176,7 @@ api.interceptors.response.use(
 
         useAuthStore.getState().login(user, token, refreshToken)
         originalRequest.headers.Authorization = `Bearer ${token}`
-        return api(originalRequest)
+        return await api(originalRequest)
       } catch (refreshError) {
         if(!useAuthStore.getState().refreshToken||isSessionRejection(refreshError as AxiosError)){
           useAuthStore.getState().logout()
@@ -187,12 +194,13 @@ api.interceptors.response.use(
       originalRequest._networkRetryCount=(originalRequest._networkRetryCount||0)+1
       dispatchConnectionDegraded(originalRequest._networkRetryCount)
       await waitForNetworkRetry(delay,originalRequest.signal as AbortSignal|undefined)
-      return api(originalRequest)
+      return await api(originalRequest)
     }
     if(isTemporaryFailure(error))dispatchConnectionDegraded()
 
     if (expectsMutationFeedback(originalRequest)) dispatchMutationFeedback('error', mutationErrorMessage(error))
     return Promise.reject(error)
+    } finally {finishNexusWrite(originalRequest?._applicationWriteKey)}
   }
 )
 

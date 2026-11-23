@@ -1,3 +1,4 @@
+import { clearResponseCaches } from "../services/responseCacheScope";
 import { create } from "zustand";
 
 export type Role =
@@ -32,6 +33,7 @@ const SESSION_ACTIVE_KEY = "edupay_session_active";
 const MUST_CHANGE_PASSWORD_KEY = "edupay_must_change_password";
 
 function clearStoredAuth() {
+  clearResponseCaches();
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   localStorage.removeItem(ROLE_STORAGE_KEY);
   localStorage.removeItem(NAME_STORAGE_KEY);

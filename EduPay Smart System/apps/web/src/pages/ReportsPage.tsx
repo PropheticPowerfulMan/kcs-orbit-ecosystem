@@ -1,3 +1,4 @@
+import { uiText } from "../uiText";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -451,10 +452,10 @@ export function ReportsPage() {
           </div>
           <div className="relative mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[
-              { label: "Revenu collecté", value: currency.format(financeOverview.collectedRevenue), icon: WalletCards },
-              { label: "Dépenses totales", value: currency.format(expenseOverview.expenses.totalExpenses), icon: Landmark },
-              { label: "Profit / perte", value: currency.format(expenseOverview.cashflow.profitLoss), icon: TrendingUp },
-              { label: "Trésorerie disponible", value: currency.format(expenseOverview.cashflow.availableCash), icon: Download }
+              { label: uiText("Revenu collecté"), value: currency.format(financeOverview.collectedRevenue), icon: WalletCards },
+              { label: uiText("Dépenses totales"), value: currency.format(expenseOverview.expenses.totalExpenses), icon: Landmark },
+              { label: uiText("Profit / perte"), value: currency.format(expenseOverview.cashflow.profitLoss), icon: TrendingUp },
+              { label: uiText("Trésorerie disponible"), value: currency.format(expenseOverview.cashflow.availableCash), icon: Download }
             ].map((card) => (
               <div key={card.label} className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">

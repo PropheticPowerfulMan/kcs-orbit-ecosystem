@@ -1,3 +1,4 @@
+import { uiText } from "../uiText";
 import { useEffect, useMemo, useState } from "react";
 import {
   Area,
@@ -476,7 +477,7 @@ export function AdminParentPaymentsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-700">
-                        {["Date", "Transaction", "Motif", "Mode", "Montant", "Statut"].map((heading) => (
+                        {[uiText("Date"), uiText("Transaction"), uiText("Motif"), uiText("Mode"), uiText("Montant"), uiText("Statut")].map((heading) => (
                           <th key={heading} className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wide text-ink-dim">
                             {heading}
                           </th>

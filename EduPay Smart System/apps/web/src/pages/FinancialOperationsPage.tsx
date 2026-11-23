@@ -1,3 +1,4 @@
+import { uiText, uiStatus } from "../uiText";
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
@@ -2876,7 +2877,7 @@ export function FinancialOperationsPage() {
                   <option value="CANCELLED">{F("Annulée", lang)}</option>
                 </select>
                 <select value={expensePeriodFilter} onChange={(event) => setExpensePeriodFilter(event.target.value)} className="input min-w-[180px]">
-                  {PERIOD_FILTERS.map((period) => <option key={period.value} value={period.value}>{period.label}</option>)}
+                  {PERIOD_FILTERS.map((period) => <option key={period.value} value={period.value}>{uiText(period.label)}</option>)}
                 </select>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={printExpensesReport} className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-300/25 bg-brand-500/10 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-500/20">
@@ -2905,7 +2906,7 @@ export function FinancialOperationsPage() {
                           <p className="mt-1 text-xs text-ink-dim">{expense.department} • {expense.category.accountCode || "-"} - {expense.category.name} • {new Date(expense.expenseDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <StatusBadge value={expense.status} />
+                          <StatusBadge value={uiStatus(expense.status)} />
                           <span className="font-mono text-sm font-bold text-white">{currency.format(expense.amount)}</span>
                         </div>
                       </div>
@@ -2924,7 +2925,7 @@ export function FinancialOperationsPage() {
                         </div>
                         <div>
                           <p className="text-ink-dim">{F("Mode / etape", lang)}</p>
-                          <p className="font-semibold text-white">{expense.paymentMethod || "Mode non precise"} - {currentStep ? `${currentStep.role} / stage ${currentStep.stage}` : "Workflow termine"}</p>
+                          <p className="font-semibold text-white">{expense.paymentMethod || "Mode non precise"} - {currentStep ? `${currentStep.role} / stage ${currentStep.stage}` : uiText("Workflow termine")}</p>
                         </div>
                       </div>
                       {expense.comments && <p className="mt-3 text-sm text-ink-dim">{expense.comments}</p>}
@@ -3264,7 +3265,7 @@ export function FinancialOperationsPage() {
                         </div>
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">{F("Departements touches", lang)}</p>
-                          <p className="mt-2 text-sm text-white">{vendorUsage[selectedVendor.id] ? Array.from(vendorUsage[selectedVendor.id].departments).join(", ") : "Aucun historique"}</p>
+                          <p className="mt-2 text-sm text-white">{vendorUsage[selectedVendor.id] ? Array.from(vendorUsage[selectedVendor.id].departments).join(", ") : uiText("Aucun historique")}</p>
                         </div>
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">{F("Notes", lang)}</p>
@@ -3316,7 +3317,7 @@ export function FinancialOperationsPage() {
                       <p className="font-semibold text-white">{budget.name}</p>
                       <p className="mt-1 text-xs text-ink-dim">{budget.department} • {budget.period?.name ?? "Période active"} • {budget.category?.name ?? "Budget global"}</p>
                     </div>
-                    <StatusBadge value={budget.status} />
+                    <StatusBadge value={uiStatus(budget.status)} />
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
                     <div>
@@ -3449,7 +3450,7 @@ export function FinancialOperationsPage() {
                         <p className="font-semibold text-white">{run.title}</p>
                         <p className="mt-1 text-xs text-ink-dim">{run.department || "Tous departements"} • {run.period?.name ?? "Période active"} • {labelizeFrequency(run.frequency, lang)}</p>
                       </div>
-                      <StatusBadge value={run.status} />
+                      <StatusBadge value={uiStatus(run.status)} />
                     </div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
                       <div>
@@ -3542,7 +3543,7 @@ export function FinancialOperationsPage() {
                   </label>
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
                     {F("Fréquence de paie", lang)}
-                    <select className="input" value={salaryForm.frequency} onChange={(event) => setSalaryForm((current) => ({ ...current, frequency: event.target.value }))}>
+                    <select className="input" value={uiStatus(salaryForm.frequency)} onChange={(event) => setSalaryForm((current) => ({ ...current, frequency: event.target.value }))}>
                       <option value="">{F("Laisser le système appliquer le mensuel par défaut", lang)}</option>
                       {PAYROLL_FREQUENCIES.map((frequency) => <option key={frequency} value={frequency}>{labelizeFrequency(frequency, lang)}</option>)}
                     </select>
@@ -3599,7 +3600,7 @@ export function FinancialOperationsPage() {
                   </label>
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
                     {F("Fréquence", lang)}
-                    <select className="input" value={payrollForm.frequency} onChange={(event) => setPayrollForm((current) => ({ ...current, frequency: event.target.value }))}>
+                    <select className="input" value={uiStatus(payrollForm.frequency)} onChange={(event) => setPayrollForm((current) => ({ ...current, frequency: event.target.value }))}>
                       {PAYROLL_FREQUENCIES.map((frequency) => <option key={frequency} value={frequency}>{labelizeFrequency(frequency, lang)}</option>)}
                     </select>
                   </label>
@@ -3609,7 +3610,7 @@ export function FinancialOperationsPage() {
                 </div>
                 <textarea className="input min-h-24" value={payrollForm.notes} onChange={(event) => setPayrollForm((current) => ({ ...current, notes: event.target.value }))} placeholder={F("Notes du run", lang)} />
                 <button type="submit" disabled={submittingKey === "payroll" || !eligiblePayrollProfiles.length} className="btn-primary justify-center px-5 py-3 text-sm font-semibold disabled:opacity-60">
-                  {submittingKey === "payroll" ? "Génération en cours..." : `Générer la paie et ${eligiblePayrollProfiles.length} fiche(s)`}
+                  {submittingKey === "payroll" ? uiText("Génération en cours...") : `Générer la paie et ${eligiblePayrollProfiles.length} fiche(s)`}
                 </button>
               </form>
             </OperationsSubDialog>
@@ -3634,10 +3635,10 @@ export function FinancialOperationsPage() {
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {[
-                    { label: "Salaire de base", value: currency.format(selectedPayslip.item.baseSalary), tone: "text-white" },
-                    { label: "Primes et bonus", value: currency.format(selectedPayslip.item.bonuses), tone: "text-emerald-200" },
-                    { label: "Total retenues", value: currency.format(Number(selectedPayslip.item.deductions || 0) + Number(selectedPayslip.item.advancesRecovered || 0) + Number(selectedPayslip.item.debtRecovered || 0)), tone: "text-amber-200" },
-                    { label: "Net à payer", value: currency.format(selectedPayslip.item.netSalary), tone: "text-cyan-200" }
+                    { label: uiText("Salaire de base"), value: currency.format(selectedPayslip.item.baseSalary), tone: "text-white" },
+                    { label: uiText("Primes et bonus"), value: currency.format(selectedPayslip.item.bonuses), tone: "text-emerald-200" },
+                    { label: uiText("Total retenues"), value: currency.format(Number(selectedPayslip.item.deductions || 0) + Number(selectedPayslip.item.advancesRecovered || 0) + Number(selectedPayslip.item.debtRecovered || 0)), tone: "text-amber-200" },
+                    { label: uiText("Net à payer"), value: currency.format(selectedPayslip.item.netSalary), tone: "text-cyan-200" }
                   ].map((metric) => (
                     <div key={metric.label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">{metric.label}</p>
@@ -3671,7 +3672,7 @@ export function FinancialOperationsPage() {
           )}
           {(activeSubDialog === "employee-advance-create" || activeSubDialog === "employee-debt-create") && canWrite && (
             <OperationsSubDialog
-              title={activeSubDialog === "employee-advance-create" ? "Avance sur salaire" : "Dette employé"}
+              title={activeSubDialog === "employee-advance-create" ? uiText("Avance sur salaire") : uiText("Dette employé")}
               subtitle="Cette opération crée une écriture comptable, une ligne de trésorerie et un reçu."
               onClose={() => setActiveSubDialog(null)}
             >
@@ -3943,7 +3944,7 @@ export function FinancialOperationsPage() {
                 {cashflowSourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
               </select>
               <select value={cashflowPeriodFilter} onChange={(event) => setCashflowPeriodFilter(event.target.value)} className="input h-9 min-w-[180px] text-xs">
-                {PERIOD_FILTERS.map((period) => <option key={period.value} value={period.value}>{period.label}</option>)}
+                {PERIOD_FILTERS.map((period) => <option key={period.value} value={period.value}>{uiText(period.label)}</option>)}
               </select>
             </div>
             {cashflowPeriodFilter === "CUSTOM" && (
@@ -4043,7 +4044,7 @@ export function FinancialOperationsPage() {
                       <p className="font-semibold text-white">{entry.fileName}</p>
                       <p className="mt-1 text-xs text-ink-dim">{entry.expenseTitle} • {entry.department} • {new Date(entry.expenseDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                     </div>
-                    <StatusBadge value={entry.status} />
+                    <StatusBadge value={uiStatus(entry.status)} />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button onClick={() => openExpenseSupportDocument(entry)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white hover:border-brand-300/25 hover:bg-brand-500/10">

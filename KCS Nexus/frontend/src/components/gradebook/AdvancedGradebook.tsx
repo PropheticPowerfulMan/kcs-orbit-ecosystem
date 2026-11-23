@@ -1,3 +1,4 @@
+import {preserveReadOnlyGradebook} from '@/utils/gradebookSaveScope'
 import {initialGradebookPanel,gradebookPanelKey} from '@/utils/mobileWorkspace'
 import AcademicCycleNotice from '@/components/shared/AcademicCycleNotice'
 import {officialAcademicCycle,globallyClosedCycle} from '@/utils/academicCycleSelection'
@@ -288,7 +289,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       return false
     }
     const savedAt = new Date().toISOString()
-    const snapshot: GradebookSnapshot = { scores, comments, assignments: sanitizeAssignments(assignments), categories, archivedAssignments, savedAt }
+    let snapshot: GradebookSnapshot = { scores, comments, assignments: sanitizeAssignments(assignments), categories, archivedAssignments, savedAt }
+    const visibleContent = stableGradebookValue({ ...snapshot, savedAt: undefined })
+    const lockedTerm = (value: string) => isAcademicPeriodReadOnly(periodAccess, academicYear, value || terms[0]) || isFutureGradebookPeriod(periodAccess, academicYear, value || terms[0])
     const scope = cycleKey
     try { localStorage.setItem(browserStorageKey, JSON.stringify(snapshot)) } catch { /* Server persistence remains available when browser storage is full. */ }
     const request = saveQueue.current.then(async () => {
@@ -303,25 +306,31 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             const state = (workspace?.state ?? {}) as Record<string, any>
             const currentSnapshot = state.advancedGradebookByCycle?.[cycleKey]
               ?? (academicYear === legacyAcademicYear ? state.advancedGradebookByCourse?.[selectedCourseId] : undefined)
+            snapshot = preserveReadOnlyGradebook(currentSnapshot, snapshot, lockedTerm)
             const content = (value: Partial<GradebookSnapshot> | undefined) => value ? { ...value, savedAt: undefined } : undefined
             const alreadyPersisted = stableGradebookValue(content(currentSnapshot)) === stableGradebookValue(content(snapshot))
             if (currentSnapshot?.savedAt && currentSnapshot.savedAt !== (serverVersions.current.get(scope) ?? loadedSnapshotSavedAt) && !alreadyPersisted) {
               throw new Error(tr('Ce cours a été modifié dans une autre session. Rechargez les notes avant de réessayer.', 'This course was updated in another session. Reload its saved grades before trying again.'))
             }
             if (alreadyPersisted && currentSnapshot.savedAt) snapshot.savedAt = currentSnapshot.savedAt
-            const legacyColumns = assignments.map(({ id, title, type, date, maxPoints, term, category, confirmedCycle }) => ({ id, title, type, date, maxPoints, term, category, confirmedCycle }))
+            const legacyColumns = snapshot.assignments.filter(a => !lockedTerm(a.term)).map(({ id, title, type, date, maxPoints, term, category, confirmedCycle }) => ({ id, title, type, date, maxPoints, term, category, confirmedCycle }))
             const nextLegacyScores = { ...(state.gradebookScores ?? {}) } as Record<string, string>
             // The legacy mirrors are kept only for the original 2026-2027 cycle so
             // older report-card readers remain compatible without leaking one
             // academic year's scores into another one.
             if (academicYear === legacyAcademicYear) {
               const legacyPrefix = `${selectedCourseId}-`
+              const openTaskIds = new Set([
+                ...snapshot.assignments.filter(a => !lockedTerm(a.term)).map(a => a.id),
+                ...(state.gradebookColumnsByCourse?.[selectedCourseId] ?? []).filter((a: GradebookColumn) => !lockedTerm(a.term)).map((a: GradebookColumn) => a.id),
+                ...(snapshot.archivedAssignments ?? []).filter(a => !lockedTerm(a.assignment.term)).map(a => a.assignment.id),
+              ])
               Object.keys(nextLegacyScores).forEach((key) => {
-                if (key.startsWith(legacyPrefix)) delete nextLegacyScores[key]
+                if ([...openTaskIds].some(id => key.startsWith(legacyPrefix + id + '-'))) delete nextLegacyScores[key]
               })
-              assignments.forEach((assignment) => {
+              snapshot.assignments.filter(a => !lockedTerm(a.term)).forEach((assignment) => {
                 enrolledCourseStudents.forEach((student) => {
-                  const value = scores[`${assignment.id}:${student.id}`]
+                  const value = snapshot.scores[`${assignment.id}:${student.id}`]
                   if (value !== undefined) nextLegacyScores[`${selectedCourseId}-${assignment.id}-${student.id}`] = value
                 })
               })
@@ -329,8 +338,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             const nextAdvancedByCourse = { ...(state.advancedGradebookByCourse ?? {}) }
             const nextLegacyColumns = { ...(state.gradebookColumnsByCourse ?? {}) }
             if (academicYear === legacyAcademicYear) {
-              nextAdvancedByCourse[selectedCourseId] = snapshot
-              nextLegacyColumns[selectedCourseId] = legacyColumns
+              nextAdvancedByCourse[selectedCourseId] = preserveReadOnlyGradebook(state.advancedGradebookByCourse?.[selectedCourseId] ?? currentSnapshot, snapshot, lockedTerm)
+              const previousColumns = state.gradebookColumnsByCourse?.[selectedCourseId] ?? (currentSnapshot?.assignments ?? []).map(({description, confirmedCycle, ...a}: GradebookColumn) => a)
+              nextLegacyColumns[selectedCourseId] = [...previousColumns.filter((a: GradebookColumn) => lockedTerm(a.term)), ...legacyColumns]
             }
             await teacherWorkspaceAPI.save({
               ...state,
@@ -347,7 +357,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             if (stableGradebookValue(persisted) !== stableGradebookValue(snapshot)) throw new Error(tr('La vérification sur le serveur a échoué. Vos notes restent conservées sur cet appareil. Réessayez.', 'Server verification did not confirm this save. Your grades remain on this device. Please retry.'))
             window.dispatchEvent(new CustomEvent('kcs-gradebook-saved', { detail: { courseId: selectedCourseId, savedAt: snapshot.savedAt, revision: confirmation.data?.data?.revision } }))
             serverVersions.current.set(scope, snapshot.savedAt ?? savedAt)
-            syncedContents.current.set(scope, stableGradebookValue({ ...snapshot, savedAt: undefined }))
+            syncedContents.current.set(scope, visibleContent)
             if (!automatic) {
               localStorage.setItem(autosavePreferenceKey, 'enabled')
               pausedAutosaves.current.delete(scope)
@@ -405,7 +415,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     ? tr('Bilan annuel en lecture seule, calculé à partir des quarters. Les notes se saisissent et se soumettent dans chaque quarter.', 'Read-only annual summary, derived from the quarters. Enter and submit grades within each quarter.')
     : futurePeriod
     ? tr('Ce quarter n’est pas encore ouvert. Saisissez les notes dans ', 'This quarter is not open yet. Enter grades in ') + (periodAccess?.activeEntryTerm || '') + tr(' jusqu’au passage confirmé par le SuperAdmin.', ' until the SuperAdmin confirms advancement.')
-    : tr('Cette période est clôturée. Les notes sont en lecture seule.', 'This academic period is closed. Grades are read-only.')
+    : tr('Cette période est clôturée. Les notes sont en lecture seule : ', 'This academic period is closed. Grades are read-only: ') + academicYear + ' · ' + term
   const closedNotice = () => onAction(periodNotice, true)
   const displayCategories = periodReadOnly && frozenCategoryWeights[term]?.length ? frozenCategoryWeights[term] : categories
   const manuallyBrowsingPeriod=useRef(false)

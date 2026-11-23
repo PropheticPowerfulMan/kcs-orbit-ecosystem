@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 const SOURCE_ROOT = join(process.cwd(), "src");
 const SCANNED_DIRS = ["pages", "components"];
 const VISIBLE_ATTRIBUTES = new Set(["placeholder", "title", "aria-label", "alt"]);
-const ALLOWED_LITERALS = new Set(["FR", "EN", "SMS", "USD", "KCS", "EduPay", "SAVANEX", "Excel", "PDF", "IA", "AI", "Mobile Money"]);
+const ALLOWED_LITERALS = new Set(["FR", "EN", "SMS", "USD", "KCS", "KCS ORBIT ECOSYSTEM", "KCS EDUPAY", "EduPay", "SAVANEX", "Excel", "PDF", "IA", "AI", "Mobile Money"]);
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((name) => {

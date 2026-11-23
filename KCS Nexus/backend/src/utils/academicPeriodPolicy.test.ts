@@ -138,3 +138,14 @@ test('SuperAdmin can edit closed records but future assessment and annual-summar
  assert.equal(closedGradebookChanged(before,after,{...closed,canManageClosedPeriods:true}),false)
  assert.equal(academicPeriodIsReadOnly({...closed,canManageClosedPeriods:true},year,q1),false)
 })
+
+test('future-year snapshots cannot accept marks before activation and remain readable',()=>{
+ const key='course::2027-2028',before={advancedGradebookByCycle:{[key]:{assignments:[{id:'next-year',term:q1,maxPoints:100}],scores:{'next-year:learner':'0'},savedAt:'old'}}};
+ assert.equal(futureGradebookChanged(before,structuredClone(before),open),false);
+ const changed=structuredClone(before);changed.advancedGradebookByCycle[key].scores['next-year:learner']='97';
+ assert.equal(futureGradebookChanged(before,changed,open),true);
+ assert.equal(futureGradebookChanged({},changed,open),true);
+ assert.equal(futureGradebookChanged(before,changed,{...open,activeAcademicYear:'2027-2028'}),false);
+ const old={advancedGradebookByCycle:{['course::2025-2026']:changed.advancedGradebookByCycle[key]}};
+ assert.equal(futureGradebookChanged({},old,open),false);
+});

@@ -1,3 +1,4 @@
+import { uiText, uiStatus } from "../uiText";
 import { useEffect, useMemo, useState } from "react";
 import {
   Area,
@@ -434,7 +435,7 @@ export function ParentTrackingPage() {
                 <p className="font-mono text-2xl font-black text-white">{summary.aiScore.toFixed(0)}/100</p>
               </div>
             </div>
-            <p className="mt-2 text-xs font-semibold text-cyan-200">{summary.riskLevel}</p>
+            <p className="mt-2 text-xs font-semibold text-cyan-200">{uiStatus(summary.riskLevel)}</p>
           </div>
         </div>
       </div>
@@ -457,7 +458,7 @@ export function ParentTrackingPage() {
                 <p className="break-words font-display text-2xl font-bold text-white">{data.fullName}</p>
                 <p className="mt-2 break-words text-sm text-ink-dim">{data.phone} · {data.email}</p>
                 {!data.photoUrl && <p className="mt-2 text-xs text-amber-200">{t("parentPhotoMissing")}</p>}
-                {photoError && <p className="mt-2 text-xs text-danger">{photoError}</p>}
+                {photoError && <p className="mt-2 text-xs text-danger">{uiText(photoError)}</p>}
                 <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20">
                   <Camera className="h-4 w-4" />
                   {photoSaving ? t("pmSaving") : t("parentPhotoAction")}
@@ -472,10 +473,10 @@ export function ParentTrackingPage() {
             </div>
             <div className="grid w-full min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:w-auto">
               {[
-                { label: "Enfants", value: String(data.students.length), icon: Target, color: "text-brand-300" },
-                { label: "Mois couverts", value: summary.coveredMonths.toFixed(1), icon: CalendarClock, color: "text-cyan-300" },
-                { label: "Risque max", value: `${(summary.worstStudent?.risk ?? 0).toFixed(0)}%`, icon: AlertTriangle, color: "text-amber-300" },
-                { label: "Meilleur suivi", value: `${(summary.bestStudent?.progress ?? 0).toFixed(0)}%`, icon: CheckCircle2, color: "text-emerald-300" }
+                { label: uiText("Enfants"), value: String(data.students.length), icon: Target, color: "text-brand-300" },
+                { label: uiText("Mois couverts"), value: summary.coveredMonths.toFixed(1), icon: CalendarClock, color: "text-cyan-300" },
+                { label: uiText("Risque max"), value: `${(summary.worstStudent?.risk ?? 0).toFixed(0)}%`, icon: AlertTriangle, color: "text-amber-300" },
+                { label: uiText("Meilleur suivi"), value: `${(summary.bestStudent?.progress ?? 0).toFixed(0)}%`, icon: CheckCircle2, color: "text-emerald-300" }
               ].map((item) => (
                 <div key={item.label} className="min-w-0 rounded-xl border border-white/10 bg-slate-900/30 p-3">
                   <item.icon className={`h-4 w-4 ${item.color}`} />
@@ -642,7 +643,7 @@ export function ParentTrackingPage() {
             <div className="min-w-0 rounded-xl border border-white/10 bg-slate-900/30 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Délai estimé", "Estimated time")}</p>
               <p className="mt-2 font-mono text-lg font-bold text-white">
-                {Number.isFinite(summary.monthsToClearDebt) ? `${Math.ceil(summary.monthsToClearDebt)} mois` : "À définir"}
+                {Number.isFinite(summary.monthsToClearDebt) ? `${Math.ceil(summary.monthsToClearDebt)} mois` : uiText("À définir")}
               </p>
             </div>
           </div>

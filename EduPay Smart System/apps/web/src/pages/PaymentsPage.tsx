@@ -1,3 +1,4 @@
+import { uiText, uiStatus } from "../uiText";
 import DateSelect from '../components/DateSelect';
 import { useMemo, useState, useEffect, useRef, type FormEvent } from "react";
 import { createPortal } from "react-dom";
@@ -1691,9 +1692,9 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
             </span>
           </div>
           {[
-            ["Motif", receipt.reason],
-            ["Méthode", getMethodLabel(receipt.method)],
-            ["Statut", getStatusLabel(receipt.status)]
+            [uiText("Motif"), receipt.reason],
+            [uiText("Méthode"), getMethodLabel(receipt.method)],
+            [uiText("Statut"), getStatusLabel(receipt.status)]
           ].map(([label, value]) => (
             <div key={label} className="grid grid-cols-[120px_1fr] gap-3 border-b border-dotted border-slate-300 py-2">
               <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</span>
@@ -2542,7 +2543,7 @@ export function PaymentsPage() {
         const labels: Record<string, string> = {
           form:    "+ " + t("newPaymentBtn"),
           history: "Historique (" + payments.length + ")",
-          report:  "État des paiements",
+          report:  uiText("État des paiements"),
         };
         return (
           <button
@@ -2577,10 +2578,10 @@ export function PaymentsPage() {
   const StatsBanner = ({ compact = false }: { compact?: boolean }) => (
     <div className={`grid grid-cols-2 md:grid-cols-4 ${compact ? "gap-3" : "gap-4"} mb-6`}>
       {[
-        { label: "Total encaissé",   value: fmtUsd(stats.total),     color: "text-brand-300"   },
-        { label: "Réglés",           value: fmtUsd(stats.completed), color: "text-emerald-300" },
-        { label: "En attente",       value: fmtUsd(stats.pending),   color: "text-amber-300"   },
-        { label: "Annules",          value: fmtUsd(stats.cancelled), color: "text-slate-300"   },
+        { label: uiText("Total encaissé"),   value: fmtUsd(stats.total),     color: "text-brand-300"   },
+        { label: uiText("Réglés"),           value: fmtUsd(stats.completed), color: "text-emerald-300" },
+        { label: uiText("En attente"),       value: fmtUsd(stats.pending),   color: "text-amber-300"   },
+        { label: uiText("Annules"),          value: fmtUsd(stats.cancelled), color: "text-slate-300"   },
       ].map((s) => (
         <div key={s.label} className={`card ${compact ? "py-3 px-4" : "py-4 px-5"}`}>
           <p className="text-xs text-ink-dim uppercase tracking-wide mb-1">{s.label}</p>
@@ -2617,7 +2618,7 @@ export function PaymentsPage() {
                 onClick={() => setHistoryNotificationPanelOpen((current) => !current)}
                 className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white transition hover:border-brand-300/30 hover:bg-brand-500/10"
               >
-                {historyNotificationPanelOpen ? "Réduire" : "Gérer les parents"}
+                {historyNotificationPanelOpen ? uiText("Réduire") : uiText("Gérer les parents")}
               </button>
             )}
           </div>
@@ -2626,7 +2627,7 @@ export function PaymentsPage() {
           <p className="mt-2 text-xs font-semibold text-cyan-200">{t("paymentNotificationsChannels")}</p>
           {compact && (
             <p className="mt-2 text-xs text-ink-dim">
-              {parents.length} {L("parent(s) configurables. Les réglages détaillés sont repliés pour alléger l'historique.","parent(s) configurables. Les réglages détaillés sont repliés pour alléger l'historique.")}
+              {parents.length} {L("parent(s) configurables. Les réglages détaillés sont repliés pour alléger l'historique.", "configurable parent(s). Detailed settings are collapsed to keep the history compact.")}
             </p>
           )}
           {selectedParent && (
@@ -2635,12 +2636,12 @@ export function PaymentsPage() {
                 ? "border-cyan-400/25 bg-cyan-400/10 text-cyan-100"
                 : "border-amber-400/30 bg-amber-400/10 text-amber-100"
             }`}>
-              {L("Parent cible :","Target parent:")} {selectedParent.fullName} {L("- Email & SMS","- Email & SMS")} {selectedParentNotificationsEnabled ? t("enabled") : t("disabled")}
+              {L("Parent cible :","Target parent:")} {selectedParent.fullName} {L("– E-mail et SMS", "– Email & SMS")} {selectedParentNotificationsEnabled ? t("enabled") : t("disabled")}
               {selectedParent.email ? ` - ${selectedParent.email}` : ""}
               {selectedParent.phone ? ` - ${selectedParent.phone}` : ""}
             </p>
           )}
-          {notificationStatus && <p className="mt-2 text-xs font-semibold text-white/85">{notificationStatus}</p>}
+          {notificationStatus && <p className="mt-2 text-xs font-semibold text-white/85">{uiText(notificationStatus)}</p>}
           {parents.length > 0 && (!compact || historyNotificationPanelOpen) && (
             <div className="edupay-scrollbar mt-4 grid max-h-64 gap-2 overflow-y-auto pr-1 md:grid-cols-2 xl:grid-cols-3">
               {parents.map((parent) => {
@@ -2658,7 +2659,7 @@ export function PaymentsPage() {
                   >
                     <span className="block truncate text-xs font-black uppercase tracking-wide">{parent.fullName}</span>
                     <span className="mt-1 block text-[11px] font-semibold">
-                      {L("Email & SMS","Email & SMS")} {active ? t("enabled") : t("disabled")}
+                      {L("E-mail et SMS", "Email & SMS")} {active ? t("enabled") : t("disabled")}
                       {!paymentNotificationsEnabled && active ? " - en attente globale" : ""}
                     </span>
                   </button>
@@ -2723,7 +2724,7 @@ export function PaymentsPage() {
             disabled={receiptPrintingId === r.id}
             className="flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold transition-all active:scale-95 shadow-lg shadow-brand-500/20"
           >
-            <PrintIcon className="w-5 h-5" /> {receiptPrintingId === r.id ? "Préparation..." : t("printPdf")}
+            <PrintIcon className="w-5 h-5" /> {receiptPrintingId === r.id ? uiText("Préparation...") : t("printPdf")}
           </button>
           <button
             onClick={() => exportReceiptExcel(r, lang)}
@@ -2735,7 +2736,7 @@ export function PaymentsPage() {
             onClick={() => setView("history")}
             className="px-5 py-3 rounded-xl border border-slate-600 text-ink-dim hover:text-white hover:border-slate-400 transition-all font-semibold text-sm"
           >
-            {L("Voir l'historique","Voir l'historique")}
+            {L("Voir l'historique", "View history")}
           </button>
           <button
             onClick={() => setView("report")}
@@ -2782,7 +2783,7 @@ export function PaymentsPage() {
                 title={L("Ouvre la boîte d’impression pour enregistrer la liste filtrée en PDF", "Open the print dialog to save the filtered list as PDF")}
                 className="flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-brand-700 active:scale-95"
               >
-                <PrintIcon /> {historyPrintBusy ? "Préparation..." : "PDF / Imprimer"}
+                <PrintIcon /> {historyPrintBusy ? uiText("Préparation...") : uiText("PDF / Imprimer")}
               </button>
               <button
                 onClick={triggerHistoryExcel}
@@ -2790,7 +2791,7 @@ export function PaymentsPage() {
                 title={L("Exporte exactement la liste filtrée courante au format Excel", "Export the current filtered list to Excel")}
                 className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-3 text-sm font-bold text-emerald-200 transition-all hover:bg-emerald-500/20 active:scale-95"
               >
-                <ExcelIcon /> {historyExcelBusy ? "Export..." : "Exporter Excel"}
+                <ExcelIcon /> {historyExcelBusy ? uiText("Export...") : uiText("Exporter Excel")}
               </button>
             </div>
           </div>
@@ -2832,7 +2833,7 @@ export function PaymentsPage() {
               <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">{L("Statut","Status")}</label>
               <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full">
                 <option value="ALL">{L("Tous les statuts", "All statuses")}</option>
-                {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{uiText(o.label)}</option>)}
               </select>
             </div>
             <div>
@@ -2846,7 +2847,7 @@ export function PaymentsPage() {
               <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">{L("Mode de paiement", "Payment method")}</label>
               <select value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)} className="w-full">
                 <option value="ALL">{L("Tous les modes", "All methods")}</option>
-                {METHOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {METHOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{uiText(o.label)}</option>)}
               </select>
             </div>
             <div>
@@ -2888,7 +2889,7 @@ export function PaymentsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-700">
-                  {["No Transaction", "Date", "Paiement pour", "Motif", "Mode", "Montant (USD)", "Statut", "Actions"].map((h) => (
+                  {[uiText("No Transaction"), uiText("Date"), uiText("Paiement pour"), uiText("Motif"), uiText("Mode"), uiText("Montant (USD)"), uiText("Statut"), uiText("Actions")].map((h) => (
                     <th key={h} className="text-left text-xs font-bold uppercase tracking-wide text-ink-dim py-3 px-3 first:pl-0 last:pr-0">
                       {h}
                     </th>
@@ -2905,7 +2906,7 @@ export function PaymentsPage() {
                     <td className="px-3 py-2.5">
                       <div className="min-w-[190px] max-w-[250px]">
                         <p className="font-semibold text-white">{getPaymentSubjectName(p)}</p>
-                        {getPaymentParentCaption(p) ? <p className="mt-0.5 text-xs text-ink-dim">{L("Parent:","Parent:")} {getPaymentParentCaption(p)}</p> : null}
+                        {getPaymentParentCaption(p) ? <p className="mt-0.5 text-xs text-ink-dim">{L("Parent :", "Parent:")} {getPaymentParentCaption(p)}</p> : null}
                         {p.tuitionAllocationSummary && (() => {
                           const allocationSnapshot = buildReceiptAllocationSnapshot(p.tuitionAllocationSummary, {
                             maxVisibleChildren: 1,
@@ -2929,7 +2930,7 @@ export function PaymentsPage() {
                     <td className="px-3 py-2.5 whitespace-nowrap font-mono font-bold text-emerald-300">
                       $ {formatMoney(p.amount)}
                     </td>
-                    <td className="px-3 py-2.5"><StatusBadge status={p.status} /></td>
+                    <td className="px-3 py-2.5"><StatusBadge status={uiStatus(p.status)} /></td>
                     <td className="px-3 py-2.5 last:pr-0">
                       <div className="flex flex-wrap gap-1.5">
                         <button
@@ -2950,7 +2951,7 @@ export function PaymentsPage() {
                           <ExcelIcon className="w-3.5 h-3.5" />
                         </button>
                         <select
-                          value={p.status}
+                          value={uiStatus(p.status)}
                           onChange={(e) => changeStatus(p.id, e.target.value as PaymentRecord["status"])}
                           disabled={p.status === "CANCELLED"}
                           className="text-xs rounded px-1.5 py-1 bg-slate-700 border-slate-600 text-white"
@@ -2958,7 +2959,7 @@ export function PaymentsPage() {
                         >
                           {p.status === "CANCELLED" ? <option value="CANCELLED">{L("Annule","Cancelled")}</option> : null}
                           {STATUS_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
+                            <option key={o.value} value={o.value}>{uiText(o.label)}</option>
                           ))}
                         </select>
                         <button
@@ -3017,7 +3018,7 @@ export function PaymentsPage() {
         <div className="animate-fadeInDown">
           <h1 className="font-display text-3xl font-bold text-white">{L("État des paiements", "Payment status")}</h1>
           <p className="text-ink-dim mt-2 text-sm">
-            {L("Situation financière","Financial overview")} {reportSearch ? `- ${reportSearch}` : "générale"} {L("- Tous les montants en USD","- All amounts in USD")}
+            {L("Situation financière","Financial overview")} {reportSearch ? `- ${reportSearch}` : uiText("générale")} {L("- Tous les montants en USD","- All amounts in USD")}
           </p>
         </div>
         <NavBar />
@@ -3043,14 +3044,14 @@ export function PaymentsPage() {
             className="flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold transition-all active:scale-95 shadow-lg shadow-brand-500/20 whitespace-nowrap"
           >
             <PrintIcon className="w-5 h-5" />
-            {reportSearch ? `Imprimer l'état de ${reportSearch}` : "Imprimer l'état général"}
+            {reportSearch ? `Imprimer l'état de ${reportSearch}` : uiText("Imprimer l'état général")}
           </button>
           <button
             onClick={() => exportPaymentsExcel(`etat-paiements-${(reportSearch || "general").toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}`, reportPayments)}
             className="flex items-center gap-2 px-6 py-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 font-bold transition-all active:scale-95 whitespace-nowrap"
           >
             <ExcelIcon className="w-5 h-5" />
-            {reportSearch ? `Exporter ${reportSearch} en Excel` : "Exporter l'état général en Excel"}
+            {reportSearch ? `Exporter ${reportSearch} en Excel` : uiText("Exporter l'état général en Excel")}
           </button>
         </div>
 
@@ -3075,7 +3076,7 @@ export function PaymentsPage() {
                     </div>
                     <div>
                       <p className="font-bold text-white text-base">{subject}</p>
-                      {parentCaptions.length > 0 ? <p className="mt-1 text-xs text-ink-dim">{L("Parent:","Parent:")} {parentCaptions.join(" / ")}</p> : null}
+                      {parentCaptions.length > 0 ? <p className="mt-1 text-xs text-ink-dim">{L("Parent :", "Parent:")} {parentCaptions.join(" / ")}</p> : null}
                       <p className="text-xs text-ink-dim">{recs.length} {L("transaction","transaction")}{recs.length > 1 ? "s" : ""}</p>
                     </div>
                   </div>
@@ -3106,7 +3107,7 @@ export function PaymentsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-700">
-                        {["No Transaction", "Date", "Motif", "Mode", "Montant USD", "Statut", ""].map((h) => (
+                        {[uiText("No Transaction"), uiText("Date"), uiText("Motif"), uiText("Mode"), uiText("Montant USD"), uiText("Statut"), ""].map((h) => (
                           <th key={h} className="text-left text-xs font-bold uppercase tracking-wide text-ink-dim py-2 px-2 first:pl-0 last:pr-0">
                             {h}
                           </th>
@@ -3123,7 +3124,7 @@ export function PaymentsPage() {
                           <td className="py-2.5 px-2 text-ink-dim">{r.reason}</td>
                           <td className="py-2.5 px-2 text-xs text-ink-dim">{r.method.replace(/_/g, " ")}</td>
                           <td className="py-2.5 px-2 font-mono font-bold text-emerald-300">$ {formatMoney(r.amount)}</td>
-                          <td className="py-2.5 px-2"><StatusBadge status={r.status} /></td>
+                          <td className="py-2.5 px-2"><StatusBadge status={uiStatus(r.status)} /></td>
                           <td className="py-2.5 px-2 last:pr-0">
                             <button
                               title={L("Imprimer le reçu", "Print receipt")}
@@ -3159,13 +3160,13 @@ export function PaymentsPage() {
                     onClick={() => exportPaymentsExcel(`etat-${subject.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}`, payments, subject, undefined, lang)}
                     className="mr-3 flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition-all text-sm font-semibold"
                   >
-                    <ExcelIcon /> {L("Exporter l'état de","Exporter l'état de")} {subject}
+                    <ExcelIcon /> {L("Exporter l'état de", "Export statement for")} {subject}
                   </button>
                   <button
                     onClick={() => printHtml(buildReportHtml(payments, subject, undefined, lang))}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-500/40 text-brand-300 hover:bg-brand-600/20 transition-all text-sm font-semibold"
                   >
-                    <PrintIcon /> {L("Imprimer l'état de","Imprimer l'état de")} {subject}
+                    <PrintIcon /> {L("Imprimer l'état de", "Print statement for")} {subject}
                   </button>
                 </div>
               </div>
@@ -3250,7 +3251,7 @@ export function PaymentsPage() {
 
         {apiError && (
           <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
-            {apiError}
+            {uiText(apiError)}
           </div>
         )}
 
@@ -3423,7 +3424,7 @@ export function PaymentsPage() {
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">{L("Contexte financier", "Financial context")}</p>
                     <h3 className="mt-1 text-lg font-bold text-white">{selectedParentFinance.profile.activeTuitionPlan}</h3>
                     <p className="mt-1 text-sm text-cyan-100">
-                      {L("Paid","Paid")} {fmtUsd(selectedParentFinance.profile.totalPaid)} {L("· Debt","· Debt")} {fmtUsd(selectedParentFinance.profile.totalDebt)} {L("· Reductions","· Reductions")} {fmtUsd(selectedParentFinance.profile.totalReduction)}
+                      {L("Payé", "Paid")} {fmtUsd(selectedParentFinance.profile.totalPaid)} {L("· Dette", "· Debt")} {fmtUsd(selectedParentFinance.profile.totalDebt)} {L("· Réductions", "· Discounts")} {fmtUsd(selectedParentFinance.profile.totalReduction)}
                     </p>
                     <p className="mt-1 text-xs text-cyan-100/85">
                       {L("Couverture","Coverage")} {selectedParentFinance.profile.completionRate.toFixed(1)} % · {selectedParentFinance.profile.overdueInstallments} {L("échéance(s) en retard.","overdue installment(s).")}
@@ -3454,7 +3455,7 @@ export function PaymentsPage() {
                           <p className="mt-1 text-[11px] text-ink-dim">{suggestion.planName} · {suggestion.paymentOptionLabel}</p>
                         </div>
                         <span className={`rounded-full px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${suggestion.isOverdue ? "bg-red-500/15 text-red-200" : "bg-cyan-500/15 text-cyan-100"}`}>
-                          {suggestion.isOverdue ? "Retard" : suggestion.status}
+                          {suggestion.isOverdue ? uiText("Retard") : suggestion.status}
                         </span>
                       </div>
                       <div className="mt-3 flex items-center justify-between text-xs text-cyan-100/85">
@@ -3471,10 +3472,10 @@ export function PaymentsPage() {
               <div className="lg:col-span-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0">
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">{L("EduPay Tuition Payment Engine","EduPay Tuition Payment Engine")}</p>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">{L("Calcul de scolarité EduPay", "EduPay tuition calculation")}</p>
                     <h3 className="mt-1 text-lg font-bold text-white">{L("Réduction familiale en premier, réduction du plan ensuite", "Family discount first, plan discount second")}</h3>
                     <p className="mt-1 text-sm text-emerald-100/85">
-                      {displayedParentStudents.length} {L("child account","child account")}{displayedParentStudents.length > 1 ? "s" : ""}{L(". Family discount applies when there are 2 or more linked children.",". Family discount applies when there are 2 or more linked children.")}
+                      {displayedParentStudents.length} {L("compte enfant", "child account")}{displayedParentStudents.length > 1 ? "s" : ""}{L(". La réduction familiale s’applique à partir de deux enfants rattachés.", ". Family discount applies when there are 2 or more linked children.")}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -3484,7 +3485,7 @@ export function PaymentsPage() {
                       disabled={tuitionEngineBusy || !form.parentId || amountNum <= 0 || (displayedParentStudents.length > 0 && form.studentIds.length === 0)}
                       className="rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-bold text-emerald-50 hover:bg-emerald-500/30 disabled:opacity-50"
                     >
-                      {tuitionEngineBusy ? "Calcul..." : allocationMode === "MANUAL" && tuitionPreview ? "Recalculer manuellement" : "Prévisualiser la répartition"}
+                      {tuitionEngineBusy ? uiText("Calcul...") : allocationMode === "MANUAL" && tuitionPreview ? uiText("Recalculer manuellement") : uiText("Prévisualiser la répartition")}
                     </button>
                     <button
                       type="button"
@@ -3496,7 +3497,7 @@ export function PaymentsPage() {
                     </button>
                     {!tuitionPreview && (
                       <p className="w-full text-xs font-semibold text-emerald-100/80">
-                        {L("La confirmation est active seulement après la prévisualisation, pour que le financier voie la répartition avant l'enregistrement.","La confirmation est active seulement après la prévisualisation, pour que le financier voie la répartition avant l'enregistrement.")}
+                        {L("La confirmation est active seulement après la prévisualisation, pour que le financier voie la répartition avant l'enregistrement.", "Confirmation is available after preview so the finance officer can review allocation before saving.")}
                       </p>
                     )}
                   </div>
@@ -3517,8 +3518,8 @@ export function PaymentsPage() {
                               : "border-white/10 bg-slate-950/30 text-ink-dim hover:border-emerald-300/40 hover:text-white"
                           }`}
                         >
-                          <span className="block text-sm font-bold">{plan.label}</span>
-                          <span className="mt-1 block text-[11px]">{plan.detail}</span>
+                          <span className="block text-sm font-bold">{uiText(plan.label)}</span>
+                          <span className="mt-1 block text-[11px]">{uiText(plan.detail)}</span>
                         </button>
                       ))}
                     </div>
@@ -3538,7 +3539,7 @@ export function PaymentsPage() {
                               : "border-white/10 bg-slate-950/30 text-ink-dim hover:border-cyan-300/40 hover:text-white"
                           }`}
                         >
-                          {mode === "AUTO" ? "Automatic scientific allocation" : "Manual finance split"}
+                          {mode === "AUTO" ? uiText("Automatic scientific allocation") : uiText("Manual finance split")}
                         </button>
                       ))}
                     </div>
@@ -3576,7 +3577,7 @@ export function PaymentsPage() {
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="font-semibold text-white">{row.studentName}</p>
                                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${row.isOverdue ? "bg-red-500/15 text-red-200" : "bg-cyan-500/15 text-cyan-100"}`}>
-                                  {row.isOverdue ? "Retard" : row.status}
+                                  {row.isOverdue ? uiText("Retard") : row.status}
                                 </span>
                               </div>
                               <p className="mt-1 text-xs text-ink-dim">
@@ -3628,9 +3629,9 @@ export function PaymentsPage() {
                             </div>
                             <div className="mt-3 grid gap-2 text-xs text-emerald-50/85 sm:grid-cols-2">
                               <span>{L("Base","Base")} {fmtUsd(row.baseAnnualTuition)}</span>
-                              <span>{L("Family -","Family -")}{fmtUsd(row.familyDiscountAmount)}</span>
+                              <span>{L("Famille –", "Family –")}{fmtUsd(row.familyDiscountAmount)}</span>
                               <span>{L("After family","After family discount")} {fmtUsd(row.familyAdjustedTuition)}</span>
-                              <span>{L("Plan -","Plan -")}{fmtUsd(row.planDiscountAmount)}</span>
+                              <span>{L("Plan -", "Plan –")}{fmtUsd(row.planDiscountAmount)}</span>
                               {row.monthlyAmount ? <span>{L("Monthly","Monthly payment")} {fmtUsd(row.monthlyAmount)}</span> : null}
                             </div>
                           </div>
@@ -3661,9 +3662,9 @@ export function PaymentsPage() {
                           )}
                         </div>
                         <div className="text-right text-xs">
-                          <p className="font-mono font-bold text-white">{L("Allocated","Allocated")} {fmtUsd(tuitionPreview.allocationPreview.allocatedTotal)}</p>
-                          <p className="font-mono text-amber-100">{L("Missing","Missing")} {fmtUsd(tuitionPreview.allocationPreview.missingAmount)}</p>
-                          {tuitionPreview.allocationPreview.advanceBalance > 0 && <p className="font-mono text-emerald-100">{L("Advance","Advance")} {fmtUsd(tuitionPreview.allocationPreview.advanceBalance)}</p>}
+                          <p className="font-mono font-bold text-white">{L("Imputé", "Allocated")} {fmtUsd(tuitionPreview.allocationPreview.allocatedTotal)}</p>
+                          <p className="font-mono text-amber-100">{L("À couvrir", "Outstanding")} {fmtUsd(tuitionPreview.allocationPreview.missingAmount)}</p>
+                          {tuitionPreview.allocationPreview.advanceBalance > 0 && <p className="font-mono text-emerald-100">{L("Avance", "Credit balance")} {fmtUsd(tuitionPreview.allocationPreview.advanceBalance)}</p>}
                         </div>
                       </div>
 
@@ -3771,7 +3772,7 @@ export function PaymentsPage() {
               type="text"
               value={form.reason}
               onChange={(e) => setField("reason", e.target.value)}
-              placeholder={form.paymentScope === "SERVICE" ? "Ex. Abonnement bus scolaire - juin" : "Ex. Frais scolaires 1er trimestre 2026"}
+              placeholder={form.paymentScope === "SERVICE" ? uiText("Ex. Abonnement bus scolaire - juin") : uiText("Ex. Frais scolaires 1er trimestre 2026")}
               className={`w-full ${fieldErrors.reason ? "border-danger" : ""}`}
             />
             <datalist id="payment-reason-suggestions">
@@ -3828,12 +3829,12 @@ export function PaymentsPage() {
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">{t("method")}</label>
               <select
-                value={form.method}
+                value={uiStatus(form.method)}
                 onChange={(e) => setField("method", e.target.value as FormState["method"])}
                 className="w-full"
               >
                 {METHOD_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                  <option key={o.value} value={o.value}>{uiText(o.label)}</option>
                 ))}
               </select>
             </div>
@@ -3889,7 +3890,7 @@ export function PaymentsPage() {
                     onChange={() => setField("status", o.value as FormState["status"])}
                     className="sr-only"
                   />
-                  {o.label}
+                  {uiText(o.label)}
                 </label>
               ))}
             </div>

@@ -235,6 +235,17 @@ export function futureGradebookChanged(previous: unknown, next: unknown, access:
   // Annual is a derived summary, not a writable assessment period. Do not use
   // an annual closure here: that would also lock the still-open quarters.
   const before = record(previous), after = record(next);
+  // Published future calendars may be planned, but grade entry starts only after activation.
+  // Preserve any existing future snapshots unchanged and never mix their marks with this year.
+  const futureYears = [...new Set([
+    ...Object.keys(record(before.advancedGradebookByCycle)),
+    ...Object.keys(record(after.advancedGradebookByCycle)),
+  ].map(key => key.slice(key.lastIndexOf('::') + 2)))]
+    .filter(candidate => /^\d{4}-\d{4}$/.test(candidate) && Number(candidate.slice(0, 4)) > Number(year.slice(0, 4)));
+  if (futureYears.length && closedGradebookChanged(previous, next, {
+    ...access, canManageClosedPeriods: false, reopenedPeriods: [],
+    closedPeriods: futureYears.map(academicYear => ({ academicYear, term: 'Annual final' })),
+  })) return true;
   for (const field of ['advancedGradebookByCycle', 'advancedGradebookByCourse', 'gradebookColumnsByCourse']) {
     const oldMap = record(before[field]), newMap = record(after[field]);
     for (const key of new Set([...Object.keys(oldMap), ...Object.keys(newMap)])) {
