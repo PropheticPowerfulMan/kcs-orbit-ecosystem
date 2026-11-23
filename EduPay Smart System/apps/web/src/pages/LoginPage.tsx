@@ -1,3 +1,4 @@
+import { ArrowRight, ArrowUpRight, LockKeyhole, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -335,145 +336,77 @@ export function LoginPage() {
   };
 
   return (
-    <div className="ep-login min-h-screen grid place-items-center relative overflow-hidden px-4 py-8">
+    <div className="ep-login">
       {showForgot && <ForgotPasswordModal initialResetToken={resetTokenFromUrl} onClose={() => setShowForgot(false)} t={t} lang={lang} />}
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 -right-20 w-96 h-96 bg-brand-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
-        <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-accent rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
-      </div>
-
-      {/* Login Card */}
-      <div className="w-full max-w-md relative z-10 animate-fadeInUp">
-        <div className="glass rounded-2xl overflow-hidden">
-          {/* Header with gradient */}
-          <div className="relative overflow-hidden p-8">
-            <div className="absolute inset-0 bg-gradient-to-br from-brand-600 to-brand-500 opacity-90"></div>
-            <div className="absolute inset-0 bg-gradient-to-br from-transparent via-brand-500/0 to-accent/20"></div>
-            
-            <div className="relative z-10 flex flex-col items-center text-center">
-              <div className="logo-glass h-20 w-20 rounded-full flex items-center justify-center border-2 border-white/35 shadow-lg shadow-black/20">
-                <div className="h-16 w-16 overflow-hidden rounded-full bg-white p-1.5">
-                  <img 
-                    src={schoolBranding.logoSrc} 
-                    alt={`Logo ${schoolBranding.schoolName}`} 
-                    className="h-full w-full rounded-full object-contain" 
-                  />
-                </div>
-              </div>
-              <div className="mt-3 max-w-[260px]">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/75">{schoolBranding.shortName}</p>
-                <h1 className="mt-1 font-display text-lg font-bold leading-tight text-white sm:text-xl">{schoolBranding.schoolName}</h1>
-                <p className="mt-1 text-xs font-medium text-white/70">{schoolBranding.tagline}</p>
-              </div>
+      <header className="ep-login-topbar">
+        <a className="ep-login-brand" href={import.meta.env.VITE_NEXUS_URL || "https://kinshasachristianschool.org/"}>
+          <img src={schoolBranding.logoSrc} alt={schoolBranding.schoolName} width="48" height="48" />
+          <span><strong>EduPay</strong><small>KCS ORBIT ECOSYSTEM</small></span>
+        </a>
+        <div className="ep-login-top-actions" data-edupay-header-actions>
+          <a className="ep-login-return" aria-label={L("Retour à Nexus", "Back to Nexus")} title={L("Retour à Nexus", "Back to Nexus")} href={import.meta.env.VITE_NEXUS_URL || "https://kinshasachristianschool.org/"}>
+            <span>{L("Retour à Nexus", "Back to Nexus")}</span> <ArrowUpRight size={17} />
+          </a>
+        </div>
+      </header>
+      <main className="ep-login-card">
+        <aside className="ep-login-story">
+          <img
+            className="ep-login-photo"
+            src="/images/school-finance-1440.webp"
+            srcSet="/images/school-finance-768.webp 768w, /images/school-finance-1440.webp 1440w, /images/school-finance-3840.webp 3840w"
+            sizes="(max-width: 760px) 100vw, 58vw"
+            alt={L("Équipe financière d'une école vérifiant les frais de scolarité et les reçus", "School finance team reviewing tuition records and receipts")}
+            width="3840" height="2160" fetchPriority="high"
+          />
+          <div className="ep-login-photo-shade" />
+          <span className="ep-login-story-badge"><ShieldCheck size={16} /> {L("Votre espace financier KCS", "Your KCS finance workspace")}</span>
+          <div className="ep-login-story-copy">
+            <span className="ep-login-kicker">KCS EDUPAY</span>
+            <h1>{L("Les finances scolaires.", "School finance.")}<br /><em>{L("En toute clarté.", "With clarity.")}</em></h1>
+            <p>{L("Un espace commun pour suivre les frais, les paiements et les reçus de votre communauté scolaire.", "One shared workspace for your school community’s fees, payments and receipts.")}</p>
+            <div className="ep-login-story-tags">
+              <span><WalletCards size={15} /> {L("Paiements", "Payments")}</span>
+              <span><ReceiptText size={15} /> {L("Reçus officiels", "Official receipts")}</span>
             </div>
           </div>
-
-          {/* Form Content */}
-          <div className="p-8 space-y-6">
-            {/* Language Switch */}
-            <div className="space-y-4">
-              <div className="min-w-0">
-                <h2 className="font-display text-2xl font-bold text-white">{t("loginTitle")}</h2>
-                <p className="text-sm text-ink-dim mt-1">{t("loginSubtitle")}</p>
-              </div>
-              <div className="flex max-w-full flex-wrap items-center justify-start gap-3 rounded-xl border border-slate-700/40 bg-slate-950/35 p-2 sm:flex-nowrap sm:gap-3.5">
-                <FontSwitch />
-                <LanguageSwitch />
-              </div>
-            </div>
-
-            {/* Form */}
-            <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
-              {/* Email input */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-ink-dim">{L("E-mail ou code d'accès", "Email or access code")}</label>
-                <input 
-                  {...register("email")} 
-                  placeholder={L("email@ecole.cd ou ACC-PAR-XXXXXX", "email@school.com or ACC-PAR-XXXXXX")}
-                  className="w-full"
-                  type="text"
-                  autoComplete="off"
-                />
-                {errors.email && <p className="text-xs text-danger">{errors.email.message}</p>}
-              </div>
-
-              {/* Password Input */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-ink-dim">{t("password")}</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowForgot(true)}
-                    className="text-xs text-brand-300 hover:text-brand-200 transition-colors underline underline-offset-2"
-                  >
-                    {t("forgotLink")}
-                  </button>
-                </div>
-                <div className="relative">
-                  <input
-                    {...register("password")}
-                    type={showPassword ? "text" : "password"}
-                    placeholder={t("password")}
-                    className="w-full !pr-11"
-                    autoComplete="new-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-dim hover:text-white transition-colors p-1"
-                    tabIndex={-1}
-                    aria-label={showPassword ? t("hidePassword") : t("showPassword")}
-                  >
-                    <EyeIcon open={showPassword} />
-                  </button>
-                </div>
-                {errors.password && <p className="text-xs text-danger">{errors.password.message}</p>}
-              </div>
-
-              {/* Error Message */}
-              {apiError && (
-                <div className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
-                  {apiError}
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <button 
-                disabled={isSubmitting} 
-                className="w-full btn-primary py-3 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    {t("signingIn")}
-                  </div>
-                ) : (
-                  t("signIn")
-                )}
-              </button>
-            </form>
-
-            {/* Divider */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-slate-700/50"></div>
-              <p className="text-xs text-ink-dim">{t("or")}</p>
-              <div className="flex-1 h-px bg-slate-700/50"></div>
-            </div>
-
-            {/* Footer */}
-            <div className="text-center space-y-2">
-              <p className="text-xs text-ink-dim">{schoolBranding.appName}</p>
-              <p className="text-xs text-brand-300 font-medium">{schoolBranding.tagline}</p>
-            </div>
+        </aside>
+        <section className="ep-login-form-panel">
+          <div className="ep-login-preferences"><FontSwitch /><LanguageSwitch /></div>
+          <div className="ep-login-intro">
+            <span className="ep-login-access"><LockKeyhole size={15} /> {L("Accès sécurisé", "Secure access")}</span>
+            <h2>{t("loginTitle")}</h2>
+            <p>{t("loginSubtitle")}</p>
           </div>
-        </div>
-
-        {/* Bottom decoration */}
-        <div className="mt-4 text-center">
-          <p className="text-xs text-ink-dim">© 2026 {schoolBranding.schoolName} . {L("Tous droits réservés.", "All rights reserved.")}</p>
-        </div>
-      </div>
+          <form className="ep-login-form" onSubmit={handleSubmit(onSubmit)}>
+            <div className="ep-login-field">
+              <label htmlFor="ep-login-identifier">{L("E-mail ou code d'accès", "Email or access code")}</label>
+              <input {...register("email")} id="ep-login-identifier" placeholder={L("email@ecole.cd ou code Orbit", "email@school.com or Orbit code")} type="text" autoComplete="username" aria-invalid={Boolean(errors.email)} />
+              {errors.email && <p className="ep-login-error">{errors.email.message}</p>}
+            </div>
+            <div className="ep-login-field">
+              <div className="ep-login-label-row">
+                <label htmlFor="ep-login-password">{t("password")}</label>
+                <button type="button" data-kcs-no-processing="true" onClick={() => setShowForgot(true)}>{t("forgotLink")}</button>
+              </div>
+              <div className="ep-login-password">
+                <input {...register("password")} id="ep-login-password" type={showPassword ? "text" : "password"} placeholder={t("password")} autoComplete="current-password" aria-invalid={Boolean(errors.password)} />
+                <button type="button" data-kcs-no-processing="true" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? t("hidePassword") : t("showPassword")} aria-pressed={showPassword}><EyeIcon open={showPassword} /></button>
+              </div>
+              {errors.password && <p className="ep-login-error">{errors.password.message}</p>}
+            </div>
+            {apiError && <div className="ep-login-api-error" role="alert">{apiError}</div>}
+            <button disabled={isSubmitting} className="ep-login-submit btn-primary">
+              {isSubmitting ? <span className="ep-login-spinner" aria-hidden="true" /> : <LockKeyhole size={18} />}
+              <span>{isSubmitting ? t("signingIn") : t("signIn")}</span>
+              {!isSubmitting && <ArrowRight size={18} />}
+            </button>
+          </form>
+          <p className="ep-login-reassurance"><ShieldCheck size={17} /> {L("Vos identifiants personnels. Votre espace KCS.", "Your personal credentials. Your KCS workspace.")}</p>
+          <div className="ep-login-school"><strong>{schoolBranding.schoolName}</strong><span>{schoolBranding.tagline}</span></div>
+        </section>
+      </main>
+      <footer className="ep-login-footer">© {new Date().getFullYear()} {schoolBranding.schoolName} · {L("Tous droits réservés.", "All rights reserved.")}</footer>
     </div>
   );
 }

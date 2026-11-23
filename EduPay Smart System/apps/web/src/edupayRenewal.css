@@ -556,91 +556,6 @@
   .ep-workspace .fixed [class*="bg-slate-900"] {
     background: #172630 !important;
   }
-  .ep-login {
-    background:
-      radial-gradient(ellipse at 0% 100%, #34534d40, transparent 60%), #101b24 !important;
-    padding: 30px !important;
-  }
-  .ep-login > .pointer-events-none {
-    display: none;
-  }
-  .ep-login > .max-w-md {
-    max-width: 970px;
-  }
-  .ep-login > .max-w-md > .glass {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    overflow: hidden;
-    border-radius: 25px;
-    border: 1px solid #4f6b6b40 !important;
-    box-shadow: 0 25px 90px #0002 !important;
-  }
-  .ep-login > .max-w-md > .glass > div:first-child {
-    padding: 50px 30px !important;
-    background: linear-gradient(145deg, #243f40, #152a34);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .ep-login > .max-w-md > .glass > div:first-child > .absolute {
-    display: none;
-  }
-  .ep-login > .max-w-md > .glass > div:first-child .relative {
-    width: 100%;
-  }
-  .ep-login > .max-w-md > .glass > div:first-child img {
-    box-shadow: none;
-  }
-  .ep-login > .max-w-md > .glass > div:first-child h1 {
-    font-size: 29px !important;
-    font-weight: 600;
-    line-height: 1.25;
-    letter-spacing: -0.04em;
-    max-width: 280px;
-    margin: 12px auto;
-  }
-  .ep-login > .max-w-md > .glass > div:first-child .logo-glass {
-    background: #ffffff0b;
-    box-shadow: none;
-    border-color: #ffffff20;
-    height: 82px;
-    width: 82px;
-  }
-  .ep-login > .max-w-md > .glass > div:first-child:after {
-    content: "EduPay";
-    position: absolute;
-    bottom: 30px;
-    left: 30px;
-    color: #dec797;
-    font-size: 12px;
-    letter-spacing: 0.15em;
-  }
-  .ep-login > .max-w-md > .glass > div:nth-child(2) {
-    padding: 36px 32px !important;
-  }
-  .ep-login input {
-    min-height: 43px;
-    font-size: 13px;
-  }
-  .ep-login .font-display {
-    letter-spacing: -0.035em;
-  }
-  .ep-login .text-brand-300 {
-    color: #dec797;
-  }
-  .ep-login .text-xs {
-    font-size: 10px;
-  }
-  .ep-login .btn-primary {
-    min-height: 44px;
-    font-size: 12px;
-  }
-  .ep-login .logo-glass {
-    animation: none;
-  }
-  .ep-login .relative > button[aria-label] {
-    transition: none;
-  }
   @media (max-width: 1350px) {
     .ep-sidebar {
       width: 205px;
@@ -881,62 +796,149 @@
       padding: 17px;
       border-radius: 16px;
     }
-    .ep-login {
-      padding: 18px !important;
-      align-items: start !important;
-      overflow: auto !important;
-    }
-    .ep-login > .max-w-md {
-      max-width: 450px;
-    }
-    .ep-login > .max-w-md > .glass {
-      display: flex;
-      flex-direction: column;
-      border-radius: 21px;
-    }
-    .ep-login > .max-w-md > .glass > div:first-child {
-      padding: 23px 20px !important;
-    }
-    .ep-login > .max-w-md > .glass > div:first-child > .relative {
-      flex-direction: row;
-      text-align: left;
-      gap: 15px;
-    }
-    .ep-login > .max-w-md > .glass > div:first-child .logo-glass {
-      height: 58px;
-      width: 58px;
-      flex-shrink: 0;
-    }
-    .ep-login > .max-w-md > .glass > div:first-child .logo-glass > div {
-      height: 48px;
-      width: 48px;
-    }
-    .ep-login > .max-w-md > .glass > div:first-child .mt-3 {
-      margin-top: 0;
-      max-width: 240px;
-    }
-    .ep-login > .max-w-md > .glass > div:first-child h1 {
-      font-size: 18px !important;
-      margin: 3px 0;
-    }
-    .ep-login > .max-w-md > .glass > div:first-child p {
-      font-size: 9px;
-    }
-    .ep-login > .max-w-md > .glass > div:first-child:after {
-      display: none;
-    }
-    .ep-login > .max-w-md > .glass > div:nth-child(2) {
-      padding: 25px 23px !important;
-    }
-    .ep-login input {
-      font-size: 16px !important;
-    }
-    .ep-login .space-y-6 > :not([hidden]) ~ :not([hidden]) {
-      margin-top: 20px;
-    }
-    .ep-login .font-display.text-2xl {
-      font-size: 24px;
-    }
+  }
+
+  /* Spacious financial workspace and photographic sign-in. Screen-only. */
+  .ep-workspace { font-size: 15px; }
+  .ep-workspace .text-sm { font-size: 14px; }
+  .ep-workspace .text-xs { font-size: 12px; }
+  .ep-workspace input, .ep-workspace select, .ep-workspace textarea { font-size: 14px; }
+  .edupay-app-shell > main, [data-edupay-renewal-header] > div { max-width: none; width: 100%; margin: 0; }
+  .ep-workspace > [class*="max-w-"] { max-width: none; }
+  .ep-nav-item { font-size: 13px; }
+  .ep-sidebar-foot > a, .ep-sidebar-foot > button, .ep-workspace-tag { font-size: 12px; }
+  .ep-workspace table, .ep-workspace td { font-size: 14px; }
+  .ep-workspace th { font-size: 11px; }
+  [data-edupay-finance-hero] p { font-size: 14px !important; }
+  [data-edupay-finance-hero] .mt-5 span { font-size: 11px; }
+  [data-edupay-finance-hero] .grid > div p:first-child { font-size: 10px !important; }
+  [data-edupay-finance-hero] .grid > div p:last-child { font-size: 12px !important; }
+  [data-edupay-kpis] .ep-kpi-top > p, [data-edupay-kpis] .ep-kpi-detail { font-size: 12px !important; }
+  .ep-login { display: flex; flex-direction: column; align-items: stretch; min-height: 100dvh; padding: 22px clamp(18px, 3vw, 54px) 16px !important; background: radial-gradient(ellipse at 20% 0, #243e4b70, transparent 65%), #101b24 !important; overflow: visible !important; }
+  .ep-login-topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 2px 22px; width: 100%; max-width: 1640px; margin: 0 auto; }
+  .ep-login-brand { display: flex; gap: 12px; align-items: center; color: #f4f3ec; text-decoration: none; }
+  .ep-login-brand > img { width: 48px; height: 48px; object-fit: contain; background: #fff; padding: 3px; border-radius: 50%; flex-shrink: 0; }
+  .ep-login-brand strong { display: block; font: 700 25px/1.1 var(--font-heading); letter-spacing: -.025em; }
+  .ep-login-brand small { display: block; color: #a9bec5; font-size: 9px; letter-spacing: .16em; margin-top: 5px; }
+  .ep-login-top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
+  @media (max-width: 400px) { .ep-login-return > span { display: none; } }
+  .ep-login-return { display: inline-flex; align-items: center; gap: 8px; color: #dac89f; font-size: 13px; text-decoration: none; padding: 10px 13px; border: 1px solid #dec79730; border-radius: 11px; }
+  .ep-login-return:hover { background: #dec79710; }
+  .ep-login-card { display: grid; grid-template-columns: 1.15fr 1fr; min-height: min(740px, calc(100dvh - 140px)); width: 100%; max-width: 1640px; margin: auto; border: 1px solid #4b657155; border-radius: 28px; overflow: hidden; box-shadow: 0 30px 90px #050c1538; background: #172630; }
+  .ep-login-story { position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 100px; min-width: 0; min-height: 630px; padding: clamp(26px, 3.4vw, 58px); overflow: hidden; background: #203541; }
+  .ep-login-photo, .ep-login-photo-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ep-login-photo { object-fit: cover; object-position: 43% center; }
+  .ep-login-photo-shade { background: linear-gradient(180deg, #0b1c2b50 0%, #07182b0a 30%, #0b1e30d9 72%, #0b1d2af5); }
+  .ep-login-story-badge { position: relative; z-index: 1; align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 10px 13px; border: 1px solid #ffffff45; background: #122a37c2; color: #fff4db; border-radius: 30px; font-size: 12px; backdrop-filter: blur(10px); }
+  .ep-login-story-copy { position: relative; z-index: 1; max-width: 550px; }
+  .ep-login-kicker { color: #e7ce9c; font-size: 10px; letter-spacing: .22em; font-weight: 750; }
+  .ep-login-story-copy h1 { color: #fffaf0; font: 700 clamp(34px, 3.8vw, 64px)/1.05 var(--font-heading); letter-spacing: -.035em; margin: 20px 0; }
+  .ep-login-story-copy h1 em { color: #e4cd9f; font-style: normal; }
+  .ep-login-story-copy > p { color: #d3e2e6; font-size: 15px; max-width: 420px; line-height: 1.7; margin: 18px 0 24px; }
+  .ep-login-story-tags { display: flex; flex-wrap: wrap; gap: 10px; }
+  .ep-login-story-tags > span { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #e1e9e7; padding: 9px 12px; border: 1px solid #ffffff30; border-radius: 10px; background: #ffffff09; }
+  .ep-login-form-panel { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: clamp(28px, 4vw, 72px); background: linear-gradient(145deg, #1b303c, #15252e); }
+  .ep-login-preferences { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 14px; margin: 0 0 30px; }
+  .ep-login-access { display: inline-flex; align-items: center; gap: 8px; color: #e2cd9f; font-size: 12px; border: 1px solid #dec79722; background: #dec79707; border-radius: 30px; padding: 8px 12px; }
+  .ep-login-intro h2 { font: 700 clamp(27px, 2.6vw, 39px)/1.15 var(--font-heading); margin: 20px 0 12px; color: #f5f5ee; letter-spacing: -.025em; }
+  .ep-login-intro > p { color: #afc4cd; font-size: 15px; line-height: 1.65; margin: 0 0 30px; }
+  .ep-login-form { display: grid; gap: 24px; }
+  .ep-login-field { display: grid; gap: 10px; min-width: 0; }
+  .ep-login-field label { color: #d8e3e7; font-size: 14px; font-weight: 650; }
+  .ep-login-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .ep-login-label-row > button { color: #dec797; font-size: 12px; text-decoration: underline; text-underline-offset: 4px; background: none; border: 0; padding: 3px 0; }
+  .ep-login .ep-login-field input { display: block; width: 100%; min-height: 56px; height: 56px; padding: 14px 16px; font-size: 16px; line-height: 1.4; border: 1px solid #526a75; background: #102430 !important; border-radius: 12px; color: #f2f7f5 !important; box-shadow: inset 0 1px 2px #0001; }
+  .ep-login .ep-login-field input::placeholder { color: #92aab6; opacity: 1; }
+  .ep-login .ep-login-field input[aria-invalid="true"] { border-color: #f79ca5 !important; }
+  .ep-login input:-webkit-autofill { -webkit-box-shadow: 0 0 0 1000px #102430 inset; -webkit-text-fill-color: #f2f7f5; caret-color: #f2f7f5; }
+  .ep-login-password { position: relative; }
+  .ep-login .ep-login-password input { padding-right: 56px; }
+  .ep-login-password > button { position: absolute; top: 0; bottom: 0; right: 6px; display: grid; place-items: center; width: 44px; height: 44px; margin: auto; padding: 0; border: 0; border-radius: 9px; color: #b6ccd4; background: transparent; transform: none; }
+  .ep-login-password > button:hover { color: #f1d8a4; background: #ffffff09; }
+  .ep-login-password > button svg { width: 20px; height: 20px; }
+  .ep-login .ep-login-submit { display: flex; justify-content: center; align-items: center; gap: 13px; width: 100%; min-height: 56px; font-size: 16px; border-radius: 12px; margin-top: 2px; }
+  .ep-login-submit > span:not(.ep-login-spinner) { flex: 1; }
+  .ep-login .ep-login-error { color: #ffb5bd; font-size: 12px; margin: 0; }
+  .ep-login-api-error { background: #e76b7a12; color: #ffc3ca; border: 1px solid #ed9ca53b; border-radius: 11px; padding: 14px; font-size: 14px; }
+  .ep-login-spinner { display: block; width: 18px; height: 18px; border: 2px solid #19283150; border-top-color: #192831; border-radius: 50%; animation: spin 1s linear infinite; }
+  .ep-login-reassurance { display: flex; gap: 8px; align-items: center; justify-content: center; color: #a6bdc7; font-size: 12px; margin: 24px 0; line-height: 1.5; }
+  .ep-login-reassurance svg { flex-shrink: 0; }
+  .ep-login-school { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid #ffffff13; padding-top: 20px; text-align: center; color: #d4e0e4; font-size: 12px; }
+  .ep-login-school > span { font-size: 11px; color: #92acb7; }
+  .ep-login-footer { color: #93aab4; font-size: 11px; text-align: center; margin: 16px 0 0; }
+  dialog.edupay-payment-modal-backdrop { position: fixed; inset: 0; width: min(1540px, calc(100% - 36px)); height: fit-content; max-width: none; max-height: calc(100dvh - 36px); margin: auto; padding: 0; border: 0; border-radius: 22px; background: #172630; color: #edf4f2; overflow: hidden; box-shadow: 0 25px 100px #02081299; font-family: var(--font-body); font-size: 15px; }
+  dialog.edupay-payment-modal-backdrop:not([open]) { display: none; }
+  dialog.edupay-payment-modal-backdrop::backdrop { background: #050c16b8; backdrop-filter: blur(8px); }
+  .edupay-payment-modal-panel { display: flex; flex-direction: column; width: 100%; min-width: 0; min-height: 0; max-height: inherit; padding: 0; background: #172630; border: 1px solid #526c7545; border-radius: inherit; box-shadow: none; backdrop-filter: none; }
+  .edupay-payment-modal-panel::before { display: none; }
+  .edupay-payment-modal-panel * { min-width: 0; }
+  .ep-payment-heading { display: flex; flex-shrink: 0; justify-content: space-between; align-items: center; gap: 20px; padding: 24px 30px; border-bottom: 1px solid #ffffff16; background: linear-gradient(115deg, #223b45, #182c37); }
+  .ep-payment-heading h2 { font-size: 27px; line-height: 1.2; }
+  .ep-payment-heading > div > p:first-child { color: #dec797; font-size: 11px; letter-spacing: .15em; }
+  .ep-payment-intro { color: #adc3cc; font-size: 13px; margin-top: 8px; max-width: 780px; }
+  .ep-payment-heading > button { flex-shrink: 0; align-self: flex-start; font-size: 13px; min-height: 40px; }
+  .ep-payment-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 26px 30px 30px; scrollbar-width: thin; scrollbar-color: #8aa2ad #14232e; }
+  .ep-payment-type { order: -1; }
+  .ep-payment-fields { align-items: start; }
+  .edupay-payment-modal-panel .text-sm { font-size: 14px; }
+  .edupay-payment-modal-panel .text-xs { font-size: 12px; }
+  .edupay-payment-modal-panel input:not([type="checkbox"]):not([type="radio"]), .edupay-payment-modal-panel select, .edupay-payment-modal-panel textarea { width: 100%; min-height: 46px; font-size: 15px; border: 1px solid #49616d; background: #10232e; color: #f0f5f4; border-radius: 10px; }
+  .edupay-payment-modal-panel label { line-height: 1.55; }
+  .edupay-payment-modal-panel input:focus, .edupay-payment-modal-panel select:focus, .edupay-payment-modal-panel button:focus-visible { outline: 2px solid #dec797; outline-offset: 3px; }
+  .ep-payment-body form > button[type="submit"] { display: block; width: min(100%, 580px); margin: 26px auto 0; min-height: 54px; font-size: 16px; border: 1px solid #dec797; border-radius: 12px; background: linear-gradient(135deg, #dfc799, #c6aa73); color: #192831; box-shadow: none; }
+  @media (max-width: 1023px) {
+    .ep-workspace { font-size: 14px; }
+    .ep-mobile-dock .ep-nav-item, .ep-dock-menu { font-size: 10px; }
+    .ep-login-story { padding: 30px; min-height: 600px; }
+    .ep-login-form-panel { padding: 30px; }
+    .ep-login-story-copy h1 { font-size: 42px; }
+  }
+  @media (max-width: 760px) {
+    .ep-login { padding: 15px 14px 14px !important; }
+    .ep-login-topbar { padding: 0 0 16px; gap: 10px; }
+    .ep-login-brand > img { width: 40px; height: 40px; }
+    .ep-login-brand strong { font-size: 23px; }
+    .ep-login-brand small { font-size: 7px; letter-spacing: .1em; }
+    .ep-login-return { padding: 8px; font-size: 11px; gap: 4px; }
+    .ep-login-card { display: flex; flex-direction: column; border-radius: 21px; min-height: 0; margin: 0 auto; max-width: 600px; }
+    .ep-login-story { min-height: 190px; height: 190px; padding: 20px 23px; gap: 14px; }
+    .ep-login-photo { object-position: 50% 43%; }
+    .ep-login-photo-shade { background: linear-gradient(90deg, #0a1f31db, #0b1e3030), linear-gradient(0deg, #0b1e30ae, transparent 75%); }
+    .ep-login-story-badge { padding: 5px 9px; font-size: 10px; gap: 5px; }
+    .ep-login-story-badge svg { width: 12px; height: 12px; }
+    .ep-login-story-copy h1 { font-size: 31px; margin: 8px 0 0; line-height: 1.05; }
+    .ep-login-story-copy > p, .ep-login-story-tags, .ep-login-kicker { display: none; }
+    .ep-login-form-panel { padding: 23px; }
+    .ep-login-preferences { gap: 12px; margin: 0 0 18px; justify-content: flex-start; }
+    .ep-login-intro h2 { font-size: 28px; margin-top: 16px; }
+    .ep-login-intro > p { font-size: 14px; margin-bottom: 23px; }
+    .ep-login-access { font-size: 11px; padding: 6px 10px; }
+    .ep-login-form { gap: 20px; }
+    .ep-login .ep-login-field input { min-height: 52px; height: 52px; }
+    .ep-login-field label { font-size: 13px; }
+    .ep-login-reassurance { font-size: 11px; margin: 20px 0; }
+    .ep-login-school { padding-top: 16px; }
+    dialog.edupay-payment-modal-backdrop { width: calc(100% - 20px); max-height: calc(100dvh - 24px); border-radius: 17px; }
+    .ep-payment-heading { padding: 18px; gap: 10px; align-items: flex-start; }
+    .ep-payment-heading h2 { font-size: 23px; }
+    .ep-payment-intro { font-size: 12px; line-height: 1.5; }
+    .ep-payment-heading > button { padding: 8px 11px; font-size: 12px; }
+    .ep-payment-body { padding: 18px; }
+    .edupay-payment-modal-panel input:not([type="checkbox"]):not([type="radio"]), .edupay-payment-modal-panel select, .edupay-payment-modal-panel textarea { font-size: 16px; }
+  }
+  @media (max-width: 640px) {
+    .ep-workspace { font-size: 13px; }
+    .ep-workspace .text-sm { font-size: 13px !important; }
+    .ep-workspace .text-xs { font-size: 11px !important; }
+    .ep-workspace .text-base { font-size: 14px !important; }
+    .ep-workspace button, .ep-workspace input, .ep-workspace select { font-size: 13px; }
+    .ep-workspace table, .ep-workspace td { font-size: 12px !important; }
+    .ep-workspace th { font-size: 10px !important; }
+    [data-edupay-finance-hero] p { font-size: 13px !important; }
+    [data-edupay-finance-hero] .mt-5 span { font-size: 10px; }
+    [data-edupay-finance-hero] .grid > div p:first-child { font-size: 10px !important; }
+    [data-edupay-finance-hero] .grid > div p:last-child { font-size: 11px !important; }
+    [data-edupay-kpis] .ep-kpi-top > p, [data-edupay-kpis] .ep-kpi-detail { font-size: 11px !important; }
   }
   @media (prefers-reduced-motion: reduce) {
     .edupay-app-shell *,
@@ -948,6 +950,6 @@
   }
 }
 
-@media screen{[data-edupay-kpis] .ep-kpi-top{display:flex;align-items:flex-start;gap:8px}[data-edupay-kpis] .ep-kpi-top>p{flex:1;text-transform:none;letter-spacing:0;font-size:11px;line-height:1.45;overflow-wrap:normal;word-break:normal}[data-edupay-kpis] .ep-kpi-icon{display:grid;place-items:center;height:26px;width:26px;flex-shrink:0;border:1px solid currentColor;border-radius:8px;background:transparent}[data-edupay-kpis] .ep-kpi-icon svg{width:14px;height:14px}[data-edupay-kpis] .ep-kpi-value{font-size:clamp(17px,1.8vw,25px)!important;letter-spacing:-.03em;margin-top:16px;line-height:1.2;overflow-wrap:anywhere}[data-edupay-kpis] .ep-kpi-detail{margin-top:7px;font-size:10px!important;line-height:1.5}.ep-header-brand-label{display:block}@media(max-width:640px){.ep-header-brand-label>p:first-child{font-size:12px!important;line-height:1.2;max-width:86px}.ep-header-brand-label>p:last-child{display:none}[data-edupay-renewal-header]>div>div:first-child{padding:6px!important;min-height:48px}[data-edupay-renewal-header]>div>div:first-child>div:first-child{gap:8px}[data-edupay-renewal-header]>div>div:last-child{margin-top:5px!important;padding:4px!important}[data-edupay-kpis] .ep-kpi-top>p{font-size:10px!important;min-height:29px}[data-edupay-kpis] .ep-kpi-icon{width:23px;height:23px;border-radius:7px}[data-edupay-kpis] .ep-kpi-icon svg{width:12px!important;height:12px!important}[data-edupay-kpis] .ep-kpi-value{margin-top:12px;font-size:20px!important}[data-edupay-kpis] .ep-kpi-detail{font-size:9px!important}}}
+@media screen{[data-edupay-kpis] .ep-kpi-top{display:flex;align-items:flex-start;gap:8px}[data-edupay-kpis] .ep-kpi-top>p{flex:1;text-transform:none;letter-spacing:0;font-size:12px;line-height:1.45;overflow-wrap:normal;word-break:normal}[data-edupay-kpis] .ep-kpi-icon{display:grid;place-items:center;height:26px;width:26px;flex-shrink:0;border:1px solid currentColor;border-radius:8px;background:transparent}[data-edupay-kpis] .ep-kpi-icon svg{width:14px;height:14px}[data-edupay-kpis] .ep-kpi-value{font-size:clamp(17px,1.8vw,25px)!important;letter-spacing:-.03em;margin-top:16px;line-height:1.2;overflow-wrap:anywhere}[data-edupay-kpis] .ep-kpi-detail{margin-top:7px;font-size:10px!important;line-height:1.5}.ep-header-brand-label{display:block}@media(max-width:640px){.ep-header-brand-label>p:first-child{font-size:12px!important;line-height:1.2;max-width:86px}.ep-header-brand-label>p:last-child{display:none}[data-edupay-renewal-header]>div>div:first-child{padding:6px!important;min-height:48px}[data-edupay-renewal-header]>div>div:first-child>div:first-child{gap:8px}[data-edupay-renewal-header]>div>div:last-child{margin-top:5px!important;padding:4px!important}[data-edupay-kpis] .ep-kpi-top>p{font-size:11px!important;min-height:29px}[data-edupay-kpis] .ep-kpi-icon{width:23px;height:23px;border-radius:7px}[data-edupay-kpis] .ep-kpi-icon svg{width:12px!important;height:12px!important}[data-edupay-kpis] .ep-kpi-value{margin-top:12px;font-size:20px!important}[data-edupay-kpis] .ep-kpi-detail{font-size:9px!important}}}
 
 @media screen{.ep-old-mobile-preferences{display:none!important}.ep-profile-preferences>*{max-width:100%}@media(max-width:640px){[data-edupay-renewal-header]>div{padding-block:8px!important}.ep-profile-preferences{padding:12px;gap:8px}.ep-profile-preferences .text-sm{font-size:11px}.ep-profile-preferences .text-xs{font-size:10px}}}
