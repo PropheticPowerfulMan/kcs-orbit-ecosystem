@@ -953,3 +953,20 @@
 @media screen{[data-edupay-kpis] .ep-kpi-top{display:flex;align-items:flex-start;gap:8px}[data-edupay-kpis] .ep-kpi-top>p{flex:1;text-transform:none;letter-spacing:0;font-size:12px;line-height:1.45;overflow-wrap:normal;word-break:normal}[data-edupay-kpis] .ep-kpi-icon{display:grid;place-items:center;height:26px;width:26px;flex-shrink:0;border:1px solid currentColor;border-radius:8px;background:transparent}[data-edupay-kpis] .ep-kpi-icon svg{width:14px;height:14px}[data-edupay-kpis] .ep-kpi-value{font-size:clamp(17px,1.8vw,25px)!important;letter-spacing:-.03em;margin-top:16px;line-height:1.2;overflow-wrap:anywhere}[data-edupay-kpis] .ep-kpi-detail{margin-top:7px;font-size:10px!important;line-height:1.5}.ep-header-brand-label{display:block}@media(max-width:640px){.ep-header-brand-label>p:first-child{font-size:12px!important;line-height:1.2;max-width:86px}.ep-header-brand-label>p:last-child{display:none}[data-edupay-renewal-header]>div>div:first-child{padding:6px!important;min-height:48px}[data-edupay-renewal-header]>div>div:first-child>div:first-child{gap:8px}[data-edupay-renewal-header]>div>div:last-child{margin-top:5px!important;padding:4px!important}[data-edupay-kpis] .ep-kpi-top>p{font-size:11px!important;min-height:29px}[data-edupay-kpis] .ep-kpi-icon{width:23px;height:23px;border-radius:7px}[data-edupay-kpis] .ep-kpi-icon svg{width:12px!important;height:12px!important}[data-edupay-kpis] .ep-kpi-value{margin-top:12px;font-size:20px!important}[data-edupay-kpis] .ep-kpi-detail{font-size:9px!important}}}
 
 @media screen{.ep-old-mobile-preferences{display:none!important}.ep-profile-preferences>*{max-width:100%}@media(max-width:640px){[data-edupay-renewal-header]>div{padding-block:8px!important}.ep-profile-preferences{padding:12px;gap:8px}.ep-profile-preferences .text-sm{font-size:11px}.ep-profile-preferences .text-xs{font-size:10px}}}
+
+/* Edge-to-edge application frame; spacing stays inside its content panels. */
+@media screen {
+  .edupay-app-shell > main,
+  .ep-login {
+    padding-inline: 0 !important;
+  }
+  .ep-login-card {
+    max-width: none;
+    border-radius: 0;
+    border-inline: 0;
+  }
+  .ep-login-topbar {
+    max-width: none;
+    padding-inline: clamp(14px, 2vw, 32px);
+  }
+}
