@@ -1,0 +1,127 @@
+/* Matte daylight palette. Only screen UI changes; issued documents and night mode keep their design. */
+@media screen {
+ html:not(.dark) {
+  --nexus-day-base:#d3dfe0; --nexus-day-panel:#dce6e4; --nexus-day-raised:#e5ece7;
+  --nexus-day-field:#e9eee8; --nexus-day-hover:#cadcd8; --nexus-day-line:#a9c1bf;
+  --nexus-day-ink:#193d43; --nexus-day-muted:#48666b;
+  --nexus-day-heading:linear-gradient(115deg,#244954,#31636a 65%,#356662);
+  --nexus-soft-paper:var(--nexus-day-base); --nexus-soft-card:var(--nexus-day-panel); --nexus-soft-input:var(--nexus-day-field);
+  --background:185 16% 85%; --card:166 16% 88%; --popover:146 17% 91%;
+  --foreground:190 45% 18%; --card-foreground:190 45% 18%; --popover-foreground:190 45% 18%;
+  --primary:190 45% 30%; --secondary:165 19% 84%; --muted:175 17% 84%; --accent:166 24% 82%;
+  --border:174 17% 71%; --input:174 17% 71%; --ring:187 40% 38%;
+ }
+ html:not(.dark) body { background:var(--nexus-day-base); }
+ html:not(.dark) body[data-nexus-dashboard],html:not(.dark) body:has(.portal-shell) {
+  --nexus-day-canvas:var(--nexus-day-base); --nexus-day-surface:var(--nexus-day-panel);
+  --nexus-day-surface-raised:var(--nexus-day-field); --nexus-day-surface-muted:var(--nexus-day-raised);
+  --nexus-day-border:var(--nexus-day-line); color-scheme:light;
+ }
+  /* Reuse each module's existing design tokens; keep its structure, spacing and status colours. */
+  html:not(.dark) body[data-nexus-dashboard] :is([data-portal-workspace], [data-media-workspace], [data-principal-workspace]) {
+    --nw-paper: var(--nexus-day-panel); --nw-card: var(--nexus-day-raised);
+    --nw-ink: var(--nexus-day-ink); --nw-muted: var(--nexus-day-muted); --nw-line: var(--nexus-day-line);
+  }
+  html:not(.dark) body[data-nexus-dashboard] [data-admin-workspace] {
+    --admin-paper: var(--nexus-day-panel); --admin-ink: var(--nexus-day-ink); --admin-line: var(--nexus-day-line);
+  }
+  html:not(.dark) body[data-nexus-dashboard] [data-nexus-dialog] {
+    --nd-paper: var(--nexus-day-panel); --nd-card: var(--nexus-day-raised);
+    --nd-ink: var(--nexus-day-ink); --nd-muted: var(--nexus-day-muted); --nd-line: var(--nexus-day-line);
+  }
+  html:not(.dark) body[data-nexus-dashboard] [data-entity-dialog] {
+    --rd-paper: var(--nexus-day-panel); --rd-card: var(--nexus-day-raised);
+    --rd-ink: var(--nexus-day-ink); --rd-muted: var(--nexus-day-muted); --rd-line: var(--nexus-day-line);
+  }
+  html:not(.dark) body[data-nexus-dashboard] .st-workspace {
+    --st-bg: var(--nexus-day-base); --st-card: var(--nexus-day-panel); --st-field: var(--nexus-day-raised);
+    --st-ink: var(--nexus-day-ink); --st-muted: var(--nexus-day-muted); --st-line: var(--nexus-day-line);
+  }
+  html:not(.dark) body[data-nexus-dashboard] .teaching-workspace {
+    --ta-bg: var(--nexus-day-field); --ta-panel: var(--nexus-day-panel);
+    --ta-ink: var(--nexus-day-ink); --ta-muted: var(--nexus-day-muted); --ta-border: var(--nexus-day-line);
+  }
+  html:not(.dark) body[data-nexus-dashboard] [data-main-teacher-workspace] {
+    --as-paper: var(--nexus-day-panel); --as-card: var(--nexus-day-raised);
+    --as-ink: var(--nexus-day-ink); --as-muted: var(--nexus-day-muted); --as-line: var(--nexus-day-line);
+  }
+  html:not(.dark) body[data-nexus-dashboard] [data-report-surface] {
+    --rp-card: var(--nexus-day-panel); --rp-field: var(--nexus-day-field);
+    --rp-ink: var(--nexus-day-ink); --rp-muted: var(--nexus-day-muted); --rp-line: var(--nexus-day-line);
+  }
+  html:not(.dark) body[data-nexus-dashboard] .parent-meeting-workspace {
+    --pm-surface: var(--nexus-day-panel); --pm-soft: var(--nexus-day-raised); --pm-field: var(--nexus-day-field);
+    --pm-ink: var(--nexus-day-ink); --pm-muted: var(--nexus-day-muted); --pm-border: var(--nexus-day-line);
+  }
+  html:not(.dark) body[data-nexus-dashboard] .forum-experience {
+    --forum-card: var(--nexus-day-panel); --forum-soft: var(--nexus-day-field);
+    --forum-ink: var(--nexus-day-ink); --forum-line: var(--nexus-day-line);
+  }
+  html:not(.dark) body[data-nexus-dashboard] .school-handbook {
+    --hb-paper: var(--nexus-day-panel); --hb-ink: var(--nexus-day-ink);
+    --hb-muted: var(--nexus-day-muted); --hb-border: var(--nexus-day-line);
+  }
+
+
+ html:not(.dark) body[data-nexus-dashboard] .portal-shell,
+ html:not(.dark) .public-site-shell {
+  background:radial-gradient(ellipse at 0 0,#a9cfc426,transparent 48%),var(--nexus-day-base)!important;
+  color:var(--nexus-day-ink);
+ }
+ html:not(.dark) body[data-nexus-dashboard] .portal-shell main {
+  background-color:var(--nexus-day-base)!important;
+  background-image:linear-gradient(155deg,#d3dfe0,#dbe4de)!important;
+ }
+ html:not(.dark) body[data-nexus-dashboard] :is(.portal-dashboard-topbar,.nexus-workspace-heading,[data-admin-hero],.nexus-assignment-hero,.nexus-shining-hero,.nexus-activity-report-heading,[data-transcript-intro],.nexus-gradebook-focus-heading,.st-hero) {
+  background:var(--nexus-day-heading)!important; border-color:#638b89!important;
+  box-shadow:0 8px 22px #163f4417!important;
+ }
+ html:not(.dark) body[data-nexus-dashboard] :is(.portal-dashboard-topbar,.nexus-workspace-heading,[data-admin-hero]) :is(h1,h2,h3,.portal-dashboard-title) { color:#f0f3e9!important; text-shadow:none; }
+ html:not(.dark) body[data-nexus-dashboard] :is(.portal-dashboard-topbar,.nexus-workspace-heading,[data-admin-hero]) > p { color:#d8e7dd!important; }
+ html:not(.dark) body[data-nexus-dashboard] .nexus-workspace-card {
+  --nw-paper:var(--nexus-day-panel); border-color:var(--nexus-day-line)!important;
+  box-shadow:0 4px 14px #183e4310!important;
+ }
+ html:not(.dark) body[data-nexus-dashboard] :is(.portal-shell,[data-nexus-dialog-panel],[data-entity-dialog],[data-gradebook-focus])
+ :is(div,section,article,fieldset,details,form):is([class~="bg-white"],[class~="bg-white/95"],[class~="bg-white/90"],[class~="bg-white/85"],[class~="bg-white/80"],[class~="bg-white/70"],[class~="bg-white/65"],[class~="bg-white/60"],[class~="bg-white/55"],[class~="bg-white/50"],[class~="bg-white/45"],[class~="bg-white/42"]):not(:where([data-official-document],[data-official-document] *,[data-report-card-document],[data-report-card-document] *,.report-card-paper,.report-card-paper *,.report-card-document,.report-card-document *,.official-report-card,.official-report-card *,.transcript-paper,.transcript-paper *)) {
+  background-color:var(--nexus-day-panel)!important; border-color:var(--nexus-day-line)!important;
+ }
+ html:not(.dark) body[data-nexus-dashboard] :is(.portal-shell,[data-nexus-dialog-panel],[data-entity-dialog],[data-gradebook-focus])
+ :is([class~="bg-gray-50"],[class~="bg-gray-100"],[class~="bg-slate-50"],[class~="bg-slate-100"],[class~="bg-kcs-blue-50"],[class~="bg-sky-50"]):not(:where([data-official-document],[data-official-document] *,[data-report-card-document],[data-report-card-document] *,.report-card-paper,.report-card-paper *,.official-report-card,.official-report-card *,.transcript-paper,.transcript-paper *)) { background-color:var(--nexus-day-raised)!important; }
+ html:not(.dark) body[data-nexus-dashboard] :is(.portal-shell,[data-nexus-dialog-panel],[data-entity-dialog],[data-gradebook-focus]) :is(input,select,textarea):not([type=checkbox]):not([type=radio]):not([type=range]):not(:where([data-official-document] *,[data-report-card-document] *)) {
+  background-color:var(--nexus-day-field)!important; border-color:var(--nexus-day-line)!important;
+  color:var(--nexus-day-ink); caret-color:var(--nexus-day-ink);
+ }
+ html:not(.dark) body[data-nexus-dashboard] :is(input,select,textarea):focus-visible { outline:2px solid #397d81; outline-offset:2px; box-shadow:0 0 0 4px #397d8117; }
+ html:not(.dark) body[data-nexus-dashboard] :is(.nexus-sidebar-rail,.nexus-sidebar-drawer,.nexus-mobile-dashboard-bar) {
+  background:linear-gradient(160deg,#d7e4df,#c8d9d7)!important; border-color:#a8c0bc!important;
+  box-shadow:5px 0 22px #20484b12!important; color:var(--nexus-day-ink);
+ }
+ html:not(.dark) body[data-nexus-dashboard] .nexus-sidebar-profile>div { background:#e3ebe5!important; border-color:#b1c7c2!important; }
+ html:not(.dark) body[data-nexus-dashboard] .sidebar-link { color:#254d53; }
+ html:not(.dark) body[data-nexus-dashboard] .sidebar-link:hover:not(.active) { background:#bfd6d1!important; color:#153e45!important; }
+ html:not(.dark) body[data-nexus-dashboard] .sidebar-link.active { background:linear-gradient(110deg,#285f69,#367a79)!important; color:#f0f3e9!important; border-color:#397b7a!important; box-shadow:0 4px 12px #214d4d24; }
+ html:not(.dark) body[data-nexus-dashboard] :is(.registry-view-window.registry-dialog-window,.registry-view-card,.principal-record-dialog,.portal-action-surface,.nx-update-confirm,.nx-update-notice) {
+  background:var(--nexus-day-panel)!important; border-color:var(--nexus-day-line)!important; color:var(--nexus-day-ink);
+ }
+ html:not(.dark) body[data-nexus-dashboard] :is(.registry-view-heading,.registry-view-actions,.registry-view-nav,.registry-view-contacts>article,.registry-view-learners>article,.portal-action-surface>footer,[data-teacher-schedule-item],[data-account-identity-detail],[data-employee-metrics]>div,[data-people-metrics]>div) { background:var(--nexus-day-raised)!important; border-color:var(--nexus-day-line)!important; }
+ html:not(.dark) body[data-nexus-dashboard] :is([data-gradebook-focus],[data-teacher-schedule],[data-account-identity]) { background:var(--nexus-day-panel)!important; border-color:var(--nexus-day-line)!important; }
+ html:not(.dark) body[data-nexus-dashboard] :is([data-gradebook-toolbar],[data-gradebook-periods],.published-calendar-strip,.workspace-dashboard-tabs,.newsroom-navigation,.handbook-pdf-toolbar,.nexus-weekly-timetable .timetable-stat) { background:var(--nexus-day-raised)!important; border-color:var(--nexus-day-line)!important; }
+ html:not(.dark) body[data-nexus-dashboard] :is(.pg-workspace,.forum-experience,.parent-meeting-workspace) { --pg-bg:var(--nexus-day-base); --pg-card:var(--nexus-day-panel); --pg-field:var(--nexus-day-field); }
+ html:not(.dark) body[data-nexus-dashboard] .pg-card { background:var(--nexus-day-panel); border-color:var(--nexus-day-line); }
+ html:not(.dark) body[data-nexus-dashboard] .pg-hero { background:var(--nexus-day-heading); }
+ html:not(.dark) body[data-nexus-dashboard] :is(.pg-course-list,.pg-kpis>article) { background:var(--nexus-day-raised); border-color:var(--nexus-day-line); }
+ html:not(.dark) body[data-nexus-dashboard] :is(.portal-shell,[data-nexus-dialog-panel],[data-gradebook-focus]) { scrollbar-color:#6e9994 var(--nexus-day-base); }
+ html:not(.dark) .public-site-shell :is(section,article,div)[class~="bg-white"] { background-color:var(--nexus-day-panel); }
+ /* Strong text contrast on dark headings and on the newly softened metric tiles. */
+ html:not(.dark) body[data-nexus-dashboard] :is(.pg-hero,.st-hero) { color:#f0f3e9; }
+ html:not(.dark) body[data-nexus-dashboard] :is(.pg-hero,.st-hero) :is(h1,h2,h3) { color:#f0f3e9!important; }
+ html:not(.dark) body[data-nexus-dashboard] :is(.pg-hero,.st-hero) :is(p,small,.st-kicker) { color:#d9e8de!important; }
+ html:not(.dark) body[data-nexus-dashboard] :is(.pg-hero,.st-hero)>svg { color:#d9e8de; }
+ html:not(.dark) body[data-nexus-dashboard] :is(.pg-workspace,.forum-experience,.parent-meeting-workspace) { --pg-surface:var(--nexus-day-panel); --pg-ink:var(--nexus-day-ink); --pg-muted:var(--nexus-day-muted); --pg-line:var(--nexus-day-line); }
+ html:not(.dark) body[data-nexus-dashboard] .pg-metrics>div { background:var(--nexus-day-raised); }
+ html:not(.dark) body[data-nexus-dashboard] [data-employee-directory]>header:first-child { background:var(--nexus-day-heading)!important; }
+ html:not(.dark) body[data-nexus-dashboard] :is([data-people-metrics],[data-employee-metrics])>div :is(p,strong) { color:var(--nexus-day-ink)!important; }
+ html:not(.dark) body[data-nexus-dashboard] :is([data-people-metrics],[data-employee-metrics])>div :is(span,svg,small) { color:var(--nexus-day-muted)!important; }
+
+}
