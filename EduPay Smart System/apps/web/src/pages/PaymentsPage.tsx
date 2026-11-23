@@ -1820,6 +1820,18 @@ export function PaymentsPage() {
   const [parentNotificationPreferences, setParentNotificationPreferences] = useState<Record<string, boolean>>(loadParentNotificationPreferences);
   const [notificationStatus, setNotificationStatus] = useState<string | null>(null);
   const [paymentDetailsDialogOpen, setPaymentDetailsDialogOpen] = useState(true);
+  const paymentDialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = paymentDialogRef.current;
+    if (!paymentDetailsDialogOpen || view !== "form" || !dialog) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (!dialog.open) dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [paymentDetailsDialogOpen, view]);
   const [parents, setParents] = useState<ParentOption[]>([]);
   const [parentLookupQuery, setParentLookupQuery] = useState("");
   const [selectedParentFinance, setSelectedParentFinance] = useState<FinanceParentSnapshot | null>(null);
@@ -3195,11 +3207,12 @@ export function PaymentsPage() {
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-brand-200">{t("paymentDetails")}</p>
           <h2 className="mt-2 font-display text-xl font-bold text-white">{t("newPaymentBtn")}</h2>
-          <p className="mt-1 text-sm text-ink-dim">{L("Le formulaire de paiement s'ouvre dans une boîte dédiée au centre de l'écran.","Le formulaire de paiement s'ouvre dans une boîte dédiée au centre de l'écran.")}</p>
+          <p className="mt-1 text-sm text-ink-dim">{L("Le formulaire de paiement s'ouvre dans une fenêtre dédiée au centre de l'écran.","The payment form opens in a dedicated window at the centre of the screen.")}</p>
         </div>
         <button
           type="button"
           onClick={() => setPaymentDetailsDialogOpen(true)}
+          data-kcs-no-processing="true"
           className="rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-brand-500/20 transition-all hover:bg-brand-700 active:scale-95"
         >
           {L("Ouvrir Payment details","Open payment details")}
@@ -3207,21 +3220,24 @@ export function PaymentsPage() {
       </div>
 
       {paymentDetailsDialogOpen ? createPortal((
-        <div className="edupay-payment-modal-backdrop edupay-scrollbar fixed inset-0 z-[999] grid place-items-center overflow-y-auto px-2 py-4">
-          <div className="edupay-payment-modal-panel edupay-scrollbar w-full max-w-[98vw] max-h-[95vh] min-h-[600px] min-w-[900px] overflow-y-auto p-8 sm:p-10">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <dialog ref={paymentDialogRef} className="edupay-payment-modal-backdrop" aria-labelledby="ep-payment-title" onCancel={() => setPaymentDetailsDialogOpen(false)} onClose={() => setPaymentDetailsDialogOpen(false)}>
+          <div className="edupay-payment-modal-panel">
+            <header className="ep-payment-heading">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-brand-200">{t("paymentDetails")}</p>
-                <h2 className="mt-1 font-display text-xl font-bold text-white">{t("newPaymentBtn")}</h2>
+                <h2 id="ep-payment-title" className="mt-1 font-display text-xl font-bold text-white">{t("newPaymentBtn")}</h2>
+                <p className="ep-payment-intro">{L("Choisissez la famille, précisez le paiement, puis vérifiez avant d’enregistrer.", "Choose the family, enter the payment details, then review before saving.")}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setPaymentDetailsDialogOpen(false)}
+                data-kcs-no-processing="true"
                 className="rounded-xl border border-slate-600 bg-slate-950/60 px-4 py-2 text-sm font-semibold text-ink-dim transition-all hover:border-slate-400 hover:text-white"
               >
                 {L("Fermer","Close")}
               </button>
-            </div>
+            </header>
+            <div className="ep-payment-body edupay-scrollbar">
 
         {/* Numero de transaction auto */}
         <div className="mb-6 p-4 rounded-xl bg-slate-900/60 border border-brand-500/30 flex items-center justify-between">
@@ -3239,7 +3255,7 @@ export function PaymentsPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <div className="ep-payment-fields grid gap-5 lg:grid-cols-2">
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">
                 {L("Parent destinataire email/SMS","Email/SMS recipient parent")}
@@ -3277,7 +3293,7 @@ export function PaymentsPage() {
                             </span>
                           </span>
                           <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">
-                            {active ? "Cible" : "Choisir"}
+                            {active ? L("Cible", "Selected") : L("Choisir", "Choose")}
                           </span>
                         </span>
                         {displayedStudents.length > 0 && (
@@ -3311,12 +3327,12 @@ export function PaymentsPage() {
               {fieldErrors.parentId && <p className="text-xs text-danger">{fieldErrors.parentId}</p>}
             </div>
 
-            <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+            <div className="ep-payment-type lg:col-span-2 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">{L("Type de paiement", "Payment type")}</p>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 {([
-                  { value: "TUITION" as const, title: "Scolarité / tuition plan", detail: "Plans officiels, arrangement spécial, répartition sur échéances et suivi de dette." },
-                  { value: "SERVICE" as const, title: "Service ou autre frais", detail: "Bus scolaire, uniformes, cantine, documents, activités: reçu officiel sans toucher au plan tuition." }
+                  { value: "TUITION" as const, title: L("Scolarité", "Tuition"), detail: L("Plans officiels, accords spéciaux, échéances et suivi des soldes.", "Official plans, special agreements, installments and balance tracking.") },
+                  { value: "SERVICE" as const, title: L("Services et autres frais", "Services and other fees"), detail: L("Transport, uniformes, cantine, documents et activités, sans modifier la scolarité.", "Transport, uniforms, meals, documents and activities without changing tuition.") }
                 ]).map((option) => (
                   <button
                     key={option.value}
@@ -3391,7 +3407,7 @@ export function PaymentsPage() {
                           <span className="block text-sm font-semibold">{student.fullName}</span>
                           <span className="block text-xs">{student.className} {L("· Frais annuels $","· Annual fees $")} {student.annualFee.toFixed(2)}</span>
                         </span>
-                        <span className="text-xs font-bold uppercase tracking-wide">{active ? "Sélectionné" : "Choisir"}</span>
+                        <span className="text-xs font-bold uppercase tracking-wide">{active ? L("Sélectionné", "Selected") : L("Choisir", "Choose")}</span>
                       </button>
                     );
                   })}
@@ -3725,12 +3741,12 @@ export function PaymentsPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-dim">{L("Paiement pour", "Payment for")}</p>
                   <p className="mt-1 truncate font-display text-2xl font-bold text-white">
-                    {selectedStudentDisplayName || "Sélectionnez l'élève concerné"}
+                    {selectedStudentDisplayName || L("Sélectionnez l'élève concerné", "Select the learner concerned")}
                   </p>
                   <p className="mt-2 text-sm text-ink-dim">
                     {form.parentFullName.trim()
-                      ? `Parent concern? : ${form.parentFullName.trim()}`
-                      : "Le parent lie au paiement apparaîtra ici comme information secondaire."}
+                      ? `${L("Parent concerné", "Parent concerned")} : ${form.parentFullName.trim()}`
+                      : L("Le parent lié au paiement apparaîtra ici.", "The parent linked to this payment will appear here.")}
                   </p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-ink-dim">
@@ -3894,11 +3910,12 @@ export function PaymentsPage() {
             disabled={saving}
             className="w-full py-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-base transition-all active:scale-[.98] shadow-lg shadow-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? "Enregistrement..." : t("saveAndGenerateReceipt")}
+            {saving ? L("Enregistrement...", "Saving...") : t("saveAndGenerateReceipt")}
           </button>
         </form>
+            </div>
           </div>
-        </div>
+        </dialog>
       ), document.body) : null}
     </div>
   );
