@@ -316,3 +316,22 @@ export async function courseRegularity(userId:string,courseId:string,year:string
   })
   return {courseId,academicYear:year,term,sessionCount:sessions.length,students:rows,gradeImpact:false,reportCardImpact:false,summary:coursePresenceStatistics(sessions.flatMap(row=>row.students.map(mark=>mark.status)))}
 }
+
+export async function studentCourseAttendance(userId:string,year:string,term:string){
+  const student=await prisma.studentProfile.findUnique({where:{userId},select:{id:true,grade:true,section:true,status:true,archive:{select:{id:true}}}})
+  if(!student||student.status.toLowerCase()!=='active'||student.archive)throw new ApiError(403,'TEACHING_ACTIVE_LEARNER_REQUIRED')
+  const calendar=(await academicCalendars({strict:true})).find(c=>c.name===year)
+  if(!calendar)throw new ApiError(400,'TEACHING_INVALID_YEAR')
+  const window=attendanceWindowForCalendar(year,term,calendar),from=window.gte.toISOString().slice(0,10),to=window.lte.toISOString().slice(0,10)
+  const enrollments=await prisma.enrollment.findMany({where:{studentId:student.id},select:{createdAt:true,course:{select:{id:true,name:true,grade:true,teacher:{select:{user:{select:{firstName:true,middleName:true,lastName:true}}}}}}}})
+  const periods=await coursePeriodStates(enrollments.map(e=>e.course.id)),current=enrollments.filter(e=>courseMatchesPeriod(periods.get(e.course.id)?.periods||[],year,term)),ids=current.map(e=>e.course.id)
+  const sessions=await prisma.teachingSession.findMany({where:{academicYear:year,schoolDate:{gte:from,lte:to},checkInAt:{not:null},OR:[{courseReference:{in:ids}},{students:{some:{studentReference:student.id}}}]},select:{id:true,courseReference:true,courseName:true,className:true,teacherName:true,schoolDate:true,expectedStartAt:true,expectedEndAt:true,students:{where:{studentReference:student.id},select:{status:true,markedAt:true}}},orderBy:[{schoolDate:'desc'},{expectedStartAt:'desc'}]})
+  const references=[...new Set([...ids,...sessions.map(s=>s.courseReference)])],allStatuses:string[]=[]
+  const courses=references.map(reference=>{
+    const enrollment=current.find(e=>e.course.id===reference),rows=sessions.filter(s=>s.courseReference===reference&&(s.students.length>0||Boolean(enrollment&&s.expectedEndAt>=enrollment.createdAt&&teachingStudentMatchesClass(student,s.className))))
+    const statuses=rows.flatMap(s=>s.students.map(m=>m.status));allStatuses.push(...statuses)
+    const source=rows[0]
+    return{courseId:reference,name:enrollment?.course.name||source?.courseName||reference,teacher:enrollment?fullName(enrollment.course.teacher.user):source?.teacherName||'',className:enrollment?.course.grade||source?.className||'',currentlyEnrolled:Boolean(enrollment),expected:rows.length,unmarked:rows.length-statuses.length,...coursePresenceStatistics(statuses),sessions:rows.map(s=>({id:s.id,date:s.schoolDate,expectedStartAt:s.expectedStartAt,status:s.students[0]?.status||'UNMARKED',markedAt:s.students[0]?.markedAt||null}))}
+  }).sort((a,b)=>a.name.localeCompare(b.name))
+  return{academicYear:year,term,schoolTimezone:TEACHING_TIMEZONE,gradeImpact:false,reportCardImpact:false,courses,summary:{...coursePresenceStatistics(allStatuses),expected:courses.reduce((n,c)=>n+c.expected,0),unmarked:courses.reduce((n,c)=>n+c.unmarked,0)}}
+}

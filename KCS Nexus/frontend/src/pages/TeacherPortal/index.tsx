@@ -1,3 +1,5 @@
+import EarlyYearsWorkspace from '@/components/teacher/EarlyYearsWorkspace'
+import {useEarlyYearsContext} from '@/hooks/useEarlyYearsContext'
 import NexusPedagogy from '@/components/shared/NexusPedagogy'
 import TeachingAttendanceWorkspace from '@/components/teachingAttendance/TeachingAttendanceWorkspace'
 import SubjectEnrollmentWorkspace from '@/components/teacher/SubjectEnrollmentWorkspace'
@@ -3037,6 +3039,7 @@ const TeacherDashboardHome = () => {
 
 
 const TeacherPortal = () => {
+  const earlyYears=useEarlyYearsContext()
   const { user } = useAuthStore()
   const language = useUIStore((state) => state.language)
   const location = useLocation()
@@ -3063,15 +3066,15 @@ const TeacherPortal = () => {
                 {getLocalizedGreeting(language)}, {user?.firstName}
               </h1>
               <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
-                {getLocalizedPortalDate(language)} - {language === 'fr' ? 'Suivi de l’enseignement, des évaluations et de l’accompagnement des élèves.' : 'Today’s overview for teaching, assessment and student support.'}
+                {getLocalizedPortalDate(language)} - {earlyYears.enabled ? language === 'fr' ? 'Jeu, observations et développement de chaque enfant.' : 'Play, observations and each child’s development.' : language === 'fr' ? 'Suivi de l’enseignement, des évaluations et de l’accompagnement des élèves.' : 'Today’s overview for teaching, assessment and student support.'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <Link to="/portal/teacher/messages" className="portal-inbox-action btn-primary w-full justify-center py-2 text-center text-sm sm:w-auto">
                 Inbox
               </Link>
-              <button type="button" onClick={openTeacherAiInsights} className="btn-gold flex w-full items-center justify-center gap-2 py-2 text-sm sm:w-auto">
-                <Brain size={16} /> AI Insights
+              <button type="button" onClick={earlyYears.enabled?()=>navigate('/portal/teacher/early-years'):openTeacherAiInsights} className="btn-gold flex w-full items-center justify-center gap-2 py-2 text-sm sm:w-auto">
+                <Brain size={16} /> {earlyYears.enabled?(language==='fr'?'Espace maternelle':'Early years studio'):'AI Insights'}
               </button>
             </div>
           </div>
@@ -3080,9 +3083,9 @@ const TeacherPortal = () => {
         <div className="min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6">
           <PublishedCalendarStrip/>
 
-          {!isDashboard && (['reports', 'messages', 'discipline'].includes(activeSegment) ? <TeacherReportsHub academicReports={<TeacherSectionView segment="reports"/>} disciplineReports={<TeacherSectionView segment="discipline"/>}/> : <TeacherSectionView segment={activeSegment} />)}
+          {!isDashboard && (activeSegment==='early-years'?<EarlyYearsWorkspace/>:['reports', 'messages', 'discipline'].includes(activeSegment) ? <TeacherReportsHub academicReports={<TeacherSectionView segment="reports"/>} disciplineReports={<TeacherSectionView segment="discipline"/>}/> : <TeacherSectionView segment={activeSegment} />)}
 
-          {isDashboard && <TeacherDashboardHome />}
+          {isDashboard && (earlyYears.loading?<div role="status" className="nexus-workspace-card p-6 text-sm">{language==='fr'?'Préparation de votre espace…':'Preparing your workspace…'}</div>:earlyYears.enabled?<EarlyYearsWorkspace/>:<TeacherDashboardHome />)}
 
           {false && isDashboard && (
             <>
