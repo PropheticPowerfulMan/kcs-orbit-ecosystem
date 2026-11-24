@@ -1964,3 +1964,11 @@ html:not(.dark) body:has(.portal-shell) textarea.suggestion-message-input::place
 }
 
 @media screen{.nx-update-notice,.nx-update-confirm{--nx-up-bg:#edf4f8;--nx-up-ink:#16384d;--nx-up-muted:#4e6d80;--nx-up-line:#9cb9cb;background:var(--nx-up-bg);color:var(--nx-up-ink);border:1px solid var(--nx-up-line);border-radius:16px;box-shadow:0 18px 55px #061c2c40;font-family:inherit;font-size:13px;line-height:1.6}.dark .nx-update-notice,.dark .nx-update-confirm{--nx-up-bg:#102c43;--nx-up-ink:#e5eef4;--nx-up-muted:#b7cbd8;--nx-up-line:#42617a}.nx-update-notice{position:fixed;z-index:12030;bottom:18px;left:50%;transform:translateX(-50%);width:min(94vw,600px);padding:16px}.nx-update-notice p{font-size:12px;color:var(--nx-up-muted);margin:6px 0 12px}.nx-update-notice button,.nx-update-confirm button{padding:9px 14px;margin-right:8px;border-radius:9px;background:#205f73;color:#fff;font-weight:750}.dark .nx-update-notice button,.dark .nx-update-confirm button{background:#2d7188;color:#fff}.nx-update-notice button:last-child,.nx-update-confirm footer button:first-child{background:transparent;border:1px solid var(--nx-up-line);color:var(--nx-up-ink)}.nx-update-notice button:disabled,.nx-update-confirm button:disabled{opacity:.5}.nx-update-confirm{width:min(94vw,520px);max-height:85dvh;overflow:auto;padding:25px}.nx-update-confirm::backdrop{background:#071c2bc0;backdrop-filter:blur(5px)}.nx-update-confirm h2{font-size:19px;font-weight:800}.nx-update-confirm p{font-size:13px;line-height:1.8;margin:12px 0 20px;color:var(--nx-up-muted)}.nx-update-confirm footer{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}}
+
+/* Persistent update prompts stay centered in the browser top layer. */
+@media screen {
+ dialog.nx-update-notice { position:fixed; inset:0; margin:auto; transform:none; width:min(92vw,600px); height:fit-content; max-height:calc(100dvh - 32px); overflow-y:auto; padding:clamp(20px,4vw,30px); border-radius:20px; }
+ dialog.nx-update-notice::backdrop { background:#071c2bbd; backdrop-filter:blur(5px); }
+ dialog.nx-update-notice h2 { margin:0; font-size:20px; line-height:1.35; font-weight:750; }
+ dialog.nx-update-notice button { margin-top:8px; }
+}

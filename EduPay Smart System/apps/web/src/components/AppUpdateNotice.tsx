@@ -6,7 +6,7 @@ export function AppUpdateNotice(){
  const {lang}=useI18n(),L=(a:string,b:string)=>lang==='fr'?a:b;
  const [available,setAvailable]=useState(false),[dismissed,setDismissed]=useState(false),[pending,setPending]=useState(getPendingApiWrites),[ready,setReady]=useState(false),[confirming,setConfirming]=useState(false);
  const retryRegistration=useRef<()=>void>(()=>{});
- const dirty=useRef(false),dialog=useRef<HTMLDialogElement>(null),registration=useRef<ServiceWorkerRegistration|null>(null);
+ const dirty=useRef(false),notice=useRef<HTMLDialogElement>(null),dialog=useRef<HTMLDialogElement>(null),registration=useRef<ServiceWorkerRegistration|null>(null);
  useEffect(()=>{
   if(!('serviceWorker' in navigator))return;
   let disposed=false,lastCheck=0;const hadController=Boolean(navigator.serviceWorker.controller);
@@ -22,8 +22,19 @@ export function AppUpdateNotice(){
   return()=>{disposed=true;clearInterval(timer);navigator.serviceWorker.removeEventListener('controllerchange',changed);document.removeEventListener('input',input,true);window.removeEventListener('hashchange',route);window.removeEventListener('edupay:write-state',writes);window.removeEventListener('online',visible);document.removeEventListener('visibilitychange',visible);};
  },[]);
  useEffect(()=>{if(!available||ready)return;const timer=setInterval(()=>retryRegistration.current(),10000);return()=>clearInterval(timer)},[available,ready]);
+ // Deferring is temporary: remind again in one minute or on returning to the app.
+ useEffect(()=>{
+  if(!available||!dismissed)return;
+  const remind=()=>{if(document.visibilityState==='visible')setDismissed(false)};
+  const timer=window.setTimeout(()=>setDismissed(false),60000);
+  window.addEventListener('focus',remind);document.addEventListener('visibilitychange',remind);
+  return()=>{clearTimeout(timer);window.removeEventListener('focus',remind);document.removeEventListener('visibilitychange',remind)};
+ },[available,dismissed]);
+ useEffect(()=>{const el=notice.current;if(!el)return;if(available&&!dismissed&&!confirming){if(!el.open)el.showModal()}else el.close()},[available,dismissed,confirming]);
  useEffect(()=>{if(confirming)dialog.current?.showModal();else dialog.current?.close()},[confirming]);
+ function deferUpdate(){setConfirming(false);setDismissed(true);}
+
  function requestReload(){if(getPendingApiWrites())return;let queued=false;try{queued=JSON.parse(localStorage.getItem('edupay_offline_mutation_queue_v1')||'[]').length>0}catch{}if(dirty.current||queued)setConfirming(true);else location.reload();}
- return <>{available&&!dismissed&&<aside className="ep-update-notice" role="status"><b>{L('Nouvelle version d’EduPay disponible','A new EduPay version is available')}</b><p>{pending?L('Une opération est en cours. Attendez sa confirmation avant de mettre à jour.','An operation is in progress. Wait for confirmation before updating.'):L('Enregistrez votre travail, puis chargez la nouvelle version. La page ne se recharge pas sans votre accord.','Save your work, then load the new version. This page will not reload without your agreement.')}</p><button data-kcs-no-processing="true" disabled={Boolean(pending)||!ready} onClick={requestReload}>{ready?L('Mettre à jour maintenant','Update now'):L('Préparation…','Preparing…')}</button><button data-kcs-no-processing="true" onClick={()=>setDismissed(true)}>{L('Plus tard','Later')}</button></aside>}
- <dialog ref={dialog} className="ep-update-confirm" onCancel={()=>setConfirming(false)}><h2>{L('Vérifier avant d’actualiser','Check before reloading')}</h2><p>{L('Une saisie ou une opération hors connexion peut encore être en attente. Vérifiez son enregistrement avant de recharger cette page.','Some input or offline work may still be pending. Check that it has been saved before reloading this page.')}</p><footer><button data-kcs-no-processing="true" onClick={()=>setConfirming(false)}>{L('Continuer mon travail','Continue working')}</button><button data-kcs-no-processing="true" disabled={Boolean(pending)} onClick={()=>{if(!getPendingApiWrites())location.reload()}}>{L('J’ai vérifié · actualiser','I have checked · reload')}</button></footer></dialog></>;
+ return <><dialog ref={notice} className="ep-update-notice" aria-labelledby="ep-update-title" onCancel={event=>{event.preventDefault();deferUpdate()}}><h2 id="ep-update-title">{L('Nouvelle version d’EduPay disponible','A new EduPay version is available')}</h2><p>{pending?L('Une opération est en cours. Attendez sa confirmation avant de mettre à jour.','An operation is in progress. Wait for confirmation before updating.'):L('Enregistrez votre travail, puis chargez la nouvelle version. La page ne se recharge pas sans votre accord.','Save your work, then load the new version. This page will not reload without your agreement.')}</p><button data-kcs-no-processing="true" disabled={Boolean(pending)||!ready} onClick={requestReload}>{ready?L('Mettre à jour maintenant','Update now'):L('Préparation…','Preparing…')}</button><button data-kcs-no-processing="true" onClick={deferUpdate}>{L('Plus tard · rappel dans 1 min','Later · remind me in 1 min')}</button></dialog>
+ <dialog ref={dialog} className="ep-update-confirm" onCancel={event=>{event.preventDefault();deferUpdate()}}><h2>{L('Vérifier avant d’actualiser','Check before reloading')}</h2><p>{L('Une saisie ou une opération hors connexion peut encore être en attente. Vérifiez son enregistrement avant de recharger cette page.','Some input or offline work may still be pending. Check that it has been saved before reloading this page.')}</p><footer><button data-kcs-no-processing="true" onClick={deferUpdate}>{L('Continuer mon travail','Continue working')}</button><button data-kcs-no-processing="true" disabled={Boolean(pending)} onClick={()=>{if(!getPendingApiWrites())location.reload()}}>{L('J’ai vérifié · actualiser','I have checked · reload')}</button></footer></dialog></>;
 }
