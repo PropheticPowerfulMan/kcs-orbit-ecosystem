@@ -1,3 +1,4 @@
+import {hasDisciplineWorkspaceAccess,DISCIPLINE_WORKSPACE_PERMISSION} from '../utils/staffWorkspace.js'
 import {Prisma} from '@prisma/client'
 import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
 import { queueMessageBatch } from '../services/messageBatch.js'
@@ -157,7 +158,7 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
 messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const allowedRoles = req.user!.role === 'parent' || req.user!.role === 'student' ? ['ADMIN', 'STAFF', 'TEACHER'] as const : undefined
   const actorId = await resolveMessageActorId(req)
-  const contacts = await prisma.user.findMany({ where: { accountBlockedAt: null, id: { not: actorId }, ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}) }, select: { id: true, firstName: true, middleName: true, lastName: true, role: true, accessCode: true, staffProfile: { select: { function: true, department: true } }, teacherProfile: { select: { department: true } } }, orderBy: [{ role: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }] })
+  const contacts = await prisma.user.findMany({ where: { accountBlockedAt: null, id: { not: actorId }, ...(allowedRoles ? { OR:[{role:{in:[...allowedRoles]}},{AND:[{permissions:{has:DISCIPLINE_WORKSPACE_PERMISSION}},{NOT:{permissions:{has:'nexus:media-only'}}}]}] } : {}) }, select: { id: true, firstName: true, middleName: true, lastName: true, role: true, accessCode: true, staffProfile: { select: { function: true, department: true } }, teacherProfile: { select: { department: true } } }, orderBy: [{ role: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }] })
   return success(res, contacts)
 }))
 
@@ -264,9 +265,9 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
 messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const data = messageSchema.parse(req.body)
   const senderId = await resolveMessageActorId(req)
-  const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true, email: true, phone: true, firstName: true, middleName: true, lastName: true, accountBlockedAt: true } })
+  const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true, permissions: true, email: true, phone: true, firstName: true, middleName: true, lastName: true, accountBlockedAt: true } })
   if (!recipient || recipient.accountBlockedAt) throw new ApiError(404, 'Active recipient not found')
-  if ((req.user!.role === 'parent' || req.user!.role === 'student') && !['ADMIN', 'STAFF', 'TEACHER'].includes(recipient.role)) {
+  if ((req.user!.role === 'parent' || req.user!.role === 'student') && !['ADMIN', 'STAFF', 'TEACHER'].includes(recipient.role)&&!hasDisciplineWorkspaceAccess(recipient)) {
     throw new ApiError(403, 'Parents and students may only contact authorized school staff.')
   }
   const { language = 'fr', ...messageData } = data

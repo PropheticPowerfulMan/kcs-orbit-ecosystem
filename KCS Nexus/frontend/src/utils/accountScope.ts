@@ -16,3 +16,5 @@ export const workspaceRole=(user:User|null|undefined,pathname:string):UserRole|u
  if(/^\/portal\/teacher(?:\/|$)/.test(pathname)&&(user.role==='teacher'||user.accessRoles?.includes('teacher')))return 'teacher'
  return user.role
 }
+
+export const canUseDisciplineWorkspace=(user:Pick<User,'id'|'permissions'>|null|undefined)=>Boolean(user&&!isMediaAccount(user)&&(user.id==='configured-superadmin'||user.permissions?.includes('nexus:discipline-director-workspace')))

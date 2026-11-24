@@ -29,3 +29,16 @@ test('document and grade release remain independent',()=>{
  assert.equal(canViewAcademic(p,'grades',{...ctx,audience:'parent'}),false)
  assert.equal(canViewAcademic(p,'transcripts',{...ctx,audience:'parent'}),false)
 })
+
+
+test('removing a targeted grant denies subsequent requests using the same student or parent session',()=>{
+ const p:VisibilityPolicy={...closedVisibilityPolicy(),enabled:true,rules:[{...rule,permissions:{grades:true,reportCards:true,transcripts:true}}]}
+ const contexts=[ctx,{...ctx,audience:'parent' as const,parentIds:['family']}]
+ for(const context of contexts)for(const feature of ['grades','reportCards','transcripts'] as const)assert.equal(canViewAcademic(p,feature,context),true)
+ const saved={...p,revision:p.revision+1,rules:p.rules.filter(r=>r.id!==rule.id)}
+ for(const context of contexts)for(const feature of ['grades','reportCards','transcripts'] as const)assert.equal(canViewAcademic(saved,feature,context),false)
+ // Deletion removes only its own permission; independent deliberate grants survive.
+ saved.defaults.parent.grades=true
+ assert.equal(canViewAcademic(saved,'grades',contexts[1]),true)
+ assert.equal(canViewAcademic(saved,'reportCards',contexts[1]),false)
+})

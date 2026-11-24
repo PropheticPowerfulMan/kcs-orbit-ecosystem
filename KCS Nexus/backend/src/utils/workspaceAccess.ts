@@ -1,8 +1,8 @@
 import {createHash} from 'node:crypto'
-import {STAFF_WORKSPACE_PERMISSION,PRINCIPAL_WORKSPACE_PERMISSION,SENIOR_WORKSPACE_PERMISSION,hasStaffWorkspaceAccess,hasPrincipalWorkspaceAccess,hasSeniorWorkspaceAccess} from './staffWorkspace.js'
-export const WORKSPACE_KEYS=['staff','principal','senior'] as const
+import {DISCIPLINE_WORKSPACE_PERMISSION,hasDisciplineWorkspaceAccess,STAFF_WORKSPACE_PERMISSION,PRINCIPAL_WORKSPACE_PERMISSION,SENIOR_WORKSPACE_PERMISSION,hasStaffWorkspaceAccess,hasPrincipalWorkspaceAccess,hasSeniorWorkspaceAccess} from './staffWorkspace.js'
+export const WORKSPACE_KEYS=['staff','principal','senior','discipline'] as const
 export type Workspace=typeof WORKSPACE_KEYS[number]
-const permissionByWorkspace:Record<Workspace,string>={staff:STAFF_WORKSPACE_PERMISSION,principal:PRINCIPAL_WORKSPACE_PERMISSION,senior:SENIOR_WORKSPACE_PERMISSION}
+const permissionByWorkspace:Record<Workspace,string>={staff:STAFF_WORKSPACE_PERMISSION,principal:PRINCIPAL_WORKSPACE_PERMISSION,senior:SENIOR_WORKSPACE_PERMISSION,discipline:DISCIPLINE_WORKSPACE_PERMISSION}
 type Account={role:string;permissions:string[]}
 export const explicitWorkspaces=(account:Account)=>WORKSPACE_KEYS.filter(workspace=>account.permissions.includes(permissionByWorkspace[workspace]))
 export const workspaceAccessVersion=(account:Account)=>createHash('sha256').update(JSON.stringify([account.role.toUpperCase(),explicitWorkspaces(account)])).digest('hex')
@@ -12,6 +12,7 @@ export function workspaceAccessView(account:Account){
  if(hasStaffWorkspaceAccess(account))workspaces.push('staff')
  if(hasPrincipalWorkspaceAccess(account))workspaces.push('principal')
  if(hasSeniorWorkspaceAccess(account))workspaces.push('senior')
+ if(hasDisciplineWorkspaceAccess(account))workspaces.push('discipline')
  return {enabled:hasStaffWorkspaceAccess(account),included:includedWorkspaces.length>0,workspace:hasPrincipalWorkspaceAccess(account)?'principal':'staff',workspaces,grantedWorkspaces:explicitWorkspaces(account),includedWorkspaces,version:workspaceAccessVersion(account)}
 }
 export function selectedWorkspacePermissions(account:Account,workspaces:readonly Workspace[]){

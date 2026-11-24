@@ -59,7 +59,7 @@ adminRouter.get('/staff-workspace-access',authenticate,requireSuperAdmin(),async
 adminRouter.put('/staff-workspace-access/:userId',authenticate,requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const workspace=z.enum(WORKSPACE_KEYS)
  const payload=z.union([
-  z.object({workspaces:z.array(workspace).max(3).refine(values=>new Set(values).size===values.length,'Choose each workspace once'),version:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict(),
+  z.object({workspaces:z.array(workspace).max(WORKSPACE_KEYS.length).refine(values=>new Set(values).size===values.length,'Choose each workspace once'),version:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict(),
   z.object({enabled:z.boolean(),workspace:workspace.default('staff')}).strict()
  ]).parse(req.body)
  const id=z.string().min(1).max(150).parse(req.params.userId),actorId=await databaseActorId(req.user!.sub)
