@@ -30,3 +30,26 @@ academicVisibilityRouter.put('/',asyncHandler(async(req:AuthenticatedRequest,res
  })
  res.setHeader('Cache-Control','private, no-store');return success(res,saved,'Academic release controls saved')
 }))
+
+// Deletion is its own durable, revisioned mutation. Removing a row in the editor
+// must not leave its server-side permission active until an unrelated Save click.
+academicVisibilityRouter.delete('/rules/:id',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const id=z.string().min(1).max(80).parse(req.params.id)
+ const input=z.object({revision:z.number().int().min(0),confirmed:z.literal(true)}).strict().parse(req.body)
+ const actorId=await databaseActorId(req.user!.sub)
+ const policy=await prisma.$transaction(async tx=>{
+  await tx.$queryRaw(Prisma.sql`SELECT 1 FROM pg_advisory_xact_lock(hashtext('nexus-academic-visibility'))`)
+  const row=await tx.auditLog.findUnique({where:{id:visibilitySettingsId},select:{metadata:true}})
+  const previous=row?.metadata as unknown as import('../utils/academicVisibilityPolicy.js').VisibilityPolicy|undefined
+  if(!previous)throw new ApiError(404,'Visibility rule not found.')
+  // A retry after a successful deletion is harmless; it never recreates a rule.
+  if(!previous.rules.some(rule=>rule.id===id))return previous
+  if(previous.revision!==input.revision)throw new ApiError(409,'Les réglages ont changé. Rechargez avant de réessayer. / Settings changed. Reload before retrying.')
+  const next={...previous,revision:previous.revision+1,rules:previous.rules.filter(rule=>rule.id!==id)}
+  await tx.auditLog.update({where:{id:visibilitySettingsId},data:{actorId,metadata:next as unknown as Prisma.InputJsonValue}})
+  await tx.auditLog.create({data:{actorId,action:'ACADEMIC_VISIBILITY_RULE_DELETED',targetType:'AcademicVisibility',targetId:id,metadata:{previous,next} as unknown as Prisma.InputJsonValue}})
+  return next
+ })
+ res.setHeader('Cache-Control','private, no-store')
+ return success(res,policy,'Visibility rule deleted on the server.')
+}))

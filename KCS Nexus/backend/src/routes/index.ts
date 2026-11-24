@@ -1,3 +1,4 @@
+import {disciplineDirectorRouter} from './discipline-director.routes.js'
 import {earlyYearsRouter} from './early-years.routes.js'
 import {electionsRouter} from './elections.routes.js'
 import {pedagogyRouter} from './pedagogy.routes.js'
@@ -90,6 +91,7 @@ router.use('/academic-records', academicRecordsRouter)
 router.use('/attendance', attendanceRouter)
 router.use('/teaching-attendance', teachingAttendanceRouter)
 router.use('/senior-teacher', seniorTeacherRouter)
+router.use('/discipline-director', disciplineDirectorRouter)
 router.use('/pedagogy', pedagogyRouter)
 router.use('/early-years', earlyYearsRouter)
 router.use('/elections', electionsRouter)

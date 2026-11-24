@@ -48,6 +48,7 @@ const ParentPortal = lazyWithRecovery(() => import('@/pages/ParentPortal'))
 const ParentForumPage = lazyWithRecovery(() => import('@/pages/ParentForum'))
 const TeacherPortal = lazyWithRecovery(() => import('@/pages/TeacherPortal'))
 const MediaPortal = lazyWithRecovery(() => import('@/pages/MediaPortal'))
+const DisciplineDirectorPortal = lazyWithRecovery(() => import('@/pages/DisciplineDirectorPortal'))
 const SeniorTeacherPortal = lazyWithRecovery(() => import('@/pages/SeniorTeacherPortal'))
 const StaffPortal = lazyWithRecovery(() => import('@/pages/StaffPortal'))
 const IncidentReportsPage = lazyWithRecovery(() => import('@/pages/IncidentReports'))
@@ -221,6 +222,8 @@ const App = () => {
             <Route path="/" element={<HomePage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/portal/senior/handbook" element={<ProtectedRoute><SchoolHandbookPage portal /></ProtectedRoute>} />
+            <Route path="/portal/discipline/handbook" element={<ProtectedRoute><SchoolHandbookPage portal /></ProtectedRoute>} />
+            <Route path="/portal/discipline/*" element={<ProtectedRoute><DisciplineDirectorPortal /></ProtectedRoute>} />
             <Route path="/portal/senior/*" element={<ProtectedRoute><SeniorTeacherPortal /></ProtectedRoute>} />
             <Route path="/school-handbook" element={<SchoolHandbookPage />} />
             <Route path="/admin/handbook" element={<ProtectedRoute allowedRoles={['admin']}><SchoolHandbookPage portal /></ProtectedRoute>} />

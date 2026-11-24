@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import ts from 'typescript';
+const code=ts.transpileModule(readFileSync(new URL('./courseLearnerOrder.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022}}).outputText;
+const {alphabeticCourseLearners}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+test('full names sort alphabetically with accents and mixed case',()=>{const rows=['Zoé Luyeye','Émile Nkote','alice Kalala','Besolo Stany'].map((name,i)=>({name,studentId:String(i),status:'PRESENT'}));const result=alphabeticCourseLearners(rows);assert.deepEqual(result.map(r=>r.name),['alice Kalala','Besolo Stany','Émile Nkote','Zoé Luyeye']);assert.equal(rows[0].name,'Zoé Luyeye');assert.equal(result[3],rows[0])});
+test('equal names remain stable by course and identifier',()=>assert.deepEqual(alphabeticCourseLearners([{name:'A',studentId:'2',courseName:'Z'},{name:'A',studentId:'1',courseName:'A'}]).map(r=>r.studentId),['1','2']));

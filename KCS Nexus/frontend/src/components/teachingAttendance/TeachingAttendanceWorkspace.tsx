@@ -1,3 +1,4 @@
+import {alphabeticCourseLearners} from '@/utils/courseLearnerOrder'
 import {CampusSettings,PresenceEvidence,PresenceVerificationDialog,freshCampusPosition} from './TeachingPresenceControls'
 import TeachingLiveOverview from './TeachingLiveOverview'
 import TeachingScheduleEditor from './TeachingScheduleEditor'
@@ -93,7 +94,7 @@ export default function TeachingAttendanceWorkspace({manager=false}:{manager?:bo
  }
  const teachers=useMemo(()=>[...new Map(catalog.map(row=>[row.teacherUserId,{id:row.teacherUserId,name:row.teacherName}])).values()].sort((a,b)=>a.name.localeCompare(b.name)),[catalog])
  const filtered=board?.sessions||[]
- const learnerRows=board?.learners||[]
+ const learnerRows=useMemo(()=>alphabeticCourseLearners(board?.learners||[]),[board?.learners])
  const classOptions=useMemo(()=>{
   const list=board?.classes||[]
   return [...new Set(list.flatMap(label=>[label.replace(/\s+[AB]$/,''),label]))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))

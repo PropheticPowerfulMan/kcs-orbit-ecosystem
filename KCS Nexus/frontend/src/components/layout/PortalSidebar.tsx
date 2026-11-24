@@ -1,6 +1,6 @@
 import './portalSidebar.css'
 import {useEarlyYearsContext} from '@/hooks/useEarlyYearsContext'
-import {isMediaAccount,canUseStaffWorkspace,canUsePrincipalWorkspace,canUseSeniorWorkspace,workspaceRole} from '@/utils/accountScope'
+import {isMediaAccount,canUseStaffWorkspace,canUsePrincipalWorkspace,canUseSeniorWorkspace,canUseDisciplineWorkspace,workspaceRole} from '@/utils/accountScope'
 import {loadPersonalAvatar} from '@/utils/personalAvatarCache'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
@@ -10,11 +10,12 @@ import {
   LayoutDashboard, BookOpen, FileText, Calendar, Brain,
   Users, Settings, Bell, ChevronLeft, ChevronRight, Search,
   Clock3, GraduationCap, BarChart3, MessageSquare, LogOut,
-  Shield, Home, UserCheck, UserPlus, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Ban, Archive, Moon, Sun, Globe, BookOpenCheck, GripHorizontal, SlidersHorizontal, Vote, Loader2
+  Shield, Home, UserCheck, UserPlus, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Ban, Archive, Moon, Sun, Globe, BookOpenCheck, GripHorizontal, SlidersHorizontal, Vote, Loader2, ShieldAlert, HeartHandshake, ListChecks
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { academyAPI, authAPI, lessonPlanAPI, electionsAPI } from '@/services/api'
 import { useUIStore } from '@/store/uiStore'
+import {launchNexusWorkspace,WorkspaceLaunchError} from '@/utils/launchNexusWorkspace'
 import {alertPortalMessage} from '@/utils/portalActionDialogs'
 import type { UserRole } from '@/types'
 import { getAssetUrl } from '@/utils/assets'
@@ -140,6 +141,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const mobileSidebarButtonRef = useRef<HTMLButtonElement>(null)
   const [menuQuery,setMenuQuery]=useState('')
   const [electionOpening,setElectionOpening]=useState(false)
+  const [academyOpening,setAcademyOpening]=useState(false)
+  const academyLock=useRef(false)
   const electionLock=useRef(false)
   const [avatarLoadVersion, setAvatarLoadVersion] = useState(0)
   const [desktopActionHeight, setDesktopActionHeight] = useState(() => {
@@ -255,6 +258,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const activeRole = workspaceRole(user,location.pathname)!
   const principalWorkspace = canUsePrincipalWorkspace(user)
 
+  const disciplineWorkspace=/^\/portal\/discipline(?:\/|$)/.test(location.pathname)&&canUseDisciplineWorkspace(user)
   const seniorWorkspace=/^\/portal\/senior(?:\/|$)/.test(location.pathname)&&canUseSeniorWorkspace(user)
   const mediaAccount=isMediaAccount(user)
   const electionViewer=user.id!=='configured-superadmin'&&(principalWorkspace||canUseSeniorWorkspace(user))
@@ -263,11 +267,29 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const openElections=async()=>{
    if(!electionAudience||electionLock.current)return
    electionLock.current=true;setElectionOpening(true)
-   try{const owner=user.id,response=await electionsAPI.launch(electionAudience);if(useAuthStore.getState().user?.id===owner)window.location.assign(response.data.data.url)}
-   catch{await alertPortalMessage(language==='fr'?'L’accès électoral n’a pas pu être ouvert. Vérifiez votre connexion et vos droits, puis réessayez.':'The election workspace could not be opened. Check your connection and access rights, then retry.')}
+   try{const owner=user.id;await launchNexusWorkspace('elections',async()=>{const response=await electionsAPI.launch(electionAudience);return response.data.data.url},{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner})}
+   catch(error){await alertPortalMessage(error instanceof WorkspaceLaunchError&&error.message==='POPUP_BLOCKED'?(language==='fr'?'Autorisez l’ouverture d’un nouvel onglet pour accéder aux élections.':'Allow a new tab to open the election workspace.'):language==='fr'?'L’accès électoral n’a pas pu être ouvert. Vérifiez votre connexion et vos droits, puis réessayez.':'The election workspace could not be opened. Check your connection and access rights, then retry.')}
    finally{electionLock.current=false;setElectionOpening(false)}
   }
-  const navItems: NavItem[] = seniorWorkspace?[
+  const openAcademy=async()=>{
+   if(academyLock.current)return
+   academyLock.current=true;setAcademyOpening(true)
+   try{const owner=user.id;await launchNexusWorkspace('academy',async()=>{const response=await academyAPI.launch();return response.data.data.url},{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner})}
+   catch(error){await alertPortalMessage(error instanceof WorkspaceLaunchError&&error.message==='POPUP_BLOCKED'?(language==='fr'?'Autorisez l’ouverture d’un nouvel onglet pour accéder à Academy.':'Allow a new tab to open Academy.'):language==='fr'?'Academy n’a pas pu être ouverte. Vérifiez votre connexion et réessayez.':'Academy could not be opened. Check your connection and retry.')}
+   finally{academyLock.current=false;setAcademyOpening(false)}
+  }
+  const navItems: NavItem[] = disciplineWorkspace?[
+   {to:'/portal/discipline',label:language==='fr'?'Vue d’ensemble':'Overview',icon:LayoutDashboard},
+   {to:'/portal/discipline/cases',label:language==='fr'?'Dossiers et mesures':'Cases & sanctions',icon:ShieldAlert},
+   {to:'/portal/discipline/incidents',label:language==='fr'?'Signalements reçus':'Reports received',icon:ClipboardList},
+   {to:'/portal/discipline/learners',label:language==='fr'?'Dossiers élèves':'Learner dossiers',icon:Users},
+   {to:'/portal/discipline/followups',label:language==='fr'?'Rencontres et suivis':'Meetings & follow-up',icon:ListChecks},
+   {to:'/portal/discipline/plans',label:language==='fr'?'Soutien éducatif':'Positive behavior',icon:HeartHandshake},
+   {to:'/portal/discipline/communications',label:language==='fr'?'Communication familles':'Family communications',icon:MessageSquare},
+   {to:'/portal/discipline/reports',label:language==='fr'?'Analyses et rapports':'Analysis & reports',icon:BarChart3},
+   {to:'/portal/discipline/handbook',label:language==='fr'?'Manuel de l’école':'School Handbook',icon:BookOpen},
+   {to:'/portal/discipline/settings',label:t('portalNav.settings'),icon:Settings},
+  ]:seniorWorkspace?[
    {to:'/portal/senior',label:language==='fr'?'Vue d’ensemble ST':'ST overview',icon:LayoutDashboard},
    {to:'/portal/senior/pedagogy',label:language==='fr'?'Pilotage pédagogique':'Pedagogical oversight',icon:BookOpen},
    {to:'/portal/senior/cohort',label:language==='fr'?'Cohorte Grade 12':'Grade 12 cohort',icon:Users},
@@ -319,7 +341,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     parent: 'bg-orange-500',
   }[activeRole]
 
-  const roleName = seniorWorkspace?'Senior Teacher · ST':mediaAccount?'Media':{
+  const roleName = disciplineWorkspace?(language==='fr'?'Directeur de discipline':'Discipline Director'):seniorWorkspace?'Senior Teacher · ST':mediaAccount?'Media':{
     admin: t('roles.admin'),
     staff: t('roles.staff'),
     teacher: t('roles.teacher'),
@@ -348,7 +370,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           <NavLink
             key={to}
             to={to}
-            end={to === (seniorWorkspace ? '/portal/senior' : activeRole === 'admin' ? '/admin' : `/portal/${activeRole}`)}
+            end={to === (disciplineWorkspace?'/portal/discipline':seniorWorkspace ? '/portal/senior' : activeRole === 'admin' ? '/admin' : `/portal/${activeRole}`)}
             onClick={() => {
               if (isMobile) {
                 setSidebarOpen(false)
@@ -390,17 +412,18 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             <span className="flex items-center justify-center gap-1.5"><GripHorizontal size={15} aria-hidden="true" />{currentLanguage === 'fr' ? 'Règle KCS · réussite et passage ≥ 70 %' : 'KCS rule · success and promotion ≥ 70%'}</span>
           </div>
         )}
-        {accessRoles.includes('teacher') && (activeRole !== 'teacher'||seniorWorkspace) && (
+        {accessRoles.includes('teacher') && (activeRole !== 'teacher'||seniorWorkspace||disciplineWorkspace) && (
           <Link to="/portal/teacher" className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`} title={!isMobile && sidebarCollapsed ? (currentLanguage === 'fr' ? 'Espace enseignant' : 'Teacher workspace') : undefined}>
             <BookOpen size={18} />
             {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Espace enseignant' : 'Teacher workspace'}</span>}
           </Link>
         )}
-        {!accessRoles.includes('teacher') && (activeRole !== user.role || seniorWorkspace) && !['admin','staff'].includes(user.role) && (
+        {!accessRoles.includes('teacher') && (activeRole !== user.role || seniorWorkspace || disciplineWorkspace) && !['admin','staff'].includes(user.role) && (
           <Link to={'/portal/'+user.role} className={isMobile ? 'nexus-mobile-action' : 'sidebar-link w-full'}>
             <UserCheck size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Mon espace habituel':'My usual workspace'}</span>}
           </Link>
         )}
+        {canUseDisciplineWorkspace(user)&&!disciplineWorkspace&&<Link to="/portal/discipline" className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={currentLanguage==='fr'?'Direction de discipline':'Discipline Director'}><ShieldAlert size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Discipline':'Discipline workspace'}</span>}</Link>}
         {canUseSeniorWorkspace(user)&&!seniorWorkspace&&<Link to="/portal/senior" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title="Senior Teacher · ST"><GraduationCap size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Senior Teacher · ST':'Senior Teacher workspace'}</span>}</Link>}
         {canUsePrincipalWorkspace(user) && !/^\/admin(?:\/|$)/.test(location.pathname) && (
           <Link to="/admin" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title={currentLanguage==='fr'?'Espace Principal':'Principal workspace'}>
@@ -417,11 +440,11 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           {(isMobile||!sidebarCollapsed)&&<span>{electionOpening?(language==='fr'?'Ouverture sécurisée…':'Opening securely…'):electionLabel}</span>}
         </button>}
         {(accessRoles.includes('teacher') || user.role === 'admin') && (
-          <button type="button" onClick={async () => { const response = await academyAPI.launch(); window.location.assign(response.data.data.url) }}
+          <button type="button" onClick={()=>void openAcademy()} disabled={academyOpening} aria-busy={academyOpening} data-kcs-no-processing="true" data-academy-launch
             className={isMobile ? "nexus-mobile-action" : `sidebar-link w-full ${!sidebarCollapsed ? "" : "justify-center px-0"}`}
             title={!isMobile && sidebarCollapsed ? "KCS Nexus Academy" : undefined}>
-            <GraduationCap size={18} />
-            {(isMobile || !sidebarCollapsed) && <span>KCS Nexus Academy</span>}
+            <GraduationCap size={18} className={academyOpening?"animate-pulse":undefined}/>
+            {(isMobile || !sidebarCollapsed) && <span>{academyOpening?(language==='fr'?'Ouverture sécurisée…':'Opening securely…'):'KCS Nexus Academy'}</span>}
           </button>
         )}
         {(accessRoles.includes('teacher') || user.role === 'admin') && (

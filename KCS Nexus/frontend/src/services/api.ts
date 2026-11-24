@@ -593,7 +593,7 @@ const preserveNexusReturn=<T extends {data:{data:{url:string}}}>(response:T):T=>
  return response
 }
 export const academyAPI = {
-  launch: () => api.post<{ data: { url: string } }>("/academy/launch").then(preserveNexusReturn),
+  launch: () => api.post<{ data: { url: string } }>("/academy/launch",undefined,{headers:{'x-silent-feedback':'true'}}).then(preserveNexusReturn),
 }
 
 export const lessonPlanAPI = {
@@ -683,7 +683,7 @@ export const syllabiAPI = {
   remove: (courseId: string) => api.delete('/syllabi/' + courseId),
 }
 
-export const academicVisibilityAPI = { get: () => api.get('/academic-visibility'), save: (data: unknown) => api.put('/academic-visibility', data) }
+export const academicVisibilityAPI = { get: () => api.get('/academic-visibility'), save: (data: unknown) => api.put('/academic-visibility', data), deleteRule: (id: string, revision: number) => api.delete('/academic-visibility/rules/'+encodeURIComponent(id), {data:{revision,confirmed:true},headers:{'x-silent-feedback':'true'}}) }
 
 export const academicPortalAPI = {reportCards:(studentId:string)=>api.get('/academic-records/portal-report-cards/'+encodeURIComponent(studentId)),reportDocument:(id:string)=>api.get('/academic-records/report-cards/'+encodeURIComponent(id)+'/portal-document',{params:{language:'en'}})}
 

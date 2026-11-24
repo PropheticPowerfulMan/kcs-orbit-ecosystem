@@ -1,3 +1,4 @@
+import {alphabeticCourseLearners} from '@/utils/courseLearnerOrder'
 import {useEffect,useRef,useState} from 'react'
 import {CheckCheck,Loader2,Save,Search} from 'lucide-react'
 import {teachingAttendanceAPI} from '@/services/api'
@@ -14,7 +15,7 @@ export default function SessionRosterDialog({session,manager,onClose,onSaved}:{s
   teachingAttendanceAPI.register(session.id!).then(response=>{
    if(!active)return
    const register=response.data.data as SessionRegister
-   setData(register);setRows(register.roster);original.current=new Set(register.roster.filter(row=>row.status).map(row=>row.studentId));setError('')
+   setData(register);setRows(alphabeticCourseLearners(register.roster));original.current=new Set(register.roster.filter(row=>row.status).map(row=>row.studentId));setError('')
   }).catch(e=>{if(active)setError(teachingError(e,fr))}).finally(()=>{if(active)setLoading(false)})
   return()=>{active=false}
  },[session.id])
