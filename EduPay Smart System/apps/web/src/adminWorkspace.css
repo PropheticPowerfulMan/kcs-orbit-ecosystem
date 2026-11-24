@@ -1,0 +1,67 @@
+/* Focused finance workspace polish; does not alter receipts, public login or print layouts. */
+@media screen {
+  .ep-admin-refined { --ep-accent: #b8d3cc; --ep-accent-ink: #142c31; min-width: 0; }
+  .ep-admin-refined[data-finance-page="/reports"] { --ep-accent: #ddc59a; }
+  .ep-admin-refined[data-finance-page="/messages"] { --ep-accent: #b0cbdc; }
+  .ep-admin-refined[data-finance-page="/parent-payments"] { --ep-accent: #d9b9a1; }
+  .ep-admin-refined[data-finance-page="/students"] { --ep-accent: #aed4bd; }
+  .ep-admin-refined[data-finance-page="/employees"] { --ep-accent: #c9cbb9; }
+  .ep-admin-refined[data-finance-page="/parents"] { --ep-accent: #c6bfd9; }
+  .ep-admin-refined .ep-page-hero { position: relative; isolation: isolate; overflow: hidden; padding: 24px 26px !important; border: 1px solid #aec9cb24; border-radius: 22px; background: linear-gradient(120deg, #203941, #172630 78%) !important; box-shadow: 0 12px 30px #06101725; }
+  .ep-page-hero > :not(.ep-page-emblem) { position: relative; z-index: 1; }
+  .ep-page-hero-inner { padding: 0 !important; background: transparent !important; }
+  .ep-page-hero .ep-page-emblem { position: absolute; pointer-events: none; right: 22px; top: 16px; color: var(--ep-accent); opacity: .13; z-index: 0; transform: rotate(-8deg); }
+  .ep-admin-refined .ep-page-hero h1 { max-width: 32ch; color: #f1f3ee; }
+  .ep-admin-refined .ep-page-hero p { max-width: 78ch; color: #bfd0cf; }
+  .ep-admin-refined .glass { border-color: #abc5c51c !important; box-shadow: 0 7px 22px #08131b1c !important; }
+  .ep-admin-refined .card { padding: 22px; }
+  .ep-admin-refined .text-brand, .ep-admin-refined .text-gold { color: var(--ep-accent) !important; }
+  .ep-admin-refined :is(input,select,textarea) { color: #f0f3ee; border-color: #adccce30 !important; background-color: #11252d !important; }
+  .ep-admin-refined :is(input,select,textarea):focus-visible { outline: 2px solid var(--ep-accent); outline-offset: 2px; }
+  .ep-admin-refined input::placeholder, .ep-admin-refined textarea::placeholder { color: #a6bcbf; }
+  .ep-admin-refined button { scroll-margin: 90px; }
+  .ep-admin-refined button:focus-visible, .ep-admin-refined a:focus-visible { outline: 2px solid var(--ep-accent); outline-offset: 3px; }
+  .ep-admin-refined .btn-primary { background: var(--ep-accent) !important; color: var(--ep-accent-ink) !important; border-color: transparent; box-shadow: 0 4px 14px #07171c30; }
+  .ep-admin-refined .btn-primary:hover:not(:disabled) { filter: brightness(1.07); transform: translateY(-1px); }
+  .ep-admin-refined .btn-primary:disabled { opacity: .5; }
+  .ep-admin-refined :is(table th, table td) { vertical-align: middle; }
+  .ep-admin-refined table { font-variant-numeric: tabular-nums; }
+  .ep-admin-refined :is([class*="overflow-x-auto"],.overflow-auto):has(>table) { max-height: 64dvh; overflow: auto; border: 1px solid #a7c4c51c; border-radius: 14px; }
+  .ep-admin-refined thead th { position: sticky; top: 0; z-index: 2; background: #203740; color: #d8e5e1; }
+  .ep-admin-refined tbody tr:nth-child(even) { background-color: #90b3b305; }
+  .ep-admin-refined tbody tr:hover { background-color: #a7c9c90b; }
+  .ep-view-switch { display: flex; flex-wrap: wrap; gap: 7px; padding: 6px; width: fit-content; max-width: 100%; border: 1px solid #a6c3c323; border-radius: 16px; background: #11232b; }
+  .ep-view-switch button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 11px; min-height: 40px; padding: 9px 17px; color: #b9cdce; font-size: 13px; font-weight: 600; transition: background .16s, color .16s; }
+  .ep-view-switch button[aria-pressed="true"] { color: var(--ep-accent-ink); background: var(--ep-accent); box-shadow: 0 2px 8px #07171c22; }
+  .ep-view-switch button:hover[aria-pressed="false"] { background: #24414a; color: #f2f4ef; }
+  .ep-messaging-workbench { display: block !important; min-width: 0; }
+  .ep-message-compose { display: grid; grid-template-columns: minmax(260px,.8fr) minmax(0,1.5fr); gap: 20px; align-items: start; }
+  .ep-message-compose > * { min-width: 0; }
+  .ep-messaging-workbench[data-mode="compose"] > .ep-message-history,
+  .ep-messaging-workbench[data-mode="history"] > .ep-message-compose { display: none; }
+  .ep-message-history { width: 100%; min-width: 0; }
+  .ep-message-history .overflow-x-auto { max-height: 65dvh; }
+  .ep-report-grid { display: grid !important; grid-template-columns: repeat(auto-fit,minmax(min(100%,400px),1fr)) !important; gap: 20px; }
+  .ep-report-grid:empty { display: none !important; }
+  .ep-admin-refined [class*="grid"] > * { min-width: 0; }
+  @media (max-width: 1000px) {
+    .ep-message-compose { grid-template-columns: minmax(0,1fr); }
+    .ep-recipients .max-h-\[26rem\] { max-height: 220px; }
+  }
+  @media (max-width: 640px) {
+    .ep-admin-refined .ep-page-hero { padding: 18px !important; border-radius: 18px; }
+    .ep-admin-refined .ep-page-hero h1 { font-size: 24px !important; }
+    .ep-admin-refined .ep-page-hero p { font-size: 12px; line-height: 1.55; }
+    .ep-admin-refined .ep-page-emblem { width: 58px; height: 58px; right: 12px; }
+    .ep-admin-refined .card { padding: 16px; }
+    .ep-view-switch { width: 100%; }
+    .ep-view-switch button { flex: 1; padding: 8px 10px; font-size: 12px; }
+    .ep-admin-refined :is(table td,table th) { padding: 10px 11px; font-size: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ep-admin-refined button { transition: none !important; transform: none !important; }
+  }
+}
+
+@media screen and (max-width:640px){.edupay-app-shell .ep-admin-refined .ep-page-metrics{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}.ep-admin-refined .ep-page-metrics>article,.ep-admin-refined .ep-page-metrics>.glass{padding:12px!important;border-radius:15px!important}.ep-admin-refined .ep-page-metrics :is(.text-3xl,.text-2xl){font-size:23px!important;line-height:1.25!important;margin-top:7px!important}.ep-admin-refined .ep-page-metrics :is(.text-xs,.text-\[10px\]){font-size:10px!important;letter-spacing:.06em!important}.ep-admin-refined .ep-page-metrics>:last-child:nth-child(odd){grid-column:1/-1}.ep-admin-refined .ep-page-metrics .text-sm{font-size:11px!important}}
+.ep-admin-refined .ep-load-error{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;border:1px solid #b77465;border-radius:15px;background:#50332d;color:#ffe4d4;font-size:13px}.ep-load-error button{border:1px solid #e8b49b;border-radius:9px;padding:7px 12px;font-weight:700;flex-shrink:0}

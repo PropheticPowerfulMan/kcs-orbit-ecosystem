@@ -39,28 +39,17 @@ describe("EduPay offline mutation queue", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("supports the local forgot-password reset flow end to end", async () => {
-    const fetchMock = vi.fn().mockRejectedValue(new TypeError("offline"));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const forgot = await api<{ message: string; resetToken?: string }>("/api/auth/forgot-password", {
-      method: "POST",
-      body: JSON.stringify({ identifier: "admin@school.com" })
-    });
-
-    expect(forgot.resetToken).toBeTruthy();
-
-    await api<{ message: string }>("/api/auth/reset-password", {
-      method: "POST",
-      body: JSON.stringify({ token: forgot.resetToken, newPassword: "newPassword123" })
-    });
-
-    const login = await api<{ token: string; role: string }>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email: "admin@school.com", password: "newPassword123" })
-    });
-
-    expect(login).toMatchObject({ token: "local-admin-token", role: "ADMIN" });
+  it("does not invent a password reset or an authenticated account while the API is offline", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+    for (const [path, body] of [
+      ["/api/auth/forgot-password", { identifier: "admin@school.com" }],
+      ["/api/auth/reset-password", { token: "invalid-test-token", newPassword: "newPassword123" }],
+      ["/api/auth/login", { email: "admin@school.com", password: "newPassword123" }]
+    ] as const) {
+      await expect(api(path, { method: "POST", body: JSON.stringify(body) })).rejects.toThrow();
+    }
+    expect(localStorage.getItem("edupay_token")).toBeNull();
+    expect(localStorage.getItem("edupay_demo_password_reset_tokens_v1")).toBeNull();
   });
 
   it("repairs legacy local payments for history and payment status views", async () => {

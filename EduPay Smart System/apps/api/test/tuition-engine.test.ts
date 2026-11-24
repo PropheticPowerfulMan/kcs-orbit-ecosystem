@@ -1,5 +1,5 @@
 import { NotificationChannel, NotificationType, PaymentOptionType, PaymentStatus } from "@prisma/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildParentNotificationHistory, buildTuitionParentNotificationMessages, isAutomaticEcosystemTuitionAssignment, simulateTuitionEngineScenario } from "../src/modules/finance/service";
 
 describe("automatic ecosystem tuition ownership", () => {
@@ -162,11 +162,20 @@ describe("EduPay Tuition Payment Engine", () => {
   });
 
   it("keeps every 10-child transaction detail needed by the finance officer and receipt", () => {
-    const result = simulateTuitionEngineScenario({
-      paymentOptionType: PaymentOptionType.STANDARD_MONTHLY,
-      amount: 12000,
-      children: tenChildFamily
-    });
+    // This scenario asserts the state before the first installment is due.
+    // A real current date would turn it into a different overdue-debt scenario.
+    vi.useFakeTimers({toFake:["Date"]});
+    vi.setSystemTime(new Date("2026-08-31T12:00:00Z"));
+    let result: ReturnType<typeof simulateTuitionEngineScenario>;
+    try {
+      result = simulateTuitionEngineScenario({
+        paymentOptionType: PaymentOptionType.STANDARD_MONTHLY,
+        amount: 12000,
+        children: tenChildFamily
+      });
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(result.allocationPreview.totalReceived).toBe(12000);
     expect(result.allocationPreview.allocatedTotal).toBe(12000);

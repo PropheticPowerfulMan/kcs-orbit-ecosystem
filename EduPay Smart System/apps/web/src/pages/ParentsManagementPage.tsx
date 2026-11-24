@@ -1,3 +1,4 @@
+import {FinanceWorkspaceIcon} from "../components/FinanceWorkspaceIcon";
 import { uiText } from "../uiText";
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import { BulkImportLink } from "../components/BulkImportLink";
@@ -3135,7 +3136,7 @@ export function ParentsManagementPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4 animate-fadeInDown">
+      <div className="ep-page-hero flex flex-wrap items-start justify-between gap-4 animate-fadeInDown"><FinanceWorkspaceIcon kind="parents"/>
         <div className="min-w-0">
           <h1 className="font-display text-3xl font-bold text-white">{t("pmTitle")}</h1>
           <p className="text-ink-dim mt-1">{t("pmSubtitle")}</p>
@@ -3152,7 +3153,7 @@ export function ParentsManagementPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 animate-fadeInUp">
+      <div className="ep-page-metrics grid grid-cols-2 md:grid-cols-3 gap-4 animate-fadeInUp">
         <div className="card">
           <p className="text-ink-dim text-xs uppercase tracking-[0.1em]">{t("pmTotalParents")}</p>
           <p className="font-display text-3xl font-bold text-brand-300 mt-1">{stats.total}</p>

@@ -1,3 +1,4 @@
+import {teachingCourseClassMatches,teachingCourseScheduleMatches,teachingRosterClass,recordedTeachingRosterClass} from '../utils/teachingScheduleScope.js'
 import {createHash} from 'node:crypto'
 import {combineTeachingSlots,type Position} from '../utils/teachingPresenceProof.js'
 import {teachingGpsRequired,declaredTeachingPresence} from '../utils/teachingGpsPolicy.js'
@@ -51,18 +52,13 @@ type Planned = {
   expectedStartAt: Date; expectedEndAt: Date
   checkInAt: Date | null; checkOutAt: Date | null; teacherNote: string | null
   reviewStatus: string; reviewNote: string | null; reviewedAt: Date | null; rosterRevision: number
-  rosterSize: number; studentSummary: ReturnType<typeof coursePresenceStatistics>; source: string
+  rosterSize: number; rosterClassName:string; studentSummary: ReturnType<typeof coursePresenceStatistics>; source: string
 }
-function snapshot(record: Session, rosterSize: number): Planned {
+function snapshot(record: Session, rosterSize: number, rosterClassName=record.className): Planned {
   const {students,...data}=record
-  return { ...data, rosterSize, studentSummary: coursePresenceStatistics(students.map(row => row.status)), source: 'SAVED_SESSION' }
+  return { ...data, rosterSize, rosterClassName, studentSummary: coursePresenceStatistics(students.map(row => row.status)), source: 'SAVED_SESSION' }
 }
-export function teachingCourseMatchesClass(course: TeachingCourse, grade: string, group: string | null) {
-  const section = group?.match(/\d\s*([a-z])$/i)?.[1] || ''
-  const target = splitClassName(grade)
-  const placements = [splitClassName(course.grade), ...course.enrollments.map(row => row.student)]
-  return placements.some(value => normalizeTeachingLabel(value.grade) === normalizeTeachingLabel(target.grade) && (!section || normalizeTeachingLabel(value.section) === normalizeTeachingLabel(section)))
-}
+export const teachingCourseMatchesClass=teachingCourseClassMatches
 export function teachingStudentMatchesClass(student:{grade:string;section?:string|null},className:string){
   if(normalizeTeachingLabel(className)==='multi class')return true
   const target=splitClassName(className)
@@ -105,7 +101,7 @@ export async function teachingPlan(filters: Filters, options: { strictCalendar?:
     const manualId=entry.sourceDocument.startsWith('Principal course schedule · ')?entry.sourceDocument.slice('Principal course schedule · '.length):null
     const eligible=mappingCourses.filter(candidate=>
       courseMatchesPeriod(periods.get(candidate.id)?.periods||[],entry.academicYear,'Semester '+entry.semester)&&
-      teachingCourseMatchesClass(candidate,entry.grade,entry.classGroup))
+      teachingCourseScheduleMatches(candidate,entry))
     const resolved=manualId?{owners:eligible.filter(candidate=>candidate.id===manualId),unresolved:[]}:
       resolveTeachingSubjects(entry,eligible.filter(candidate=>!manualScopes.has(scope+candidate.id)),candidate=>fullName(candidate.teacher.user))
     for(const owner of resolved.owners){const key=scope+owner.id;mappedOfficial.set(key,[...(mappedOfficial.get(key)||[]),entry])}
@@ -113,7 +109,7 @@ export async function teachingPlan(filters: Filters, options: { strictCalendar?:
       // Replaced manual schedules supersede their former imported labels.
       const superseded=mappingCourses.some(candidate=>manualScopes.has(scope+candidate.id)&&
         teachingAliasMatches(issue.teacherName,fullName(candidate.teacher.user))&&
-        teachingCourseMatchesClass(candidate,entry.grade,entry.classGroup)&&
+        teachingCourseScheduleMatches(candidate,entry)&&
         teachingSubjectScore(issue.subject,candidate.name)>0)
       if(!superseded)unresolvedOfficial.push({entry,...issue})
     }
@@ -140,9 +136,9 @@ export async function teachingPlan(filters: Filters, options: { strictCalendar?:
         const teacherName = fullName(course.teacher.user)
         const exact=(mappedOfficial.get(cycle.academicYear+'|'+cycle.semester+'|'+course.id)||[]).filter(row => canonicalTeachingDay(row.day) === weekday)
         const entries = exact.length ? exact.map(row => ({
-          key: 'official-period:'+row.grade+':'+(row.classGroup||'')+':'+row.period, start: row.startTime, end: row.endTime, room: row.room || '', source: 'OFFICIAL_TIMETABLE', className:[row.grade,row.classGroup?.match(/[A-Z]$/)?.[0]].filter(Boolean).join(' '),
+          key: 'official-period:'+row.grade+':'+(row.classGroup||'')+':'+row.period, start: row.startTime, end: row.endTime, room: row.room || '', source: 'OFFICIAL_TIMETABLE', className:[row.grade,row.classGroup?.match(/[A-Z]$/)?.[0]].filter(Boolean).join(' '), rosterClassName:teachingRosterClass(course,row,[row.grade,row.classGroup?.match(/[A-Z]$/)?.[0]].filter(Boolean).join(' ')),
         })) : course.schedules.filter(row => canonicalTeachingDay(row.day) === weekday).map(row => ({
-          key: 'course-schedule:'+row.id, start: row.startTime, end: row.endTime, room: row.room, source: 'MY_COURSES', className:course.grade,
+          key: 'course-schedule:'+row.id, start: row.startTime, end: row.endTime, room: row.room, source: 'MY_COURSES', className:course.grade,rosterClassName:course.grade,
         }))
         for (const entry of entries) {
           if (!/^\d{2}:\d{2}$/.test(entry.start) || !/^\d{2}:\d{2}$/.test(entry.end)) continue
@@ -154,7 +150,7 @@ export async function teachingPlan(filters: Filters, options: { strictCalendar?:
             courseName:course.name, courseCode:course.code, className:entry.className, teacherName, room:entry.room,
             expectedStartAt:start, expectedEndAt:end, checkInAt:null, checkOutAt:null, teacherNote:null,
             reviewStatus:'PENDING', reviewNote:null, reviewedAt:null, rosterRevision:0,
-            rosterSize:course.enrollments.filter(enrollment=>teachingStudentMatchesClass(enrollment.student,entry.className)).length, studentSummary:coursePresenceStatistics([]), source:entry.source,
+            rosterClassName:entry.rosterClassName,rosterSize:course.enrollments.filter(enrollment=>teachingStudentMatchesClass(enrollment.student,entry.rosterClassName)).length, studentSummary:coursePresenceStatistics([]), source:entry.source,
           }
           sessions.set(keyOf(course.id,entry.key,day),value)
         }
@@ -162,9 +158,10 @@ export async function teachingPlan(filters: Filters, options: { strictCalendar?:
     }
     const next=new Date(day+'T12:00:00Z');next.setUTCDate(next.getUTCDate()+1);day=next.toISOString().slice(0,10)
   }
+  const savedScopes=await teachingSessionRosterClasses(saved,courses)
   for (const record of saved) {
     const course=courses.find(row=>row.id===record.courseReference)
-    sessions.set(keyOf(record.courseReference,record.scheduleKey,record.schoolDate),snapshot(record,course?.enrollments.filter(enrollment=>teachingStudentMatchesClass(enrollment.student,record.className)).length || record.students.length))
+    sessions.set(keyOf(record.courseReference,record.scheduleKey,record.schoolDate),snapshot(record,course?.enrollments.filter(enrollment=>teachingStudentMatchesClass(enrollment.student,savedScopes.get(record.id)||record.className)).length || record.students.length,savedScopes.get(record.id)||record.className))
   }
   const grouped=combineTeachingSlots([...sessions.values()],keys=>'lesson-block:'+createHash('sha256').update(keys.join('|')).digest('hex').slice(0,32))
   const rows=(await attachPresenceProofs(grouped)).sort((a,b)=>a.expectedStartAt.getTime()-b.expectedStartAt.getTime() || a.teacherName.localeCompare(b.teacherName)).map(row=>({...row,timing:teachingTiming(row,now)}))
@@ -252,18 +249,25 @@ export async function markTeachingTime(userId:string,locator:Locator,action:'ENT
     return saved
   },{maxWait:10000,timeout:20000})
 }
+async function teachingSessionRosterClasses(sessions:Array<{id:string;courseReference:string;academicYear:string;semester:number;schoolDate:string;expectedStartAt:Date;expectedEndAt:Date;className:string}>,courses:TeachingCourse[]){
+ if(!sessions.length)return new Map<string,string>()
+ const entries=await prisma.academicScheduleEntry.findMany({where:{academicYear:{in:[...new Set(sessions.map(s=>s.academicYear))]},semester:{in:[...new Set(sessions.map(s=>s.semester))]} }})
+ const byId=new Map(courses.map(c=>[c.id,c]))
+ return new Map(sessions.map(session=>{const course=byId.get(session.courseReference);return[session.id,course?recordedTeachingRosterClass(course,session,entries):session.className]}))
+}
 export async function sessionRegister(id:string,userId:string,manager:boolean) {
   const session=await prisma.teachingSession.findUnique({where:{id},include:{students:true}})
   if(!session)throw new ApiError(404,'TEACHING_SESSION_NOT_FOUND')
   if(!manager && session.teacherUserId!==userId)throw new ApiError(403,'TEACHING_COURSE_NOT_OWNED')
   const course=session.courseId?await prisma.course.findUnique({where:{id:session.courseId},include:teachingCourseInclude}):null
+  const rosterClassName=course?(await teachingSessionRosterClasses([session],[course])).get(session.id)||session.className:session.className
   const marks=new Map(session.students.map(row=>[row.studentReference,row]))
-  const roster=(course?.enrollments || []).filter(enrollment=>teachingStudentMatchesClass(enrollment.student,session.className)).map(({student})=>{
+  const roster=(course?.enrollments || []).filter(enrollment=>teachingStudentMatchesClass(enrollment.student,rosterClassName)).map(({student})=>{
     const mark=marks.get(student.id);marks.delete(student.id)
     return {studentId:student.id,name:fullName(student.user),studentNumber:student.studentNumber,className:[student.grade,student.section].filter(Boolean).join(' '),status:mark?.status||null,note:mark?.note||'',eligible:course?.teacher.userId===session.teacherUserId}
   })
   for(const mark of marks.values())roster.push({studentId:mark.studentReference,name:mark.studentName,studentNumber:mark.studentNumber,className:mark.className,status:mark.status,note:mark.note||'',eligible:false})
-  return {session,roster,summary:coursePresenceStatistics(session.students.map(row=>row.status))}
+  return {session,roster,rosterClassName,summary:coursePresenceStatistics(session.students.map(row=>row.status))}
 }
 export async function saveSessionStudents(id:string,userId:string,revision:number,entries:Array<{studentId:string;status:'PRESENT'|'ABSENT'|'LATE'|'EXCUSED'|'SICK'|'SUSPENDED';note?:string}>) {
   if(new Set(entries.map(row=>row.studentId)).size!==entries.length)throw new ApiError(400,'TEACHING_DUPLICATE_STUDENT')
@@ -278,7 +282,7 @@ export async function saveSessionStudents(id:string,userId:string,revision:numbe
     const changed=await tx.teachingSession.updateMany({where:{id,rosterRevision:revision,teacherUserId:userId},data:{rosterRevision:{increment:1}}})
     if(changed.count!==1)throw new ApiError(409,'TEACHING_REGISTER_CHANGED')
     const current=await tx.enrollment.findMany({where:{courseId:register.session.courseReference,studentId:{in:entries.map(row=>row.studentId)},course:{teacher:{userId}},student:{status:{in:['active','ACTIVE']}}},select:{studentId:true,student:{select:{grade:true,section:true}}}})
-    if(current.length!==entries.length || current.some(row=>!teachingStudentMatchesClass(row.student,register.session.className)))throw new ApiError(409,'TEACHING_ROSTER_CHANGED')
+    if(current.length!==entries.length || current.some(row=>!teachingStudentMatchesClass(row.student,register.rosterClassName)))throw new ApiError(409,'TEACHING_ROSTER_CHANGED')
     for(const entry of entries) {
       const pupil=eligible.get(entry.studentId)!
       const data={studentId:pupil.studentId,studentReference:pupil.studentId,studentName:pupil.name,studentNumber:pupil.studentNumber,className:pupil.className,status:entry.status,note:entry.note?.trim()||null,markedById:userId,markedAt:now}
@@ -309,8 +313,9 @@ export async function courseRegularity(userId:string,courseId:string,year:string
   const window=attendanceWindowForCalendar(year,term,calendar)
   const from=window.gte.toISOString().slice(0,10),to=window.lte.toISOString().slice(0,10)
   const sessions=await prisma.teachingSession.findMany({where:{courseReference:courseId,teacherUserId:userId,academicYear:year,schoolDate:{gte:from,lte:to},checkInAt:{not:null}},include:{students:true}})
+  const rosterScopes=await teachingSessionRosterClasses(sessions,[course])
   const rows=course.enrollments.map(({student,createdAt})=>{
-    const possible=sessions.filter(row=>(row.expectedEndAt>=createdAt && teachingStudentMatchesClass(student,row.className)) || row.students.some(mark=>mark.studentReference===student.id))
+    const possible=sessions.filter(row=>(row.expectedEndAt>=createdAt && teachingStudentMatchesClass(student,rosterScopes.get(row.id)||row.className)) || row.students.some(mark=>mark.studentReference===student.id))
     const statuses=possible.flatMap(row=>row.students.filter(mark=>mark.studentReference===student.id).map(mark=>mark.status))
     return {studentId:student.id,name:fullName(student.user),studentNumber:student.studentNumber,expected:possible.length,unmarked:possible.length-statuses.length,...coursePresenceStatistics(statuses)}
   })
@@ -325,10 +330,12 @@ export async function studentCourseAttendance(userId:string,year:string,term:str
   const window=attendanceWindowForCalendar(year,term,calendar),from=window.gte.toISOString().slice(0,10),to=window.lte.toISOString().slice(0,10)
   const enrollments=await prisma.enrollment.findMany({where:{studentId:student.id},select:{createdAt:true,course:{select:{id:true,name:true,grade:true,teacher:{select:{user:{select:{firstName:true,middleName:true,lastName:true}}}}}}}})
   const periods=await coursePeriodStates(enrollments.map(e=>e.course.id)),current=enrollments.filter(e=>courseMatchesPeriod(periods.get(e.course.id)?.periods||[],year,term)),ids=current.map(e=>e.course.id)
-  const sessions=await prisma.teachingSession.findMany({where:{academicYear:year,schoolDate:{gte:from,lte:to},checkInAt:{not:null},OR:[{courseReference:{in:ids}},{students:{some:{studentReference:student.id}}}]},select:{id:true,courseReference:true,courseName:true,className:true,teacherName:true,schoolDate:true,expectedStartAt:true,expectedEndAt:true,students:{where:{studentReference:student.id},select:{status:true,markedAt:true}}},orderBy:[{schoolDate:'desc'},{expectedStartAt:'desc'}]})
+  const sessions=await prisma.teachingSession.findMany({where:{academicYear:year,schoolDate:{gte:from,lte:to},checkInAt:{not:null},OR:[{courseReference:{in:ids}},{students:{some:{studentReference:student.id}}}]},select:{id:true,courseReference:true,courseName:true,className:true,teacherName:true,academicYear:true,semester:true,schoolDate:true,expectedStartAt:true,expectedEndAt:true,students:{where:{studentReference:student.id},select:{status:true,markedAt:true}}},orderBy:[{schoolDate:'desc'},{expectedStartAt:'desc'}]})
   const references=[...new Set([...ids,...sessions.map(s=>s.courseReference)])],allStatuses:string[]=[]
+  const rosterCourses=await prisma.course.findMany({where:{id:{in:references}},include:teachingCourseInclude})
+  const rosterScopes=await teachingSessionRosterClasses(sessions,rosterCourses)
   const courses=references.map(reference=>{
-    const enrollment=current.find(e=>e.course.id===reference),rows=sessions.filter(s=>s.courseReference===reference&&(s.students.length>0||Boolean(enrollment&&s.expectedEndAt>=enrollment.createdAt&&teachingStudentMatchesClass(student,s.className))))
+    const enrollment=current.find(e=>e.course.id===reference),rows=sessions.filter(s=>s.courseReference===reference&&(s.students.length>0||Boolean(enrollment&&s.expectedEndAt>=enrollment.createdAt&&teachingStudentMatchesClass(student,rosterScopes.get(s.id)||s.className))))
     const statuses=rows.flatMap(s=>s.students.map(m=>m.status));allStatuses.push(...statuses)
     const source=rows[0]
     return{courseId:reference,name:enrollment?.course.name||source?.courseName||reference,teacher:enrollment?fullName(enrollment.course.teacher.user):source?.teacherName||'',className:enrollment?.course.grade||source?.className||'',currentlyEnrolled:Boolean(enrollment),expected:rows.length,unmarked:rows.length-statuses.length,...coursePresenceStatistics(statuses),sessions:rows.map(s=>({id:s.id,date:s.schoolDate,expectedStartAt:s.expectedStartAt,status:s.students[0]?.status||'UNMARKED',markedAt:s.students[0]?.markedAt||null}))}

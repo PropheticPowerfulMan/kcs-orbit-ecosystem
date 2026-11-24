@@ -1,3 +1,4 @@
+import {FinanceWorkspaceIcon} from "../components/FinanceWorkspaceIcon";
 import { uiText } from "../uiText";
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import { BulkImportLink } from "../components/BulkImportLink";
@@ -1697,7 +1698,7 @@ export function StudentsDirectoryPage() {
       )}
       {deleteTarget && <StudentDeleteModal student={deleteTarget} deleting={deleting} onConfirm={handleDeleteStudent} onClose={() => setDeleteTarget(null)} />}
 
-      <div className="flex flex-wrap items-start justify-between gap-4 animate-fadeInDown">
+      <div className="ep-page-hero flex flex-wrap items-start justify-between gap-4 animate-fadeInDown"><FinanceWorkspaceIcon kind="students"/>
         <div>
           <h1 className="font-display text-3xl font-bold text-white">{L("Annuaire des élèves", "Student directory")}</h1>
           <p className="mt-1 text-ink-dim">
@@ -1716,7 +1717,7 @@ export function StudentsDirectoryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5 animate-fadeInUp">
+      <div className="ep-page-metrics grid grid-cols-2 gap-4 md:grid-cols-5 animate-fadeInUp">
         <div className="card">
           <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Élèves", "Students")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-cyan-300">{directory?.counts.students ?? 0}</p>

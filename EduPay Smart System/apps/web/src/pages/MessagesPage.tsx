@@ -1,3 +1,5 @@
+import {hasMessageDelivery} from "../utils/messageDelivery";
+import {FinanceWorkspaceIcon} from "../components/FinanceWorkspaceIcon";
 import { uiText, uiStatus } from "../uiText";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
@@ -59,8 +61,8 @@ function matchesDeliveryFilter(log: ManualMessageLog, filter: HistoryDeliveryFil
   if (filter === "DASHBOARD") return log.status.includes("DASHBOARD:OPEN");
   if (filter === "EMAIL") return /EMAIL:(SIMULATED|SENT|SKIPPED|PENDING)/.test(log.status);
   if (filter === "SMS") return /SMS:(SIMULATED|SENT|SKIPPED|PENDING)/.test(log.status);
-  if (filter === "EMAIL_SENT") return /EMAIL:(SIMULATED|SENT)/.test(log.status);
-  if (filter === "SMS_SENT") return /SMS:(SIMULATED|SENT)/.test(log.status);
+  if (filter === "EMAIL_SENT") return hasMessageDelivery(log.status,"EMAIL");
+  if (filter === "SMS_SENT") return hasMessageDelivery(log.status,"SMS");
   if (filter === "EMAIL_SKIPPED") return log.status.includes("EMAIL:SKIPPED");
   if (filter === "SMS_SKIPPED") return log.status.includes("SMS:SKIPPED");
   return true;
@@ -85,6 +87,9 @@ export function MessagesPage() {
     const stateLabel = ({ OPEN: L("actif", "active"), SENT: L("envoyé", "sent"), SIMULATED: L("simulé", "simulated"), SKIPPED: L("ignoré", "skipped"), PENDING: L("en attente", "pending"), FAILED: L("échoué", "failed") } as Record<string, string>)[state] ?? state;
     return state ? `${channelLabel}: ${stateLabel}` : channelLabel;
   }).join(" · ");
+  const [messageView,setMessageView]=useState<"compose"|"history">("compose");
+  const [loadError,setLoadError]=useState<string|null>(null);
+  const [messageLanguage,setMessageLanguage]=useState<"fr"|"en">(lang);
   const [parents, setParents] = useState<ParentOption[]>(() => {
     const cached = getCachedApiResponse<ParentOption[]>("/api/parents/options");
     return sortParentOptions(Array.isArray(cached) ? cached : []);
@@ -111,12 +116,13 @@ export function MessagesPage() {
   const [deletingMany, setDeletingMany] = useState(false);
 
   async function loadData() {
+    setLoadError(null);
     const parentsRequest = api<ParentOption[]>("/api/parents/options")
       .then((items) => setParents(sortParentOptions(Array.isArray(items) ? items : [])))
-      .catch(() => undefined);
+      .catch(() => setLoadError(L("Une partie de la messagerie n’a pas pu être chargée. Actualisez avant d’envoyer un message.","Part of messaging could not load. Refresh before sending a message.")));
     const logsRequest = api<ManualMessageLog[]>("/api/notifications/messages")
       .then((items) => setLogs(Array.isArray(items) ? items : []))
-      .catch(() => undefined);
+      .catch(() => setLoadError(L("Une partie de la messagerie n’a pas pu être chargée. Actualisez avant d’envoyer un message.","Part of messaging could not load. Refresh before sending a message.")));
     await Promise.all([parentsRequest, logsRequest]);
   }
 
@@ -143,8 +149,8 @@ export function MessagesPage() {
   const stats = useMemo(() => ({
     total: logs.length,
     parents: new Set(logs.map((log) => log.parentId)).size,
-    email: logs.filter((log) => log.status.includes("EMAIL:SENT") || log.status.includes("EMAIL:SIMULATED")).length,
-    sms: logs.filter((log) => log.status.includes("SMS:SENT") || log.status.includes("SMS:SIMULATED")).length,
+    email: logs.filter((log) => hasMessageDelivery(log.status,"EMAIL")).length,
+    sms: logs.filter((log) => hasMessageDelivery(log.status,"SMS")).length,
   }), [logs]);
 
   const filteredLogs = useMemo(() => {
@@ -282,18 +288,18 @@ export function MessagesPage() {
           parentIds: selectedParentIds,
           subject: subject.trim(),
           body: body.trim(),
-          language: "fr",
+          language: messageLanguage,
           channels: [sendEmail ? "EMAIL" : null, sendSms ? "SMS" : null].filter(Boolean)
         })
       });
 
-      setStatus(`${response.sentCount} message(s) envoyé(s) et déposés dans Messages reçus.`);
+      setStatus(L(`${response.sentCount} message(s) enregistré(s) dans les espaces parents. Consultez les statuts pour vérifier les envois e-mail et SMS.`,`${response.sentCount} message(s) recorded in parent accounts. Check the delivery statuses for email and SMS outcomes.`));
       setSubject("");
       setBody("");
       setSelectedParentIds([]);
       await loadData();
     } catch (submissionError) {
-      setError(submissionError instanceof Error ? submissionError.message : "Impossible d'envoyer le message.");
+      setError(submissionError instanceof Error ? submissionError.message : L("Impossible d'envoyer le message.","Unable to send the message."));
     } finally {
       setSending(false);
     }
@@ -301,7 +307,7 @@ export function MessagesPage() {
 
   return (
     <div className="space-y-6">
-      <section className="glass rounded-3xl border border-brand-300/20 p-6">
+      <section className="ep-page-hero glass rounded-3xl border border-brand-300/20 p-6"><FinanceWorkspaceIcon kind="messages"/>
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">{L("Messagerie financière", "Financial messaging")}</p>
         <h1 className="mt-3 font-display text-3xl font-bold text-white">{L("Messages entre le financier et les parents", "Messages between finance staff and parents")}</h1>
         <p className="mt-2 max-w-3xl text-sm text-ink-dim">
@@ -309,7 +315,7 @@ export function MessagesPage() {
         </p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="ep-page-metrics grid gap-4 md:grid-cols-4">
         <article className="glass rounded-2xl border border-white/10 p-4">
           <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Messages envoyés", "Messages sent")}</p>
           <p className="mt-2 text-3xl font-black text-white">{stats.total}</p>
@@ -328,9 +334,11 @@ export function MessagesPage() {
         </article>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="space-y-6">
-          <div className="glass rounded-3xl border border-white/10 p-5">
+      {loadError&&<div role="alert" className="ep-load-error">{loadError}<button type="button" onClick={()=>void loadData()}>{L("Réessayer","Retry")}</button></div>}
+      <nav className="ep-view-switch" aria-label={L("Espace de messagerie","Messaging workspace")}><button type="button" aria-pressed={messageView==='compose'} onClick={()=>setMessageView('compose')}><Send size={16}/>{L("Nouveau message","New message")}</button><button type="button" aria-pressed={messageView==='history'} onClick={()=>setMessageView('history')}><MessageSquare size={16}/>{L("Historique et suivi","History and delivery")} · {logs.length}</button></nav>
+      <section className="ep-messaging-workbench" data-mode={messageView}>
+        <div className="ep-message-compose">
+          <div className="ep-recipients glass rounded-3xl border border-white/10 p-5">
             <div className="flex items-center gap-3">
               <Users className="h-5 w-5 text-brand-200" />
               <div>
@@ -371,7 +379,7 @@ export function MessagesPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{parent.fullName}</p>
-                        <p className="mt-1 text-xs text-ink-dim">{parent.phone || "Téléphone non renseigné"} · {parent.email || "Email non renseigné"}</p>
+                        <p className="mt-1 text-xs text-ink-dim">{parent.phone || L("Téléphone non renseigné","No phone registered")} · {parent.email || L("E-mail non renseigné","No email registered")}</p>
                         {(parent.students?.length ?? 0) > 0 ? (
                           <p className="mt-2 text-xs text-ink-dim">
                             {(parent.students ?? []).map((student) => `${student.fullName}${student.className ? ` (${student.className})` : ""}`).join(" · ")}
@@ -388,7 +396,7 @@ export function MessagesPage() {
             </div>
           </div>
 
-          <div className="glass rounded-3xl border border-white/10 p-5">
+          <div className="ep-message-editor glass rounded-3xl border border-white/10 p-5">
             <div className="flex items-center gap-3">
               <Send className="h-5 w-5 text-emerald-300" />
               <div>
@@ -405,6 +413,7 @@ export function MessagesPage() {
               )) : <span className="text-sm text-ink-dim">{L("Aucun parent sélectionné.", "No parent selected.")}</span>}
             </div>
 
+            <label className="mt-4 block text-sm font-semibold">{L("Langue du message","Message language")}<select className="mt-2 w-full" value={messageLanguage} onChange={e=>setMessageLanguage(e.target.value as "fr"|"en")}><option value="fr">{L("Français","French")}</option><option value="en">{L("Anglais","English")}</option></select></label>
             <div className="mt-4 grid gap-4">
               <input
                 value={subject}
@@ -440,7 +449,7 @@ export function MessagesPage() {
             <button
               type="button"
               onClick={() => void submit()}
-              disabled={sending}
+              disabled={sending||Boolean(loadError)}
               className="btn-primary mt-5 inline-flex items-center gap-2 px-5 py-3 text-sm font-bold disabled:opacity-60"
             >
               <Send className="h-4 w-4" /> {sending ? uiText("Envoi en cours...") : uiText("Envoyer le message")}
@@ -448,7 +457,7 @@ export function MessagesPage() {
           </div>
         </div>
 
-        <div className="glass rounded-3xl border border-white/10 p-5">
+        <div className="ep-message-history glass rounded-3xl border border-white/10 p-5">
           <h2 className="font-display text-xl font-bold text-white">{L("Historique des messages transmis", "Sent message history")}</h2>
           <p className="mt-1 text-sm text-ink-dim">{L("Tous les envois manuels du financier vers les parents sont conservés ici, avec filtres précis et actions directes.", "All manual messages sent by finance staff to parents are stored here, with precise filters and direct actions.")}</p>
 

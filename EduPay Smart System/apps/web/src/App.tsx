@@ -1,7 +1,7 @@
 import { useI18n } from "./i18n";
 import { uiText } from "./uiText";
 import { Suspense, lazy, useEffect } from "react";
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { DashboardGreeting } from "./components/DashboardGreeting";
 import { Navbar } from "./components/Navbar";
 import { Sidebar } from "./components/Sidebar";
@@ -53,6 +53,8 @@ function getHomePathByRole(role: Role | null) {
 }
 
 function ProtectedLayout() {
+  const {pathname}=useLocation();
+  const refined=["/reports","/messages","/parent-payments","/students","/employees","/parents"].includes(pathname);
   const role = useAuthStore((s) => s.role);
 
   useEffect(() => {
@@ -72,7 +74,7 @@ function ProtectedLayout() {
       <Navbar />
       <main className="flex w-full gap-6 px-3 pb-32 pt-4 sm:px-5 sm:py-6 md:pb-6 lg:px-6 xl:px-8">
         <Sidebar />
-        <section className="ep-workspace min-w-0 flex-1">
+        <section className={"ep-workspace min-w-0 flex-1"+(refined?" ep-admin-refined":"")} data-finance-page={pathname}>
           <DashboardGreeting />
           <Outlet />
         </section>
