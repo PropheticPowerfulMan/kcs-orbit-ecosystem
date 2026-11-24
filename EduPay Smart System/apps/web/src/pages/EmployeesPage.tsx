@@ -1,3 +1,4 @@
+import {FinanceWorkspaceIcon} from "../components/FinanceWorkspaceIcon";
 import { uiText, uiLocale, uiStatus } from "../uiText";
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import { BulkImportLink } from "../components/BulkImportLink";
@@ -1048,7 +1049,7 @@ export function EmployeesPage() {
         </div>, document.body
       ) : null}
 
-      <div className="flex flex-wrap items-start justify-between gap-4 animate-fadeInDown">
+      <div className="ep-page-hero flex flex-wrap items-start justify-between gap-4 animate-fadeInDown"><FinanceWorkspaceIcon kind="employees"/>
         <div className="min-w-0">
           <h1 className="font-display text-3xl font-bold text-white">{L("Répertoire des employés", "Employee directory")}</h1>
           <p className="mt-1 text-ink-dim">
@@ -1070,7 +1071,7 @@ export function EmployeesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 animate-fadeInUp">
+      <div className="ep-page-metrics grid grid-cols-2 gap-4 md:grid-cols-4 animate-fadeInUp">
         <div className="card">
           <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Employés", "Employees")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-cyan-300">{stats.total}</p>

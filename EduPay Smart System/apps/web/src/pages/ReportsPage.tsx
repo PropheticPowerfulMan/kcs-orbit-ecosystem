@@ -1,3 +1,4 @@
+import {FinanceWorkspaceIcon} from "../components/FinanceWorkspaceIcon";
 import { uiText } from "../uiText";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -125,7 +126,8 @@ function plainPrintText(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char] ?? char));
 }
 
-function SectionCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function SectionCard({ title, subtitle, children, visible=true }: { title: string; subtitle: string; children: React.ReactNode; visible?:boolean }) {
+  if(!visible)return null;
   return (
     <section className="card glass border border-white/10 shadow-lg">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -143,6 +145,7 @@ export function ReportsPage() {
   const { lang } = useI18n();
   const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const currency = useMemo(() => new Intl.NumberFormat(lang === "fr" ? "fr-FR" : "en-US", { style: "currency", currency: "USD" }), [lang]);
+  const [reportView,setReportView]=useState<"summary"|"budgets"|"ledger">("summary");
   const [financeOverview, setFinanceOverview] = useState<FinanceOverviewResponse | null>(null);
   const [expenseOverview, setExpenseOverview] = useState<ExpenseOverviewResponse | null>(null);
   const [accountingEntries, setAccountingEntries] = useState<AccountingEntry[]>([]);
@@ -271,8 +274,8 @@ export function ReportsPage() {
       <div class="signals"><strong>${plainPrintText(L("Lecture de direction", "Management overview"))}</strong><ul>${signalRows}</ul></div>
       <div class="grid">${rows.map(([label, value, note]) => `<div class="metric"><span>${plainPrintText(label)}</span><b>${plainPrintText(value)}</b><small>${plainPrintText(note)}</small></div>`).join("")}</div>
       <div class="grid"><div class="metric"><span>{L("Taux de collecte", "Collection rate")}</span><b>${collectionRate.toFixed(1)}%</b><small>${plainPrintText(L("Collecte / attendu", "Collected / expected"))}</small></div><div class="metric"><span>{L("Utilisation des budgets", "Budget utilization")}</span><b>${budgetUtilization.toFixed(1)}%</b><small>${plainPrintText(currency.format(budgetConsumedTotal))} consomme</small></div><div class="metric"><span>${plainPrintText(L("Journaux filtrés", "Filtered journals"))}</span><b>${filteredAccountingEntries.length}</b><small>${plainPrintText(currency.format(accountingTotal))}</small></div><div class="metric"><span>${plainPrintText(L("Paie filtrée", "Filtered payroll"))}</span><b>${plainPrintText(currency.format(payrollTotal))}</b><small>${filteredPayrollRuns.length} run(s)</small></div></div>
-      <h2>${plainPrintText(L("Synthèse budgétaire filtrée", "Filtered budget summary"))}</h2><table><thead><tr><th>${plainPrintText(L("Budget", "Budget"))}</th><th>${plainPrintText(L("Département", "Department"))}</th><th>${plainPrintText(L("Catégorie", "Category"))}</th><th>{L("Planifié", "Planned")}</th><th>{L("Consommé", "Consumed")}</th><th>${plainPrintText(L("Utilisation", "Utilization"))}</th><th>${plainPrintText(L("Statut", "Status"))}</th></tr></thead><tbody>${budgetRows || "<tr><td colspan='7'>Aucune ligne budgétaire.</td></tr>"}</tbody></table>
-      <div class="two-col"><section class="page-soft"><h2>${plainPrintText(L("Alertes budgétaires", "Budget alerts"))}</h2><table><thead><tr><th>${plainPrintText(L("Budget", "Budget"))}</th><th>${plainPrintText(L("Département", "Department"))}</th><th>{L("Reste", "Remaining")}</th><th>${plainPrintText(L("Utilisation", "Utilization"))}</th><th>${plainPrintText(L("Statut", "Status"))}</th></tr></thead><tbody>${alertRows || "<tr><td colspan='5'>Aucune alerte.</td></tr>"}</tbody></table></section><section class="page-soft"><h2>${plainPrintText(L("Paie", "Payroll"))}</h2><table><thead><tr><th>Run</th><th>${plainPrintText(L("Département", "Department"))}</th><th>Periode</th><th>${plainPrintText(L("Statut", "Status"))}</th><th>Net</th><th>Bulletins</th></tr></thead><tbody>${payrollRows || "<tr><td colspan='6'>Aucun run de paie.</td></tr>"}</tbody></table></section></div>
+      <h2>${plainPrintText(L("Synthèse budgétaire filtrée", "Filtered budget summary"))}</h2><table><thead><tr><th>${plainPrintText(L("Budget", "Budget"))}</th><th>${plainPrintText(L("Département", "Department"))}</th><th>${plainPrintText(L("Catégorie", "Category"))}</th><th>${plainPrintText(L("Planifié", "Planned"))}</th><th>${plainPrintText(L("Consommé", "Consumed"))}</th><th>${plainPrintText(L("Utilisation", "Utilization"))}</th><th>${plainPrintText(L("Statut", "Status"))}</th></tr></thead><tbody>${budgetRows || "<tr><td colspan='7'>Aucune ligne budgétaire.</td></tr>"}</tbody></table>
+      <div class="two-col"><section class="page-soft"><h2>${plainPrintText(L("Alertes budgétaires", "Budget alerts"))}</h2><table><thead><tr><th>${plainPrintText(L("Budget", "Budget"))}</th><th>${plainPrintText(L("Département", "Department"))}</th><th>${plainPrintText(L("Reste", "Remaining"))}</th><th>${plainPrintText(L("Utilisation", "Utilization"))}</th><th>${plainPrintText(L("Statut", "Status"))}</th></tr></thead><tbody>${alertRows || "<tr><td colspan='5'>Aucune alerte.</td></tr>"}</tbody></table></section><section class="page-soft"><h2>${plainPrintText(L("Paie", "Payroll"))}</h2><table><thead><tr><th>Run</th><th>${plainPrintText(L("Département", "Department"))}</th><th>Periode</th><th>${plainPrintText(L("Statut", "Status"))}</th><th>Net</th><th>Bulletins</th></tr></thead><tbody>${payrollRows || "<tr><td colspan='6'>Aucun run de paie.</td></tr>"}</tbody></table></section></div>
       <h2>${plainPrintText(L("Journaux comptables filtrés", "Filtered accounting journals"))}</h2><table><thead><tr><th>${plainPrintText(L("Date", "Date"))}</th><th>${plainPrintText(L("Type", "Type"))}</th><th>${plainPrintText(L("Direction", "Direction"))}</th><th>${plainPrintText(L("Titre", "Title"))}</th><th>${plainPrintText(L("Département", "Department"))}</th><th>${plainPrintText(L("Montant", "Amount"))}</th></tr></thead><tbody>${accountingRows || "<tr><td colspan='6'>Aucune ecriture comptable.</td></tr>"}</tbody></table>
       <h2>${plainPrintText(L("Trésorerie filtrée", "Filtered cash flow"))}</h2><table><thead><tr><th>${plainPrintText(L("Date", "Date"))}</th><th>${plainPrintText(L("Source", "Source"))}</th><th>${plainPrintText(L("Direction", "Direction"))}</th><th>${plainPrintText(L("Méthode", "Method"))}</th><th>${plainPrintText(L("Montant", "Amount"))}</th><th>${plainPrintText(L("Notes", "Notes"))}</th></tr></thead><tbody>${cashRows || "<tr><td colspan='6'>Aucune ligne de trésorerie.</td></tr>"}</tbody></table>
       <footer>Rapport généré depuis EduPay selon la charte administrative ${plainPrintText(schoolBranding.shortName)}. Total cashflow filtre: ${plainPrintText(currency.format(cashflowTotal))}.</footer>
@@ -388,7 +391,7 @@ export function ReportsPage() {
   if (loading) {
     return (
       <div className="space-y-6 animate-fadeInUp">
-        <section className="card glass overflow-hidden border border-white/10 shadow-xl">
+        <section className="ep-page-hero card glass overflow-hidden border border-white/10 shadow-xl"><FinanceWorkspaceIcon kind="reports"/>
           <div className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.24),_transparent_30%),linear-gradient(135deg,rgba(8,47,73,0.94),rgba(2,6,23,0.98))] p-6 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">{L("Rapports exécutifs", "Executive reports")}</p>
             <h1 className="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">{L("Préparation du centre de rapports", "Preparing the report center")}</h1>
@@ -421,15 +424,15 @@ export function ReportsPage() {
           {detailsError ?? "Les journaux comptables, la trésorerie et la paie continuent de se charger en arrière-plan."}
         </div>
       )}
-      <section className="card glass overflow-hidden border border-white/10 shadow-xl">
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.24),_transparent_30%),linear-gradient(135deg,rgba(8,47,73,0.94),rgba(2,6,23,0.98))] p-6 sm:p-8">
+      <section className="ep-page-hero card glass overflow-hidden border border-white/10 shadow-xl"><FinanceWorkspaceIcon kind="reports"/>
+        <div className="ep-page-hero-inner relative overflow-hidden rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.24),_transparent_30%),linear-gradient(135deg,rgba(8,47,73,0.94),rgba(2,6,23,0.98))] p-6 sm:p-8">
           <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
           <div className="relative flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">{L("Rapports exécutifs", "Executive reports")}</p>
-              <h1 className="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">{L("Centre de pilotage financier visible et exportable", "Visible and exportable financial control center")}</h1>
+              <h1 className="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">{L("Rapports et analyses financières", "Financial reports and analysis")}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200">
-                {L("Cette vue consolide revenu, budgets, comptabilité, trésorerie et masse salariale. Elle sert de preuve visible dans l'interface et de point d'export Excel.", "This view consolidates revenue, budgets, accounting, treasury and payroll. It provides visible evidence in the interface and an Excel export point.")}
+                {L("Cette vue consolide revenu, budgets, comptabilité, trésorerie et masse salariale. Retrouvez les indicateurs essentiels et exportez les données du périmètre sélectionné.", "This view consolidates revenue, budgets, accounting, treasury and payroll. Review key indicators and export the selected scope.")}
               </p>
               <input
                 value={reportSearch}
@@ -450,7 +453,7 @@ export function ReportsPage() {
               </Link>
             </div>
           </div>
-          <div className="relative mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="ep-page-metrics relative mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[
               { label: uiText("Revenu collecté"), value: currency.format(financeOverview.collectedRevenue), icon: WalletCards },
               { label: uiText("Dépenses totales"), value: currency.format(expenseOverview.expenses.totalExpenses), icon: Landmark },
@@ -473,7 +476,8 @@ export function ReportsPage() {
         </div>
       </section>
 
-      <SectionCard title={L("Diagnostic du rapport", "Report diagnostics")} subtitle={L("Signaux ajoutés au document imprimable et au pack Excel.", "Signals added to the printable document and Excel package.")}>
+      <nav className="ep-view-switch" aria-label={L("Vues des rapports","Report views")}>{([['summary',L('Vue d’ensemble','Overview')],['budgets',L('Budgets et alertes','Budgets and alerts')],['ledger',L('Comptabilité et trésorerie','Accounting and cash flow')]] as const).map(([id,label])=><button type="button" key={id} aria-pressed={reportView===id} onClick={()=>setReportView(id)}>{label}</button>)}</nav>
+      <SectionCard visible={reportView==="summary"} title={L("Diagnostic du rapport", "Report diagnostics")} subtitle={L("Signaux ajoutés au document imprimable et au pack Excel.", "Signals added to the printable document and Excel package.")}>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Taux de collecte", "Collection rate")}</p>
@@ -505,8 +509,8 @@ export function ReportsPage() {
         </div>
       </SectionCard>
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <SectionCard title={L("Compte de résultat simplifié", "Simplified income statement")} subtitle={L("Revenu, dépenses et résultat mensuel sur la période courante.", "Revenue, expenses and monthly results for the current period.")}>
+      <div className="ep-report-grid">
+        <SectionCard visible={reportView==="summary"} title={L("Compte de résultat simplifié", "Simplified income statement")} subtitle={L("Revenu, dépenses et résultat mensuel sur la période courante.", "Revenue, expenses and monthly results for the current period.")}>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={expenseOverview.monthlyPerformance}>
@@ -531,7 +535,7 @@ export function ReportsPage() {
           </div>
         </SectionCard>
 
-        <SectionCard title={L("Position budgétaire", "Budget position")} subtitle={L("Alertes et taux de consommation à surveiller maintenant.", "Alerts and consumption rates to monitor now.")}>
+        <SectionCard visible={reportView==="budgets"} title={L("Position budgétaire", "Budget position")} subtitle={L("Alertes et taux de consommation à surveiller maintenant.", "Alerts and consumption rates to monitor now.")}>
           <div className="space-y-3">
             {filteredBudgetAlerts.map((budget) => (
               <article key={budget.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
@@ -554,8 +558,8 @@ export function ReportsPage() {
         </SectionCard>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <SectionCard title={L("Dépenses par département", "Expenses by department")} subtitle={L("Lecture immédiate des postes qui consomment le plus.", "Immediate view of the highest spending items.")}>
+      <div className="ep-report-grid">
+        <SectionCard visible={reportView==="summary"} title={L("Dépenses par département", "Expenses by department")} subtitle={L("Lecture immédiate des postes qui consomment le plus.", "Immediate view of the highest spending items.")}>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={filteredDepartmentSpending} layout="vertical" margin={{ left: 24 }}>
@@ -569,7 +573,7 @@ export function ReportsPage() {
           </div>
         </SectionCard>
 
-        <SectionCard title={L("Synthèse comptable et trésorerie", "Accounting and cash summary")} subtitle={L("Volumes visibles avant de descendre dans les journaux détaillés.", "Visible totals before reviewing detailed journals.")}>
+        <SectionCard visible={reportView==="ledger"} title={L("Synthèse comptable et trésorerie", "Accounting and cash summary")} subtitle={L("Volumes visibles avant de descendre dans les journaux détaillés.", "Visible totals before reviewing detailed journals.")}>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Écritures comptables", "Accounting entries")}</p>
@@ -579,7 +583,7 @@ export function ReportsPage() {
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Lignes de trésorerie", "Cash-flow entries")}</p>
               <p className="mt-3 text-3xl font-bold text-white">{cashflowEntries.length}</p>
-              <p className="mt-2 text-sm text-ink-dim">{L("Sorties", "Outflows")} : {currency.format(cashflowEntries.reduce((sum, entry) => sum + entry.amount, 0))}</p>
+              <p className="mt-2 text-sm text-ink-dim">{L("Sorties", "Outflows")} : {currency.format(cashflowEntries.filter(entry=>entry.direction === "OUTFLOW").reduce((sum, entry) => sum + entry.amount, 0))}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Cycles de paie", "Payroll runs")}</p>

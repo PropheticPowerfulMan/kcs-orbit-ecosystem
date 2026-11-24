@@ -1,8 +1,9 @@
+import {teachingCourseScheduleMatches,electiveTimetableEntry,multiClassCourse} from '../utils/teachingScheduleScope.js'
 import {Prisma} from '@prisma/client'
 import {prisma} from '../config/prisma.js'
 import {ApiError} from '../utils/api.js'
 import {academicCalendars} from './reportAttendance.service.js'
-import {teachingCourseInclude,teachingCourseMatchesClass} from './teachingAttendance.service.js'
+import {teachingCourseInclude} from './teachingAttendance.service.js'
 import {resolveTeachingSubjects} from '../utils/teachingTimetable.js'
 import {coursePeriodStates} from './courseTeachingPeriods.service.js'
 import {courseMatchesPeriod} from '../utils/courseTeachingPeriods.js'
@@ -27,14 +28,14 @@ export async function teachingScheduleEditor(courseId:string,academicYear:string
   if(row.sourceDocument.startsWith('Principal course schedule · '))return false
   const owners=resolveTeachingSubjects(row,courses.filter(candidate=>
    courseMatchesPeriod(periods.get(candidate.id)?.periods||[],academicYear,'Semester '+semester)&&
-   teachingCourseMatchesClass(candidate,row.grade,row.classGroup)),name).owners
+   teachingCourseScheduleMatches(candidate,row)),name).owners
   const belongs=owners.some(owner=>owner.id===courseId)
   if(belongs&&owners.length===1)existingIds.push(row.id)
   return belongs
  })
  const classes=(course.enrollments.length?course.enrollments.map(row=>[row.student.grade,row.student.section].filter(Boolean).join(' ')):[course.grade])
   .filter(value=>/^(?:Grade\s+\d{1,2}|K[345])(?:\s+[A-Z])?$/i.test(value))
- return {course,classes:[...new Set(classes)],entries:matched.map(row=>({id:row.id,day:row.day,startTime:row.startTime,endTime:row.endTime,room:row.room||'',className:[row.grade,row.classGroup?.match(/[A-Z]$/)?.[0]].filter(Boolean).join(' '),period:row.period})),existingIds}
+ return {course,crossClassRoster:multiClassCourse(course)&&matched.some(electiveTimetableEntry),classes:[...new Set([...classes,...matched.filter(electiveTimetableEntry).map(row=>[row.grade,row.classGroup?.match(/[A-Z]$/)?.[0]].filter(Boolean).join(' '))])],entries:matched.map(row=>({id:row.id,day:row.day,startTime:row.startTime,endTime:row.endTime,room:row.room||'',className:[row.grade,row.classGroup?.match(/[A-Z]$/)?.[0]].filter(Boolean).join(' '),period:row.period})),existingIds}
 }
 export async function publishTeachingSchedule(actorId:string,courseId:string,academicYear:string,semester:number,entries:Entry[]){
  const current=await teachingScheduleEditor(courseId,academicYear,semester)
@@ -52,7 +53,7 @@ export async function publishTeachingSchedule(actorId:string,courseId:string,aca
   const assignedToTeacher=others.filter(row=>{
    const explicit=row.sourceDocument.startsWith('Principal course schedule · ')?row.sourceDocument.slice('Principal course schedule · '.length):null
    const eligible=allCourses.filter(course=>
-    courseMatchesPeriod(periods.get(course.id)?.periods||[],academicYear,'Semester '+semester)&&teachingCourseMatchesClass(course,row.grade,row.classGroup))
+    courseMatchesPeriod(periods.get(course.id)?.periods||[],academicYear,'Semester '+semester)&&teachingCourseScheduleMatches(course,row))
    const owners=explicit?eligible.filter(course=>course.id===explicit):
     resolveTeachingSubjects(row,eligible,course=>[course.teacher.user.lastName,course.teacher.user.middleName,course.teacher.user.firstName].filter(Boolean).join(' ')).owners
    return owners.some(owner=>owner.id!==courseId&&owner.teacherId===current.course.teacherId)
@@ -65,7 +66,7 @@ export async function publishTeachingSchedule(actorId:string,courseId:string,aca
   for(const entry of entries){
    const placement=splitClassName(entry.className)
    const sourceKey=['teaching-course',courseId,academicYear,semester,entry.day,entry.period,placement.grade,placement.section].join(':')
-   const data={academicYear,semester,grade:placement.grade,classGroup:placement.section?placement.grade.replace('Grade ','G')+placement.section:null,day:entry.day,period:entry.period,startTime:entry.startTime,endTime:entry.endTime,subject:current.course.name,teacherName,room:entry.room||null,sourceDocument:source(courseId),active:true}
+   const data={academicYear,semester,grade:placement.grade,classGroup:placement.section?placement.grade.replace('Grade ','G')+placement.section:null,day:entry.day,period:entry.period,startTime:entry.startTime,endTime:entry.endTime,subject:current.course.name+(current.crossClassRoster?' (O)':''),teacherName,room:entry.room||null,sourceDocument:source(courseId),active:true}
    saved.push(await tx.academicScheduleEntry.upsert({where:{sourceKey},create:{sourceKey,...data},update:data}))
   }
   await tx.auditLog.create({data:{actorId,action:'TEACHING_COURSE_SCHEDULE_PUBLISHED',targetType:'Course',targetId:courseId,metadata:{academicYear,semester,previous:current.entries,next:entries,preservesRecordedSessions:true}}})

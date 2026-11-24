@@ -141,6 +141,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const mobileSidebarButtonRef = useRef<HTMLButtonElement>(null)
   const [menuQuery,setMenuQuery]=useState('')
   const [electionOpening,setElectionOpening]=useState(false)
+  const [electionManualUrl,setElectionManualUrl]=useState<string|null>(null)
   const [academyOpening,setAcademyOpening]=useState(false)
   const academyLock=useRef(false)
   const electionLock=useRef(false)
@@ -150,6 +151,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     return Number.isFinite(saved) && saved >= 170 ? saved : 300
   })
   const { user, logout, updateUser } = useAuthStore()
+  useEffect(()=>setElectionManualUrl(null),[user?.id])
+  useEffect(()=>{if(!electionManualUrl)return;const timer=setTimeout(()=>setElectionManualUrl(null),30000);return()=>clearTimeout(timer)},[electionManualUrl])
   const {
     sidebarCollapsed,
     sidebarOpen,
@@ -266,8 +269,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const electionLabel=electionAudience==='ADMIN'?(electionViewer?(language==='fr'?'Élections · consultation':'Elections · view only'):(language==='fr'?'Administration des scrutins':'Election administration')):electionAudience==='PARENT'?(language==='fr'?'Élections des parents':'Parent elections'):(language==='fr'?'Élections des élèves':'Student elections')
   const openElections=async()=>{
    if(!electionAudience||electionLock.current)return
-   electionLock.current=true;setElectionOpening(true)
-   try{const owner=user.id;await launchNexusWorkspace('elections',async()=>{const response=await electionsAPI.launch(electionAudience);return response.data.data.url},{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner})}
+   electionLock.current=true;setElectionOpening(true);setElectionManualUrl(null)
+   try{const owner=user.id;const result=await launchNexusWorkspace('elections',async()=>{const response=await electionsAPI.launch(electionAudience);return response.data.data.url},{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner});if(result?.manualUrl&&useAuthStore.getState().user?.id===owner)setElectionManualUrl(result.manualUrl)}
    catch(error){await alertPortalMessage(error instanceof WorkspaceLaunchError&&error.message==='POPUP_BLOCKED'?(language==='fr'?'Autorisez l’ouverture d’un nouvel onglet pour accéder aux élections.':'Allow a new tab to open the election workspace.'):language==='fr'?'L’accès électoral n’a pas pu être ouvert. Vérifiez votre connexion et vos droits, puis réessayez.':'The election workspace could not be opened. Check your connection and access rights, then retry.')}
    finally{electionLock.current=false;setElectionOpening(false)}
   }
@@ -342,7 +345,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   }[activeRole]
 
   const roleName = disciplineWorkspace?(language==='fr'?'Directeur de discipline':'Discipline Director'):seniorWorkspace?'Senior Teacher · ST':mediaAccount?'Media':{
-    admin: t('roles.admin'),
+    admin: user?.id === 'configured-superadmin' ? t('roles.admin') : 'Principal',
     staff: t('roles.staff'),
     teacher: t('roles.teacher'),
     student: t('roles.student'),
@@ -430,15 +433,15 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             <Shield size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Principal':'Principal workspace'}</span>}
           </Link>
         )}
-        {canUseStaffWorkspace(user) && !/^\/portal\/staff(?:\/|$)/.test(location.pathname) && (
+        {user.id !== 'configured-superadmin' && canUseStaffWorkspace(user) && !/^\/portal\/staff(?:\/|$)/.test(location.pathname) && (
           <Link to="/portal/staff" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title={currentLanguage==='fr'?'Espace Staff':'Staff workspace'}>
             <UserCheck size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Staff':'Staff workspace'}</span>}
           </Link>
         )}
-        {electionAudience&&<button type="button" onClick={()=>void openElections()} disabled={electionOpening} aria-busy={electionOpening} data-kcs-no-processing="true" data-election-launch={electionAudience} className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={!isMobile&&sidebarCollapsed?electionLabel:undefined}>
+        {electionAudience&&(electionManualUrl?<a href={electionManualUrl} target="_blank" rel="noopener noreferrer" data-election-native-launch className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={electionLabel} onClick={()=>{setTimeout(()=>setElectionManualUrl(null),0)}}><Vote size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{language==='fr'?'Ouvrir l’application électorale':'Open the election app'}</span>}</a>:<button type="button" onClick={()=>void openElections()} disabled={electionOpening} aria-busy={electionOpening} data-kcs-no-processing="true" data-election-launch={electionAudience} className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={!isMobile&&sidebarCollapsed?electionLabel:undefined}>
           {electionOpening?<Loader2 size={18} className="animate-spin"/>:<Vote size={18}/>}
           {(isMobile||!sidebarCollapsed)&&<span>{electionOpening?(language==='fr'?'Ouverture sécurisée…':'Opening securely…'):electionLabel}</span>}
-        </button>}
+        </button>)}
         {(accessRoles.includes('teacher') || user.role === 'admin') && (
           <button type="button" onClick={()=>void openAcademy()} disabled={academyOpening} aria-busy={academyOpening} data-kcs-no-processing="true" data-academy-launch
             className={isMobile ? "nexus-mobile-action" : `sidebar-link w-full ${!sidebarCollapsed ? "" : "justify-center px-0"}`}

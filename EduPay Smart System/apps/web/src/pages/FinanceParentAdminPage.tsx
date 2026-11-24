@@ -1,3 +1,4 @@
+import {FinanceWorkspaceIcon} from "../components/FinanceWorkspaceIcon";
 import {FinanceAlertMessage} from '../components/FinanceAlertMessage';
 import { uiText, uiStatus } from "../uiText";
 import DateSelect from '../components/DateSelect';
@@ -1023,7 +1024,7 @@ export function FinanceParentAdminPage() {
 
   return (
     <div className="edupay-parent-admin min-w-0 space-y-6 overflow-hidden pb-10 animate-fadeInUp">
-      <div className="min-w-0">
+      <div className="ep-page-hero min-w-0"><FinanceWorkspaceIcon kind="tracking"/>
         <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-300">{copy.pageEyebrow}</p>
         <h1 className="mt-2 font-display text-3xl font-bold text-white">{copy.pageTitle}</h1>
         <p className="mt-2 max-w-3xl text-sm text-ink-dim">

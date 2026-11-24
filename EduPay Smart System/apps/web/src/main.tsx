@@ -10,6 +10,7 @@ import { applyLegacyReceiptVerificationRedirect } from "./utils/receiptLinkRecov
 import "./styles.css";
 import "./mobileWorkspace.css";
 import "./edupayRenewal.css";
+import "./adminWorkspace.css";
 import MutationFeedback from "./components/MutationFeedback";
 
 import { SecurePageBoundary } from './components/SecurePageBoundary';

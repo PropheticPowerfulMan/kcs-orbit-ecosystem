@@ -14,6 +14,17 @@ export function installedNexusWindow(){
 /** A PWA must not replace its own origin with an external workspace: the browser adds an out-of-scope toolbar. */
 export async function launchNexusWorkspace(app:LinkedWorkspace,request:()=>Promise<string>,options:{language:string;theme:string;isCurrent:()=>boolean}){
  if(!options.isCurrent())throw new WorkspaceLaunchError('ACCOUNT_CHANGED')
+ // A noopener navigation is capturable by the installed electoral PWA. An
+ // auxiliary window reserved before fetching a ticket cannot be captured.
+ if(app==='elections'){
+  const url=workspaceUrl(app,await request());if(!options.isCurrent())throw new WorkspaceLaunchError('ACCOUNT_CHANGED')
+  // A slow connection can exhaust user activation. Keep a real, explicit link
+  // for the next click rather than opening a blocked or empty browser window.
+  if(navigator.userActivation?.isActive===false)return {manualUrl:url}
+  window.open(url,'_blank','noopener,noreferrer')
+  // noopener intentionally returns null even when opening succeeds.
+  return
+ }
  if(!installedNexusWindow()){const url=workspaceUrl(app,await request());if(options.isCurrent())window.location.assign(url);return}
  const origin=origins[app],requestId=crypto.randomUUID(),landing=new URL('/nexus-launch.html',origin)
  landing.hash=new URLSearchParams({request:requestId,lang:options.language==='fr'?'fr':'en',theme:options.theme==='dark'?'dark':'light'}).toString()

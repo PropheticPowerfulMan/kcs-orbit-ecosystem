@@ -2,6 +2,7 @@ import {normalizeTeachingLabel, teachingAliasMatches, uniquelyAssignedCourse} fr
 
 const subject=(value:string)=>normalizeTeachingLabel(value
  .replace(/\s*\((?:o|optional|elective|optionnel)\)\s*$/i,'')
+ .replace(/\s+in\s+EE\s*$/i,'')
  .replace(/\s*[-·]?\s*grade\s*\d{1,2}(?:\s*[ab])?\s*$/i,''))
  .replace(/([a-z])(\d)/g,'$1 $2').replace(/(\d)([a-z])/g,'$1 $2')
 const details=(value:string)=>{
