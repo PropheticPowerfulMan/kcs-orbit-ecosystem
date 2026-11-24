@@ -10,11 +10,12 @@ import {
   LayoutDashboard, BookOpen, FileText, Calendar, Brain,
   Users, Settings, Bell, ChevronLeft, ChevronRight, Search,
   Clock3, GraduationCap, BarChart3, MessageSquare, LogOut,
-  Shield, Home, UserCheck, UserPlus, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Ban, Archive, Moon, Sun, Globe, BookOpenCheck, GripHorizontal, SlidersHorizontal
+  Shield, Home, UserCheck, UserPlus, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Ban, Archive, Moon, Sun, Globe, BookOpenCheck, GripHorizontal, SlidersHorizontal, Vote, Loader2
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { academyAPI, authAPI, lessonPlanAPI } from '@/services/api'
+import { academyAPI, authAPI, lessonPlanAPI, electionsAPI } from '@/services/api'
 import { useUIStore } from '@/store/uiStore'
+import {alertPortalMessage} from '@/utils/portalActionDialogs'
 import type { UserRole } from '@/types'
 import { getAssetUrl } from '@/utils/assets'
 
@@ -138,6 +139,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const desktopNavigationRef = useRef<HTMLElement>(null)
   const mobileSidebarButtonRef = useRef<HTMLButtonElement>(null)
   const [menuQuery,setMenuQuery]=useState('')
+  const [electionOpening,setElectionOpening]=useState(false)
+  const electionLock=useRef(false)
   const [avatarLoadVersion, setAvatarLoadVersion] = useState(0)
   const [desktopActionHeight, setDesktopActionHeight] = useState(() => {
     const saved = Number(localStorage.getItem('kcs-nexus-sidebar-action-height'))
@@ -254,6 +257,16 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
 
   const seniorWorkspace=/^\/portal\/senior(?:\/|$)/.test(location.pathname)&&canUseSeniorWorkspace(user)
   const mediaAccount=isMediaAccount(user)
+  const electionViewer=user.id!=='configured-superadmin'&&(principalWorkspace||canUseSeniorWorkspace(user))
+  const electionAudience=!mediaAccount?(user.id==='configured-superadmin'||electionViewer?'ADMIN':activeRole==='parent'?'PARENT':activeRole==='student'?'STUDENT':user.permissions?.some(p=>['nexus:elections-manage','nexus:elections-observe'].includes(p))?'ADMIN':null):null
+  const electionLabel=electionAudience==='ADMIN'?(electionViewer?(language==='fr'?'Élections · consultation':'Elections · view only'):(language==='fr'?'Administration des scrutins':'Election administration')):electionAudience==='PARENT'?(language==='fr'?'Élections des parents':'Parent elections'):(language==='fr'?'Élections des élèves':'Student elections')
+  const openElections=async()=>{
+   if(!electionAudience||electionLock.current)return
+   electionLock.current=true;setElectionOpening(true)
+   try{const owner=user.id,response=await electionsAPI.launch(electionAudience);if(useAuthStore.getState().user?.id===owner)window.location.assign(response.data.data.url)}
+   catch{await alertPortalMessage(language==='fr'?'L’accès électoral n’a pas pu être ouvert. Vérifiez votre connexion et vos droits, puis réessayez.':'The election workspace could not be opened. Check your connection and access rights, then retry.')}
+   finally{electionLock.current=false;setElectionOpening(false)}
+  }
   const navItems: NavItem[] = seniorWorkspace?[
    {to:'/portal/senior',label:language==='fr'?'Vue d’ensemble ST':'ST overview',icon:LayoutDashboard},
    {to:'/portal/senior/pedagogy',label:language==='fr'?'Pilotage pédagogique':'Pedagogical oversight',icon:BookOpen},
@@ -399,6 +412,10 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             <UserCheck size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Staff':'Staff workspace'}</span>}
           </Link>
         )}
+        {electionAudience&&<button type="button" onClick={()=>void openElections()} disabled={electionOpening} aria-busy={electionOpening} data-kcs-no-processing="true" data-election-launch={electionAudience} className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={!isMobile&&sidebarCollapsed?electionLabel:undefined}>
+          {electionOpening?<Loader2 size={18} className="animate-spin"/>:<Vote size={18}/>}
+          {(isMobile||!sidebarCollapsed)&&<span>{electionOpening?(language==='fr'?'Ouverture sécurisée…':'Opening securely…'):electionLabel}</span>}
+        </button>}
         {(accessRoles.includes('teacher') || user.role === 'admin') && (
           <button type="button" onClick={async () => { const response = await academyAPI.launch(); window.location.assign(response.data.data.url) }}
             className={isMobile ? "nexus-mobile-action" : `sidebar-link w-full ${!sidebarCollapsed ? "" : "justify-center px-0"}`}
