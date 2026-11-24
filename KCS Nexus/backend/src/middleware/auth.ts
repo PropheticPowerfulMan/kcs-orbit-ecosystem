@@ -7,6 +7,7 @@ import { assertAccountAccess } from '../services/accountAccess.service.js'
 import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
 import { ApiError } from '../utils/api.js'
+import {electionSessionAllows} from '../utils/electionLaunchPolicy.js'
 
 type AuthPayload = {
   mediaOnly?:boolean
@@ -29,6 +30,8 @@ export const authenticate = async (req: AuthenticatedRequest, _res: Response, ne
   try {
     const token = header.replace('Bearer ', '')
     const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload
+    const electoral=payload as AuthPayload&{sessionScope?:string;electionAudience?:string;electionReadOnly?:boolean}
+    if(electoral.sessionScope==='elections'&&!electionSessionAllows(electoral.electionAudience,req.method,req.originalUrl,electoral.electionReadOnly))throw new ApiError(403,'ELECTION_SESSION_SCOPE_ONLY')
     if ((payload as any).application) {
       const path=new URL(req.originalUrl,'http://nexus.internal').pathname
       if(req.method!=='POST'||path!=='/api/academy/launch'||(payload as any).application!=='KCS_ACADEMY')throw new ApiError(403,'This application session cannot access Nexus.')

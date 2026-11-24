@@ -600,6 +600,10 @@ export const lessonPlanAPI = {
   launch: () => api.post<{ data: { url: string } }>("/lesson-plan/launch").then(preserveNexusReturn),
 }
 
+export const electionsAPI = {
+ launch:(audience:'PARENT'|'STUDENT'|'ADMIN')=>api.post<{data:{url:string}}>('/elections/launch',{audience,language:useUIStore.getState().language,theme:useUIStore.getState().theme,returnPath:window.location.pathname},{headers:{'x-silent-feedback':'true'}}),
+}
+
 export const academicCalendarAPI = {
   attendanceSettings: (academicYear: string) => api.get('/academic-calendar/attendance-settings', {params:{academicYear}}),
   saveAttendanceSettings: (data: unknown) => api.put('/academic-calendar/attendance-settings', data),
