@@ -357,6 +357,18 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const menuText=(fr:string,en:string)=>language==='fr'?fr:en
   const renderNavigation = (isMobile = false) => (
     <>
+      {user.id === 'configured-superadmin' && (
+        <div className="px-3 pt-3">
+          <Link to="/admin" data-superadministration-home
+            className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            title={currentLanguage === 'fr' ? 'Superadministration' : 'Super Administration'}
+            aria-current={location.pathname === '/admin' ? 'page' : undefined}
+            onClick={() => { setSidebarOpen(false); document.body.style.overflow = '' }}>
+            <Shield size={18}/>
+            {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Superadministration' : 'Super Administration'}</span>}
+          </Link>
+        </div>
+      )}
       {(isMobile||!sidebarCollapsed)&&<div className="nexus-menu-finder" translate="no">
         <div className="nexus-menu-caption"><span>{menuText('Votre espace','Your workspace')}</span><span>{visibleNavItems.length} / {navItemsWithBadges.length}</span></div>
         <div className="nexus-menu-search"><Search size={16} aria-hidden="true"/><input type="search" value={menuQuery} onChange={event=>setMenuQuery(event.target.value)} placeholder={menuText('Trouver une rubrique…','Find a section…')} aria-label={menuText('Rechercher dans le menu','Search menu')} autoComplete="off"/>{menuQuery&&<button type="button" onClick={()=>setMenuQuery('')} aria-label={menuText('Effacer la recherche du menu','Clear menu search')}><X size={14}/></button>}</div>
@@ -428,7 +440,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
         )}
         {canUseDisciplineWorkspace(user)&&!disciplineWorkspace&&<Link to="/portal/discipline" className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={currentLanguage==='fr'?'Direction de discipline':'Discipline Director'}><ShieldAlert size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Discipline':'Discipline workspace'}</span>}</Link>}
         {canUseSeniorWorkspace(user)&&!seniorWorkspace&&<Link to="/portal/senior" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title="Senior Teacher · ST"><GraduationCap size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Senior Teacher · ST':'Senior Teacher workspace'}</span>}</Link>}
-        {canUsePrincipalWorkspace(user) && !/^\/admin(?:\/|$)/.test(location.pathname) && (
+        {user.id !== 'configured-superadmin' && canUsePrincipalWorkspace(user) && !/^\/admin(?:\/|$)/.test(location.pathname) && (
           <Link to="/admin" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title={currentLanguage==='fr'?'Espace Principal':'Principal workspace'}>
             <Shield size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Principal':'Principal workspace'}</span>}
           </Link>
