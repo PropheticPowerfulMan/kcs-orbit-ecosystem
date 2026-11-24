@@ -990,3 +990,54 @@
 .ep-alert-reference code { display:block; margin-top:7px; padding:8px; border:1px solid #ffffff18; border-radius:8px; background:#06192350; line-height:1.6; }
 @container (min-width:42rem) { .ep-alerts-debts-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:639px) { .ep-alert-list,.ep-debt-list { max-height:19rem; } }
+
+/* Keep desktop navigation stationary; long pages scroll in their own workspace. */
+@media screen and (min-width: 1024px) {
+  .edupay-app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .edupay-app-shell > header { flex-shrink: 0; }
+  .edupay-app-shell > main {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    align-items: stretch;
+  }
+  .ep-sidebar {
+    position: static;
+    align-self: stretch;
+    height: auto;
+    min-height: 0;
+  }
+  .ep-sidebar > nav { overscroll-behavior-y: contain; }
+  .ep-workspace {
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+  }
+}
+
+/* Update reminders use the top layer, centered on every viewport. */
+@media screen {
+  dialog.ep-update-notice {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    transform: none;
+    width: min(92vw, 600px);
+    height: fit-content;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    padding: clamp(20px, 4vw, 30px);
+    border-radius: 20px;
+    box-shadow: 0 24px 90px #0006;
+  }
+  dialog.ep-update-notice::backdrop { background: #071c2bbd; backdrop-filter: blur(5px); }
+  dialog.ep-update-notice h2 { margin: 0; font-size: 20px; line-height: 1.35; font-weight: 750; }
+  dialog.ep-update-notice button { margin-top: 8px; }
+}
