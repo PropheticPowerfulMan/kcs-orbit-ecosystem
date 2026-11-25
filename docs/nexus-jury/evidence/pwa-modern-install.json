@@ -1,0 +1,15 @@
+{
+  "browser": "Chrome/156.0.8078.79",
+  "platform": "isolated Linux Chromium; not Windows",
+  "steps": [],
+  "manifest": {
+    "id": "https://staging.kinshasachristianschool.org/jury/kcs-nexus-jury",
+    "scope": "https://staging.kinshasachristianschool.org/jury/",
+    "start": "https://staging.kinshasachristianschool.org/jury/"
+  },
+  "status": "NOT_VERIFIED",
+  "error": {
+    "name": "ProtocolError",
+    "message": "Protocol error (PWA.install): 'PWA.install' wasn't found"
+  }
+}

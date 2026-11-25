@@ -1,0 +1,29 @@
+{
+  "conditions": "Synthetic browser test; directory100ms; catalog/classes/cold parent sync3000ms; not a production internet guarantee",
+  "results": [
+    {
+      "module": "parents",
+      "version": "baseline",
+      "firstRecordMilliseconds": 3408,
+      "catalogFinishedAtFirstRecord": true
+    },
+    {
+      "module": "parents",
+      "version": "changed",
+      "firstRecordMilliseconds": 215,
+      "catalogFinishedAtFirstRecord": false
+    },
+    {
+      "module": "students",
+      "version": "baseline",
+      "firstRecordMilliseconds": 3358,
+      "catalogFinishedAtFirstRecord": true
+    },
+    {
+      "module": "students",
+      "version": "changed",
+      "firstRecordMilliseconds": 215,
+      "catalogFinishedAtFirstRecord": false
+    }
+  ]
+}

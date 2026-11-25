@@ -1,0 +1,52 @@
+{
+  "results": [
+    {
+      "check": "600-session modal centered, bounded, paginated 1440",
+      "status": "PASS"
+    },
+    {
+      "check": "600-session modal centered, bounded, paginated 820",
+      "status": "PASS"
+    },
+    {
+      "check": "600-session modal centered, bounded, paginated 390",
+      "status": "PASS"
+    },
+    {
+      "check": "600-session modal centered, bounded, paginated 320",
+      "status": "PASS"
+    },
+    {
+      "check": "Escape and no outer horizontal overflow",
+      "status": "PASS"
+    },
+    {
+      "check": "timetable en PDF generation with vector QR",
+      "status": "PASS"
+    },
+    {
+      "check": "attendance en PDF generation with vector QR",
+      "status": "PASS"
+    },
+    {
+      "check": "timetable fr PDF generation with vector QR",
+      "status": "PASS"
+    },
+    {
+      "check": "attendance fr PDF generation with vector QR",
+      "status": "PASS"
+    },
+    {
+      "check": "HTTPS real Nexus SSO and Jury Teacher home",
+      "status": "PASS"
+    },
+    {
+      "check": "Distinct PWA manifest, installed SW, no private API/ticket cache",
+      "status": "PASS"
+    },
+    {
+      "check": "Public application shell available after offline reload",
+      "status": "PASS"
+    }
+  ]
+}

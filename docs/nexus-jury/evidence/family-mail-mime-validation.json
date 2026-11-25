@@ -1,0 +1,32 @@
+[
+  {
+    "flow": "broadcast-fr",
+    "copies": 4,
+    "identicalAttachmentSha256": "3d49dbb5c2df7ee358b18b92d63f1d3d1e0e8c27ea6875f9e6fef7ac772f635e",
+    "mimeVerified": true
+  },
+  {
+    "flow": "direct-fr",
+    "copies": 4,
+    "identicalAttachmentSha256": "3d49dbb5c2df7ee358b18b92d63f1d3d1e0e8c27ea6875f9e6fef7ac772f635e",
+    "mimeVerified": true
+  },
+  {
+    "flow": "report-en",
+    "copies": 4,
+    "identicalAttachmentSha256": "d158bddb6a18f58b8645524d0461e59462151facbe6ed13f00a862165429f69a",
+    "mimeVerified": true
+  },
+  {
+    "flow": "report-fr",
+    "copies": 4,
+    "identicalAttachmentSha256": "d1ac31f4bef88106793548d707ddddc881497dd8e01d7b51b66b271f5e52dbd2",
+    "mimeVerified": true
+  },
+  {
+    "flow": "targeted-en",
+    "copies": 4,
+    "identicalAttachmentSha256": "3d49dbb5c2df7ee358b18b92d63f1d3d1e0e8c27ea6875f9e6fef7ac772f635e",
+    "mimeVerified": true
+  }
+]

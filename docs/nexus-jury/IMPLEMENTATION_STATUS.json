@@ -1,0 +1,209 @@
+{
+  "project": "KCS Nexus Jury",
+  "phase": "Staging candidate prepared for production review; native device checks and explicit release authorization remain",
+  "productionAuthorized": false,
+  "baseline": "9306a969267d9d7a9013e04bc8c40be5d50a98e5",
+  "stagingUrl": "https://staging.kinshasachristianschool.org/jury/",
+  "unitTests": {
+    "pass": 36,
+    "fail": 0
+  },
+  "acceptanceScenarios": {
+    "1": {
+      "name": "Individual project with three independent judges",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "2": {
+      "name": "Group assessment and member allocation",
+      "status": "PASS",
+      "evidence": "extended-api-results.json"
+    },
+    "3": {
+      "name": "Hybrid individual/group scoring",
+      "status": "PASS",
+      "evidence": "extended-api-results.json"
+    },
+    "4": {
+      "name": "Custom criteria and protected rubric versions",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "5": {
+      "name": "A genuine zero mark",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "6": {
+      "name": "Missing marks remain incomplete",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "7": {
+      "name": "Absent judges and required quorum",
+      "status": "PASS",
+      "evidence": "extended-api-results.json"
+    },
+    "8": {
+      "name": "Interrupted browser evaluation resumes",
+      "status": "PASS",
+      "evidence": "jury-reliability-results.json"
+    },
+    "9": {
+      "name": "Concurrent independent judges and stale revisions",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "10": {
+      "name": "Lost response after actual commit",
+      "status": "PASS",
+      "evidence": "jury-reliability-results.json"
+    },
+    "11": {
+      "name": "Saved draft resumes",
+      "status": "PASS",
+      "evidence": "jury-reliability-results.json"
+    },
+    "12": {
+      "name": "Repeated evaluation submission",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "13": {
+      "name": "Repeated publication does not duplicate",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "14": {
+      "name": "Create actual Gradebook assessment column",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "15": {
+      "name": "Publish to existing column with explicit preview",
+      "status": "PASS",
+      "evidence": "extended-api-results.json"
+    },
+    "16": {
+      "name": "Normalize /100 to /20",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "17": {
+      "name": "Preserve old grades and comments",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "18": {
+      "name": "Preserve other courses",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "19": {
+      "name": "Preserve other years",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "20": {
+      "name": "TeacherWorkspace revision conflict is atomic",
+      "status": "PASS",
+      "evidence": "extended-api-results.json"
+    },
+    "21": {
+      "name": "Unauthorized user/object access denied",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "22": {
+      "name": "Controlled evaluation reopening",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "23": {
+      "name": "Synchronization failure leaves no partial cells",
+      "status": "PASS",
+      "evidence": "extended-api-results.json"
+    },
+    "24": {
+      "name": "Fresh preview then idempotent recovery",
+      "status": "PASS",
+      "evidence": "extended-api-results.json"
+    },
+    "25": {
+      "name": "Browser refresh persistence",
+      "status": "PASS",
+      "evidence": "jury-reliability-results.json"
+    },
+    "26": {
+      "name": "New institutional session persistence",
+      "status": "PASS",
+      "evidence": "api-test-results.json"
+    },
+    "27": {
+      "name": "Another genuine TeacherPortal PUT preserves marks",
+      "status": "PASS",
+      "evidence": "extended-api-results.json"
+    },
+    "28": {
+      "name": "All PDF types EN/FR, correct logo/footer QR",
+      "status": "PASS",
+      "evidence": "roles-reports-results.json"
+    },
+    "29": {
+      "name": "Independent PWA installation and native OS launch",
+      "status": "PARTIAL",
+      "evidence": "pwa-modern-install.json"
+    },
+    "30": {
+      "name": "Tablet and mobile evaluation",
+      "status": "PASS",
+      "evidence": "jury-reliability-results.json"
+    }
+  },
+  "nativePwaInstallation": "MANUAL_NOT_VERIFIED",
+  "documentation": {
+    "manuals": 3,
+    "manualPages": 33,
+    "juryAndTeacherReportPages": 40,
+    "officialEmblem": "KCS Nexus/frontend/public/images/kcs.jpg",
+    "officialEmblemSha256": "ebb5aa8f6da4ba89fb4c7353a5a727eea9520d7353d9d68048e533284929839c"
+  },
+  "productionUntouched": true,
+  "remaining": [
+    "Manual native PWA installation/link-capture acceptance on school devices",
+    "Hosted security scan remains unavailable; bounded source review and targeted runtime security tests are recorded",
+    "Production review and explicit deployment authorization; real-account acceptance, DNS and external backup configuration remain separate"
+  ],
+  "securityReview": {
+    "method": "Three independent bounded read-only static reviews plus parent review and synthetic runtime regressions",
+    "hostScanStatus": "NOT_STARTED_REGISTRATION_UNAVAILABLE",
+    "registrationError": "Review changes requires a non-bare Git worktree with a resolvable HEAD.",
+    "confirmedFixes": [
+      "Malformed multipart metadata is validated inside the file cleanup boundary",
+      "Internal SSO requires explicit target-account confirmation before exchange",
+      "Pending results are invalidated when eligibility changes"
+    ],
+    "limitations": [
+      "No completed tool-owned security scan exists",
+      "Static review does not prove absence of every vulnerability"
+    ]
+  },
+  "integrationGroups": {
+    "core": 13,
+    "extended": 6,
+    "rolesReports": 3,
+    "deliveryInventory": 5,
+    "familyMail": 5,
+    "privateFiles": 6,
+    "dashboard": 4,
+    "invitationOutbox": 2
+  },
+  "browserIntentGroups": 2,
+  "sourceCommits": {
+    "nexus": "ce0dac821d8756b4b7b1456c6671264bbf142971",
+    "edupay": "2e52fd5ed30f0f6714f6f2bca13daf217a32b7ba",
+    "kitchen": "002325539182ae7d887ed20a0bc41ac0ad826766"
+  },
+  "readyForProductionReview": true,
+  "productionDeploymentPerformed": false
+}

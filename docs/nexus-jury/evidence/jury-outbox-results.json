@@ -1,0 +1,12 @@
+{
+  "results": [
+    {
+      "name": "real FR invitation passes the persistent Jury outbox and private SMTP transport",
+      "status": "PASS"
+    },
+    {
+      "name": "one-use invitation opens only the invited project and cannot be exchanged twice",
+      "status": "PASS"
+    }
+  ]
+}

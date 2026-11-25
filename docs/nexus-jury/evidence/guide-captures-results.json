@@ -1,0 +1,51 @@
+[
+  {
+    "role": "superadmin",
+    "canonicalLogin": true,
+    "projectAccess": true,
+    "tablet": true,
+    "runtimeErrors": 0
+  },
+  {
+    "role": "teacher",
+    "canonicalLogin": true,
+    "projectAccess": true,
+    "tablet": true,
+    "runtimeErrors": 0
+  },
+  {
+    "role": "principal",
+    "canonicalLogin": true,
+    "projectAccess": true,
+    "tablet": true,
+    "runtimeErrors": 0
+  },
+  {
+    "role": "senior-teacher",
+    "canonicalLogin": true,
+    "projectAccess": true,
+    "tablet": true,
+    "runtimeErrors": 0
+  },
+  {
+    "role": "judge",
+    "canonicalLogin": true,
+    "projectAccess": true,
+    "tablet": true,
+    "runtimeErrors": 0
+  },
+  {
+    "role": "parent-judge",
+    "canonicalLogin": true,
+    "projectAccess": true,
+    "tablet": true,
+    "runtimeErrors": 0
+  },
+  {
+    "role": "student",
+    "canonicalLogin": true,
+    "projectAccess": true,
+    "tablet": true,
+    "runtimeErrors": 0
+  }
+]

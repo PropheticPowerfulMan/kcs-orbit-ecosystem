@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "name": "genuine PDF is privately stored, downloaded through authorization and matches its original hash",
+      "status": "PASS"
+    },
+    {
+      "name": "another learner cannot read private evidence and spoofed file signatures are rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "malformed multipart metadata leaves no orphaned private file or quota bypass",
+      "status": "PASS"
+    },
+    {
+      "name": "retained soft-deleted documents remain included in storage quotas",
+      "status": "PASS"
+    },
+    {
+      "name": "streaming concurrency is bounded and slots are released after completion",
+      "status": "PASS"
+    },
+    {
+      "name": "removing a document is authorized, audited and soft-deleted",
+      "status": "PASS"
+    }
+  ]
+}

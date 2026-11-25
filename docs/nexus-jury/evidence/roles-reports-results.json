@@ -1,0 +1,17 @@
+{
+  "runId": "a530b04c",
+  "results": [
+    {
+      "name": "organizer selects KCS employees and parents, invites outsiders, and cannot select learners",
+      "status": "PASS"
+    },
+    {
+      "name": "password changes revoke an already opened Jury session",
+      "status": "PASS"
+    },
+    {
+      "name": "all eleven institutional report formats produce genuine EN and FR PDFs",
+      "status": "PASS"
+    }
+  ]
+}

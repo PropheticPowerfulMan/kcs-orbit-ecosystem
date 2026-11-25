@@ -1,0 +1,37 @@
+{
+  "productionContainerCount": 27,
+  "unchangedIdsAndImages": true,
+  "running": 27,
+  "dockerHealthy": 26,
+  "withoutDockerHealthcheck": 1,
+  "productionMutationsPerformed": false,
+  "http": [
+    {
+      "url": "https://staging.kinshasachristianschool.org/jury/",
+      "status": 200
+    },
+    {
+      "url": "https://staging.kinshasachristianschool.org/jury/api/health",
+      "status": 200
+    },
+    {
+      "url": "https://staging.kinshasachristianschool.org/jury-nexus/",
+      "status": 200
+    },
+    {
+      "url": "https://kinshasachristianschool.org/",
+      "status": 200
+    },
+    {
+      "url": "https://kinshasachristianschool.org/kitchen/",
+      "status": 200
+    },
+    {
+      "url": "https://kinshasachristianschool.org/sentinel/",
+      "status": 200
+    }
+  ],
+  "juryWebDockerHealth": "healthy",
+  "juryApiDatabaseHealth": "ok",
+  "reviewOnly": true
+}
