@@ -1,6 +1,6 @@
 {
   "project": "KCS Nexus Jury",
-  "phase": "Targeted production release authorized; production image build and backup in progress",
+  "phase": "Targeted production release deployed and verified",
   "productionAuthorized": true,
   "baseline": "9306a969267d9d7a9013e04bc8c40be5d50a98e5",
   "stagingUrl": "https://staging.kinshasachristianschool.org/jury/",
@@ -168,11 +168,12 @@
     "officialEmblem": "KCS Nexus/frontend/public/images/kcs.jpg",
     "officialEmblemSha256": "ebb5aa8f6da4ba89fb4c7353a5a727eea9520d7353d9d68048e533284929839c"
   },
-  "productionUntouched": true,
+  "productionUntouched": false,
   "remaining": [
-    "Manual native PWA installation/link-capture acceptance on school devices",
-    "Hosted security scan remains unavailable; bounded source review and targeted runtime security tests are recorded",
-    "Production review and explicit deployment authorization; real-account acceptance, DNS and external backup configuration remain separate"
+    "Native OS PWA installation/link-capture acceptance on school devices",
+    "Hosted security scan unavailable; bounded source review and targeted runtime security tests are recorded",
+    "Production SMTP capacity and real-school-account acceptance remain operational checks",
+    "Off-server backup destination remains unconfigured"
   ],
   "securityReview": {
     "method": "Three independent bounded read-only static reviews plus parent review and synthetic runtime regressions",
@@ -205,7 +206,7 @@
     "kitchen": "002325539182ae7d887ed20a0bc41ac0ad826766"
   },
   "readyForProductionReview": true,
-  "productionDeploymentPerformed": false,
+  "productionDeploymentPerformed": true,
   "authorizedTargets": [
     "nexus_api",
     "nexus_web",
@@ -214,5 +215,9 @@
     "kitchen_web",
     "proxy"
   ],
-  "productionAddress": "https://kinshasachristianschool.org/jury/"
+  "productionAddress": "https://kinshasachristianschool.org/jury/",
+  "productionRelease": "b0f6a15cea83e291bdcc8946ac1c7fc2bb7a1516",
+  "productionVerification": "evidence/production-targeted-release.json",
+  "productionHealth": "PASS",
+  "stagingHealth": "PASS"
 }

@@ -70,7 +70,7 @@ The official school emblem is copied byte-for-byte from `KCS Nexus/frontend/publ
 - `frontend/`: React/TypeScript/Vite, local fonts, responsive sidebar, FR/EN UI and own PWA assets.
 - `../KCS Nexus/backend/src/jury/`: authenticated module, policies, projects, decimal scoring, publication, private files, reports, analytics and notification worker.
 - `../KCS Nexus/backend/prisma/`: 36 additive Jury models, referential constraints, uniqueness checks and two scoped analytics indexes.
-- `../ops/jury/`: isolated staging configuration, reproducible web image and unapplied production review templates.
+- `../ops/jury/`: isolated staging configuration, reproducible web image and targeted production tooling and retained optional review templates.
 - `../docs/nexus-jury/`: architecture, measured QA evidence and professional manuals.
 
 The real Nexus startup calls Jury jobs only when `JURY_ENABLED=true`. Unchanged deployments do not start the Jury worker or expose its routes. Emails use the existing school transport; in-app notices have deterministic outbox identities. SMTP acceptance is not proof of inbox delivery or reading.
@@ -129,9 +129,13 @@ Use the established production backup procedure and validate restore in a fresh 
 
 For ordinary application rollback, restore prior immutable application images and disable the opt-in Jury flag as reviewed. Preserve additive data and private files. A database restore is an incident decision, not a routine way to roll back a web appearance change. See the Technical Documentation for the recovery checklist and actual test evidence.
 
-## Production review plan — not executed
+## Production release and future review sequence
 
-1. Review this branch, test evidence, manuals and the exact affected services.
+Verified release `b0f6a15cea83e291bdcc8946ac1c7fc2bb7a1516` is deployed at https://kinshasachristianschool.org/jury/. See [production evidence](../docs/nexus-jury/evidence/production-targeted-release.json). The six targeted services are Nexus API/Web, Jury Web, EduPay Web, Kitchen Web and the required proxy route; 22 other active containers are unchanged.
+
+For future releases:
+
+1. Review the branch, test evidence, manuals and the exact affected services.
 2. Confirm DNS/TLS and the dedicated Jury URL; no DNS change is implied by this README.
 3. Configure the private storage and wrapping key through the secret manager; confirm transport capacity and off-server backups.
 4. Build/pin approved images and back up production before additive migrations.
@@ -139,7 +143,7 @@ For ordinary application rollback, restore prior immutable application images an
 6. Apply only the reviewed migrations, Nexus API/launcher changes and the new Jury web/proxy route, plus separately reviewed Nexus/EduPay/Kitchen web changes from this lot. Preserve every unrelated service image/release setting.
 7. Verify existing application health, authorized real-account SSO, canonical Gradebook read-back, receipts, private uploads, notifications and PWA isolation.
 
-`ops/jury/production/compose.override.yml` and the Caddy fragment are review templates only. They have not been applied. Existing GitHub Pages deployment runs on main, so this feature branch must not be merged as an implicit staging-only operation.
+`ops/jury/production/compose.override.yml` and the Caddy fragment are review templates only. They were not applied: this release uses the canonical production Compose file and the existing Nexus /jury/ subpath. Existing GitHub Pages deployment runs on main, so this feature branch must not be merged as an implicit staging-only operation.
 
 ## Support
 

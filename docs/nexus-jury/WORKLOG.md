@@ -128,3 +128,12 @@ Added manager-authorized, read-only analytics on real server records: exact peri
 ## Final staging verification
 
 Official Nexus public/images/kcs.jpg is used byte-for-byte in Jury report headers/watermarks. Twenty-two Jury PDFs plus four real teacher downloads were rendered and QR-checked on40pages. Three manuals were rendered on33pages. All footer QRs decoded. Explicit SSO identity confirmation, rejected-upload cleanup and pending-result invalidation were added after independent review, rebuilt and retested.36unit tests,13coreAPI groups,6extended groups,3role/report groups,6private-file groups and the dedicated browser regressions pass. Family mail capture verified20messages across5flows, four unique linked addresses per flow. Production remains untouched; no main merge/DNS/release is authorized. Hosted security-scan registration failed; bounded manual review and runtime tests are recorded honestly. Native OS capture/off-server backup configuration remain explicit operational checks.
+
+## 25 November 2026 — authorized targeted production rollout
+
+- PR #87 merged the tested lot; PR #88 adds bounded proxy readiness checking after the first safe application rollback.
+- Release b0f6a15cea83e291bdcc8946ac1c7fc2bb7a1516 applied only Nexus API/Web, new Jury Web, EduPay Web, Kitchen Web and the required proxy route. Two additive Jury migrations; no database-container restart or data reset.
+- All 22 original unrelated active containers retain IDs/images; academic table row counts and exact ordered hashes match.
+- Verified backups before and after deployment; the post-deploy archive includes the actual Jury private volume and wrapping-key file.
+- Read-only production browser tests pass on desktop/mobile with no uncaught errors or horizontal overflow. PWA identity/scope is distinct; native OS acceptance remains manual.
+- Updated three institutional manuals to the production URL while clearly identifying synthetic staging screenshots.
