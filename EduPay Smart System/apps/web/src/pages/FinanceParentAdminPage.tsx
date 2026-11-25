@@ -709,13 +709,13 @@ function AllocationTraceBlock({ trace, money, lang }: { trace?: AllocationTrace 
 export function FinanceParentAdminPage() {
   const { lang } = useI18n();
   const copy = pageCopy[lang as PageLang];
-  const [parents, setParents] = useState<Parent[]>([]);
+  const [parents, setParents] = useState<Parent[]>(() => peekApiResponse<Parent[]>("/api/parents/options") ?? []);
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(() => peekApiResponse<Parent[]>("/api/parents/options")?.[0]?.id ?? "");
   const snapshotRequest = useRef(0), selectedIdRef = useRef(selectedId);selectedIdRef.current=selectedId;
   const [snapshot, setSnapshot] = useState<FinanceSnapshot | null>(null);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !peekApiResponse<Parent[]>("/api/parents/options"));
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -756,7 +756,7 @@ export function FinanceParentAdminPage() {
   };
   useEffect(()=>{
     let active=true;
-    void api<Parent[]>("/api/parents").then(rows=>{if(active){setParents(rows);setSelectedId(rows[0]?.id??"");}}).catch(e=>{if(active)setError(e instanceof Error?e.message:copy.loadFinanceError)}).finally(()=>{if(active)setLoading(false)});
+    void api<Parent[]>("/api/parents/options").then(rows=>{if(active){setParents(rows);setSelectedId(rows[0]?.id??"");}}).catch(e=>{if(active)setError(e instanceof Error?e.message:copy.loadFinanceError)}).finally(()=>{if(active)setLoading(false)});
     void api<CatalogResponse>("/api/finance/catalog").then(value=>{if(active)setCatalog(value)}).catch(()=>{});
     return()=>{active=false;snapshotRequest.current++};
   },[]);

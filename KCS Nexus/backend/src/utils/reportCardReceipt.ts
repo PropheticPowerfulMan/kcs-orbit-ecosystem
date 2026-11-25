@@ -16,7 +16,8 @@ export function verifyReportCardReceipt(row: ReceiptDelivery, token: unknown, se
 export function reportCardReceiptUrl(row: ReceiptDelivery, frontend: string, secret: string, language: 'fr' | 'en') {
   const token = reportCardReceiptToken(row, secret)
   if (!token) return null
-  const url = new URL('/api/report-card-receipts/' + encodeURIComponent(row.id), frontend)
+  const base=new URL(frontend);if(!base.pathname.endsWith('/'))base.pathname+='/'
+  const url = new URL('api/report-card-receipts/' + encodeURIComponent(row.id), base)
   url.searchParams.set('lang', language)
   // A URL fragment is never transmitted in HTTP access logs or referrers.
   url.hash = new URLSearchParams({ token }).toString()

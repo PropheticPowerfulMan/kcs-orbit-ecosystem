@@ -1,0 +1,40 @@
+{
+  "status": "PASS",
+  "scope": "Isolated synthetic Jury database and private files only; production untouched",
+  "restoredDatabase": "jury_restore_check_4f8a6ea98b",
+  "businessTableCounts": {
+    "User": 29,
+    "StudentProfile": 6,
+    "Course": 2,
+    "Enrollment": 6,
+    "Grade": 1,
+    "TeacherWorkspace": 1,
+    "ReportCard": 49,
+    "JuryProject": 26,
+    "JuryParticipant": 58,
+    "JuryGroup": 18,
+    "JuryMember": 103,
+    "JuryAssignment": 414,
+    "JuryRubricVersion": 18,
+    "JuryCriterion": 27,
+    "JuryEvaluation": 239,
+    "JuryEvaluationScore": 270,
+    "JuryResultRun": 12,
+    "JuryStudentResult": 40,
+    "JuryPublication": 11,
+    "JuryPublicationItem": 36,
+    "JuryCertificate": 6,
+    "JuryAttachment": 4
+  },
+  "stateFingerprintsMatched": [
+    "TeacherWorkspace",
+    "Grade",
+    "JuryEvaluationScore",
+    "JuryStudentResult"
+  ],
+  "privateFilesHashVerified": 4,
+  "retainedSoftDeletedFiles": 1,
+  "protectedConfigurationCopyIncluded": true,
+  "offServerCopyConfigured": false,
+  "destructiveDatabaseOperations": false
+}

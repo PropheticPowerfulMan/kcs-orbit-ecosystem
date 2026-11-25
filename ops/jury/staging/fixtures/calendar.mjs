@@ -1,0 +1,3 @@
+import http from 'node:http';
+const calendar={name:'2026-2027',isCurrent:true,status:'ACTIVE',startDate:'2026-09-07',endDate:'2027-06-11',periods:[{type:'QUARTER',sequence:1,startDate:'2026-09-07',endDate:'2026-11-06'},{type:'QUARTER',sequence:2,startDate:'2026-11-07',endDate:'2027-01-29'},{type:'QUARTER',sequence:3,startDate:'2027-01-30',endDate:'2027-03-31'},{type:'QUARTER',sequence:4,startDate:'2027-04-01',endDate:'2027-06-11'}]};
+http.createServer((req,res)=>{if(req.url?.startsWith('/api/integration/academic-year/calendar')&&req.headers['x-api-key']===process.env.CALENDAR_TEST_KEY){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({calendars:[calendar]}))}else{res.writeHead(404);res.end()}}).listen(8080,'0.0.0.0');

@@ -1,3 +1,4 @@
+import './parentsManagementStudio.css';
 import {FinanceWorkspaceIcon} from "../components/FinanceWorkspaceIcon";
 import { uiText } from "../uiText";
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
@@ -3088,7 +3089,7 @@ export function ParentsManagementPage() {
   }), [parents]);
 
   return (
-    <div className="edupay-parent-admin space-y-6 pb-8">
+    <div className="edupay-parent-admin ep-parent-studio space-y-6 pb-8">
       {/* Modals */}
       {mutationNotice && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => setMutationNotice(null)}>
@@ -3169,7 +3170,7 @@ export function ParentsManagementPage() {
       </div>
 
       {/* Search bar */}
-      <div className="grid gap-3 animate-fadeInUp lg:grid-cols-[minmax(0,1.4fr)_220px_280px]">
+      <div className="ep-parent-filters grid gap-3 animate-fadeInUp lg:grid-cols-[minmax(0,1.4fr)_220px_280px]">
         <SearchField value={search} onChange={(e) => setSearch(e.target.value)} placeholder={L("Rechercher parent, ID, téléphone, e-mail, adresse, enfant, classe ou plan...", "Search parent, ID, phone, email, address, child, class or plan...")} />
         <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} aria-label={L("Filtrer les parents par classe", "Filter parents by class")} className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white">
           <option value="ALL">{L("Toutes les classes", "All classes")}</option>
@@ -3177,7 +3178,7 @@ export function ParentsManagementPage() {
         </select>
         <select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} aria-label={L("Filtrer par enfant lié", "Filter by linked child")} className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white">
           <option value="ALL">{L("Tous les enfants liés", "All linked children")}</option>
-          {linkedStudentOptions.map((student) => <option key={`-`} value={student.id}>{student.fullName} · {student.displayId || student.id}</option>)}
+          {linkedStudentOptions.map((student) => <option key={student.id} value={student.id}>{student.fullName} · {student.displayId || student.id}</option>)}
         </select>
       </div>
 

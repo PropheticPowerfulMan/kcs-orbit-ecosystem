@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "name": "actual browser autosave and Ctrl+S persist server revision",
+      "status": "PASS"
+    },
+    {
+      "name": "offline evaluation remains encrypted, reconnect synchronizes and refresh preserves every mark",
+      "status": "PASS"
+    },
+    {
+      "name": "a lost response after an actual commit retries the same encrypted operation without a second revision",
+      "status": "PASS"
+    },
+    {
+      "name": "tablet and mobile real judge scoring stay within viewport, both themes",
+      "status": "PASS"
+    },
+    {
+      "name": "OS installed-app launch",
+      "status": "NOT_TESTED",
+      "reason": "No interactive OS PWA install session available; Chromium installability criteria passed."
+    },
+    {
+      "name": "dedicated Jury PWA installability criteria, scoped service worker and app manifest",
+      "status": "PASS"
+    }
+  ]
+}

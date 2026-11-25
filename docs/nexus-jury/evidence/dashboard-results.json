@@ -1,0 +1,20 @@
+{
+  "results": [
+    {
+      "name": "precise year quarter course class and project filters use real counts",
+      "status": "PASS"
+    },
+    {
+      "name": "confidential analytics exclude other teachers, judges and learners",
+      "status": "PASS"
+    },
+    {
+      "name": "actual hybrid results and judge dispersion have correct descriptive statistics",
+      "status": "PASS"
+    },
+    {
+      "name": "management analytics never change grades or workspace revision",
+      "status": "PASS"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+# REVIEW TEMPLATE ONLY. DNS and TLS changes need explicit production approval.
+# Replace the hostname only with the approved institutional Jury hostname.
+jury.kinshasachristianschool.org {
+  encode zstd gzip
+  handle_path /api/* {
+    rewrite * /api/jury{path}
+    reverse_proxy nexus_api:5000
+  }
+  handle {
+    reverse_proxy jury_web:8080
+  }
+}

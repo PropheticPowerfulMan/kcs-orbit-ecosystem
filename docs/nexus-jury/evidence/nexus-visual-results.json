@@ -1,0 +1,57 @@
+[
+  {
+    "role": "superadmin",
+    "realNexusAuthentication": true,
+    "homeWidths": [
+      1440,
+      820,
+      390
+    ],
+    "themes": [
+      "dark",
+      "light"
+    ],
+    "runtimeErrors": 0
+  },
+  {
+    "role": "teacher",
+    "realNexusAuthentication": true,
+    "homeWidths": [
+      1440,
+      820,
+      390
+    ],
+    "themes": [
+      "dark",
+      "light"
+    ],
+    "runtimeErrors": 0
+  },
+  {
+    "role": "student",
+    "realNexusAuthentication": true,
+    "homeWidths": [
+      1440,
+      820,
+      390
+    ],
+    "themes": [
+      "dark",
+      "light"
+    ],
+    "runtimeErrors": 0
+  },
+  {
+    "name": "Responsive timetable",
+    "widths": [
+      1440,
+      820,
+      390,
+      320
+    ],
+    "themes": [
+      "dark",
+      "light"
+    ]
+  }
+]

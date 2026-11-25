@@ -3,12 +3,12 @@ import { uiText } from "../uiText";
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import { BulkImportLink } from "../components/BulkImportLink";
 import DateSelect from '../components/DateSelect';
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, Edit3, Eye, FileSpreadsheet, FileText, KeyRound, Printer, Trash2, X } from "lucide-react";
 import { SearchField } from "../components/SearchField";
 import { schoolBranding } from "../config/branding";
-import { api, getCachedApiResponse } from "../services/api";
+import { api, getCachedApiResponse, peekApiResponse } from "../services/api";
 import { exportWorkbook } from "../utils/financeExcel";
 import { exportElementToPdf } from "../utils/pdfDocument";
 import { printHtmlDocument } from "../utils/printDocument";
@@ -1414,7 +1414,7 @@ function StudentDeleteModal({ student, deleting, onConfirm, onClose }: { student
 export function StudentsDirectoryPage() {
   const { lang } = useI18n();
   const L = (fr: string, en: string) => localize(lang, fr, en);
-  const cachedDirectory = getCachedApiResponse<SharedDirectoryResponse>("/api/shared-directory");
+  const cachedDirectory = peekApiResponse<SharedDirectoryResponse>("/api/shared-directory") ?? getCachedApiResponse<SharedDirectoryResponse>("/api/shared-directory");
   const [directory, setDirectory] = useState<SharedDirectoryResponse | null>(() => cachedDirectory ? normalizeDirectoryForUi(cachedDirectory) : null);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [catalog, setCatalog] = useState<FinanceCatalog | null>(null);
@@ -1434,40 +1434,42 @@ export function StudentsDirectoryPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const load = async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-      setApiError(null);
-    }
-
-    const [directoryResult, classesResult, catalogResult] = await Promise.allSettled([
-      withTimeout(api<SharedDirectoryResponse>("/api/shared-directory"), 20000, "shared-directory"),
-      api<SchoolClass[]>("/api/classes"),
-      api<FinanceCatalog>("/api/finance/catalog")
-    ]);
-
-    if (directoryResult.status === "fulfilled") {
-      setDirectory(normalizeDirectoryForUi(directoryResult.value));
-    } else {
-      const message = directoryResult.reason instanceof Error ? directoryResult.reason.message : "Impossible de charger l'annuaire des élèves.";
-      if (!message.toLowerCase().includes("timeout")) {
-        setApiError(message);
-      }
-    }
-
-    setClasses(classesResult.status === "fulfilled" && classesResult.value.length ? classesResult.value : SCHOOL_SECTIONS);
-    if (catalogResult.status === "fulfilled") setCatalog(catalogResult.value);
-    if (!silent) setLoading(false);
+  const loadRevision = useRef(0);
+  const mounted = useRef(false);
+  const inFlightRefresh = useRef<Promise<void> | null>(null);
+  const load = (silent = false): Promise<void> => {
+    if (inFlightRefresh.current) return inFlightRefresh.current;
+    const request = ++loadRevision.current;
+    if (!silent && !directory) setLoading(true);
+    if (!silent) setApiError(null);
+    // Render the directory independently. A slow finance catalogue must never hide learners.
+    const directoryTask = withTimeout(api<SharedDirectoryResponse>("/api/shared-directory"), 20000, "shared-directory")
+      .then(value => { if (mounted.current && request === loadRevision.current) { setDirectory(normalizeDirectoryForUi(value)); setApiError(null); } })
+      .catch(error => { if (mounted.current && request === loadRevision.current) setApiError(error instanceof Error ? error.message : L("Impossible de charger l'annuaire.", "Unable to load the directory.")); })
+      .finally(() => { if (mounted.current && request === loadRevision.current) setLoading(false); });
+    void api<SchoolClass[]>("/api/classes").then(value => {
+      if (mounted.current && request === loadRevision.current) setClasses(value.length ? value : SCHOOL_SECTIONS);
+    }).catch(() => { if (mounted.current && request === loadRevision.current) setClasses(current => current.length ? current : SCHOOL_SECTIONS); });
+    void api<FinanceCatalog>("/api/finance/catalog").then(value => {
+      if (mounted.current && request === loadRevision.current) setCatalog(value);
+    }).catch(() => {});
+    const pending = directoryTask.finally(() => { if (inFlightRefresh.current === pending) inFlightRefresh.current = null; });
+    inFlightRefresh.current = pending;
+    return pending;
   };
 
   useEffect(() => {
+    mounted.current = true;
     void load();
-    const refresh = () => void load(true);
+    const refresh = () => { if (document.visibilityState === "visible") void load(true); };
     const timer = window.setInterval(refresh, 30000);
-    window.addEventListener('focus', refresh);
+    window.addEventListener("focus", refresh);
     return () => {
+      mounted.current = false;
+      inFlightRefresh.current = null;
+      loadRevision.current++;
       window.clearInterval(timer);
-      window.removeEventListener('focus', refresh);
+      window.removeEventListener("focus", refresh);
     };
   }, []);
 

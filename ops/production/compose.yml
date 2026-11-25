@@ -107,12 +107,12 @@ services:
     <<: *service-defaults
     image: kcs/nexus-api:${NEXUS_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge, kcs_private]
-    env_file: /etc/kcs-orbit/nexus-api.env
+    env_file: [/etc/kcs-orbit/nexus-api.env, /etc/kcs-orbit/jury.env]
     environment:
       NEXUS_UPLOADS_DIR: /app/uploads
       SAVANEX_API_URL: http://savanex-api:8000
       REPORT_PDF_RENDERER_SOCKET: /run/kcs-report/renderer.sock
-    volumes: [nexus_uploads:/app/uploads, nexus_report_socket:/run/kcs-report:ro]
+    volumes: [nexus_uploads:/app/uploads, nexus_report_socket:/run/kcs-report:ro, jury_private_files:/jury-private]
     depends_on: { nexus_db: { condition: service_healthy }, orbit_api: { condition: service_started }, nexus_report_renderer: { condition: service_healthy } }
     healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
 
@@ -136,6 +136,19 @@ services:
     networks: [kcs_edge]
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
 
+
+  jury_web:
+    image: kcs/jury-web:${JURY_WEB_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
+    restart: unless-stopped
+    networks: [kcs_edge]
+    read_only: true
+    user: "101:101"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 100
+    mem_limit: 128m
+    tmpfs: ["/tmp:size=32m,mode=1777", "/var/cache/nginx:size=16m,mode=1777"]
+    healthcheck: {test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"], interval: 15s, timeout: 5s, retries: 10}
 
   kitchen_api:
     <<: *service-defaults
@@ -263,6 +276,7 @@ volumes:
   sentinel_db_data:
   redis_data:
   nexus_uploads:
+  jury_private_files:
   nexus_report_socket:
   edupay_receipts:
   savanex_media:

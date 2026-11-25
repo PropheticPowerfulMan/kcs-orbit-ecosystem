@@ -1,0 +1,31 @@
+[
+  {
+    "page": "EduPay Parents Management",
+    "widths": [
+      1440,
+      820,
+      390,
+      320
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "syntheticReadOnlyFixtures": true
+  },
+  {
+    "page": "Kitchen login,consumer,manager",
+    "widths": [
+      1440,
+      820,
+      390,
+      320
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "syntheticReadOnlyFixtures": true,
+    "financialMutations": 0
+  }
+]

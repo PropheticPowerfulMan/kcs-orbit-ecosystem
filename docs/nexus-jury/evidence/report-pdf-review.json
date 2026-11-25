@@ -1,0 +1,504 @@
+[
+  {
+    "file": "deliberation-en.pdf",
+    "pages": 2,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      },
+      {
+        "page": 2,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "deliberation-fr.pdf",
+    "pages": 2,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      },
+      {
+        "page": 2,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "excellence_certificate-en.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "excellence_certificate-fr.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "final_ranking-en.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "final_ranking-fr.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "gradebook_synchronization-en.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "gradebook_synchronization-fr.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "group_assessment-en.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "group_assessment-fr.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "individual_assessment-en.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "individual_assessment-fr.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "jury_appreciation_certificate-en.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "jury_appreciation_certificate-fr.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "jury_scoring-en.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "jury_scoring-fr.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "participation_certificate-en.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "participation_certificate-fr.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "project_attendance-en.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "project_attendance-fr.pdf",
+    "pages": 1,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "project_evaluation-en.pdf",
+    "pages": 2,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      },
+      {
+        "page": 2,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "project_evaluation-fr.pdf",
+    "pages": 2,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      },
+      {
+        "page": 2,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.9
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "download-attendance-en.pdf",
+    "pages": 5,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      },
+      {
+        "page": 2,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      },
+      {
+        "page": 3,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      },
+      {
+        "page": 4,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      },
+      {
+        "page": 5,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "download-attendance-fr.pdf",
+    "pages": 5,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      },
+      {
+        "page": 2,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      },
+      {
+        "page": 3,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      },
+      {
+        "page": 4,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      },
+      {
+        "page": 5,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "download-timetable-en.pdf",
+    "pages": 2,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      },
+      {
+        "page": 2,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  },
+  {
+    "file": "download-timetable-fr.pdf",
+    "pages": 2,
+    "pageChecks": [
+      {
+        "page": 1,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      },
+      {
+        "page": 2,
+        "qrCount": 1,
+        "qrTopFractions": [
+          0.825
+        ],
+        "footer": true
+      }
+    ],
+    "hasText": true
+  }
+]

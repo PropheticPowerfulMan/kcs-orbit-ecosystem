@@ -1,3 +1,4 @@
+import AcademicHomeWelcome from '@/components/shared/AcademicHomeWelcome'
 import SchoolHistoryCenter from '@/components/admin/SchoolHistoryCenter'
 import InstitutionalCredentialsDialog from '@/components/admin/InstitutionalCredentialsDialog'
 import { printAdminInstitutionalReport } from '@/utils/adminInstitutionalReportPrint'
@@ -3720,7 +3721,7 @@ const AdminDashboard = () => {
             activeSegment === 'reports' ? <AdminReportsHub administrativeReports={sectionView}/> : sectionView
           ) : (
             <>
-          <section data-admin-overview className="space-y-4">
+          <section data-admin-overview data-academic-home="superadmin" className="space-y-4"><AcademicHomeWelcome role="superadmin"/>
             <nav role="tablist" aria-label={language==='fr'?'Rubriques du tableau de bord':'Dashboard sections'} className="admin-overview-tabs">{([['overview',language==='fr'?'Vue d’ensemble':'Overview'],['operations',language==='fr'?'Études et opérations':'Academics and operations'],['governance',language==='fr'?'Pilotage et contrôles':'Governance and controls'],['community',language==='fr'?'Vie de la communauté':'Community']] as const).map(([key,label])=><button type="button" key={key} role="tab" id={'admin-tab-'+key} aria-controls={'admin-panel-'+key} aria-selected={dashboardTab===key} tabIndex={dashboardTab===key?0:-1} onClick={()=>setDashboardTab(key)} onKeyDown={event=>{const tabs=Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]')),index=tabs.indexOf(event.currentTarget);let next=-1;if(event.key==='ArrowRight')next=(index+1)%tabs.length;if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;if(event.key==='Home')next=0;if(event.key==='End')next=tabs.length-1;if(next>=0){event.preventDefault();tabs[next].click();tabs[next].focus()}}}><span className="admin-tab-dot" aria-hidden="true"/>{label}</button>)}</nav>
             <div id="admin-panel-overview" role="tabpanel" aria-labelledby="admin-tab-overview" hidden={dashboardTab!=='overview'} className="space-y-4">
           <div data-dashboard-stats className="admin-summary-metrics grid grid-cols-2 gap-3 lg:grid-cols-4">

@@ -1,3 +1,4 @@
+import {juryRouter} from './jury/routes.js'
 import {uploadRoot} from './utils/uploadStorage.js'
 import {publishedSchoolCalendarRouter} from './routes/published-school-calendar.routes.js'
 import cors from 'cors'
@@ -62,6 +63,7 @@ const trustedOrigins = new Set([
   'https://kinshasachristianschool.org',
   'https://kcsparentelection.kinshasachristianschool.org',
 ])
+if(process.env.JURY_ENABLED==='true'&&process.env.JURY_PUBLIC_URL)trustedOrigins.add(new URL(process.env.JURY_PUBLIC_URL).origin)
 app.use(cors({
   origin(origin, callback) {
     if (!origin || trustedOrigins.has(origin)) return callback(null, true)
@@ -86,6 +88,7 @@ app.get('/health', (_req, res) => {
 })
 
 app.use('/api/auth', authRateLimit(15 * 60 * 1000, 10))
+if(process.env.JURY_ENABLED==='true')app.use('/api/jury',juryRouter)
 app.use('/api', router)
 app.use(notFoundHandler)
 app.use(errorHandler)

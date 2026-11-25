@@ -1,0 +1,50 @@
+[
+  {
+    "file": "KCS_Nexus_Jury_Project_Presentation.pdf",
+    "sections": [
+      "KCS Nexus Jury",
+      "A fair stage for authentic learning",
+      "One institution. Clear responsibilities.",
+      "A precise assessment studio",
+      "Mathematics that remains explainable",
+      "Verified Gradebook publication",
+      "Built for institutional review"
+    ]
+  },
+  {
+    "file": "KCS_Nexus_Jury_Illustrated_User_Guide.pdf",
+    "sections": [
+      "Your guide to Nexus Jury",
+      "Open your authorized workspace",
+      "Administrator: assign the right authority",
+      "Principal and Senior Teacher",
+      "Teacher: create a project",
+      "Import learners and form groups",
+      "Build a transparent rubric",
+      "Choose judges and issue invitations",
+      "Jury member: assess independently",
+      "When the connection is interrupted",
+      "President and presentation control",
+      "Consolidate, approve and publish",
+      "Learner: build your portfolio",
+      "Reports, certificates and exports",
+      "Troubleshooting and safe completion"
+    ]
+  },
+  {
+    "file": "KCS_Nexus_Jury_Technical_Documentation.pdf",
+    "sections": [
+      "Architecture and delivery contract",
+      "Data model and referential integrity",
+      "Authentication and authorization",
+      "API: composition and evaluation",
+      "API: results and private evidence",
+      "Scoring and descriptive statistics",
+      "Gradebook transaction and persistence",
+      "Files, PWA and privacy",
+      "Notifications and family evidence",
+      "Deployment, backup and recovery",
+      "Verification and troubleshooting"
+    ]
+  }
+]

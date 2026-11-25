@@ -1,0 +1,29 @@
+{
+  "runId": "6df62a1d",
+  "results": [
+    {
+      "name": "twelve real canonical judges, eight quorum, four absent; weighted hybrid groups",
+      "status": "PASS"
+    },
+    {
+      "name": "multiple groups distribute the correct shared score to every member",
+      "status": "PASS"
+    },
+    {
+      "name": "real stale TeacherWorkspace revision blocks publication atomically",
+      "status": "PASS"
+    },
+    {
+      "name": "failed synchronization recovers with a fresh preview and idempotent retry",
+      "status": "PASS"
+    },
+    {
+      "name": "another genuine TeacherPortal save preserves all Jury marks",
+      "status": "PASS"
+    },
+    {
+      "name": "publication into an existing period column is previewed and explicitly approved",
+      "status": "PASS"
+    }
+  ]
+}

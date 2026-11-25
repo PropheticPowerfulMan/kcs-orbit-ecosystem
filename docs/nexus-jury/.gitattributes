@@ -1,0 +1,3 @@
+manuals/*.pdf binary
+*.json text eol=lf
+*.md text eol=lf

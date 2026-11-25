@@ -1,0 +1,106 @@
+:8080 {
+  header {
+    X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+    Cache-Control "no-store"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "no-referrer"
+    X-Frame-Options "DENY"
+    Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; frame-src 'self' https://www.google.com https://maps.google.com"
+  }
+
+  # KCS Nexus Jury preview: separate scope; original staging routes are preserved.
+  redir /jury /jury/ 308
+  redir /jury-nexus /jury-nexus/ 308
+  handle_path /jury-nexus/api/* {
+    rewrite * /api{path}
+    reverse_proxy jury_api:5000
+  }
+  handle_path /jury-nexus/* {
+    reverse_proxy jury_nexus_web:80
+  }
+  handle_path /jury/api/* {
+    rewrite * /api/jury{path}
+    reverse_proxy jury_api:5000
+  }
+  handle_path /jury/* {
+    reverse_proxy jury_web:8080
+  }
+
+  handle /healthz {
+    respond "staging gateway healthy" 200
+  }
+
+  handle /academy {
+    reverse_proxy academy:3000
+  }
+  handle /academy/* {
+    reverse_proxy academy:3000
+  }
+
+  # Compatibility for the two legacy absolute form actions still rendered by
+  # the Academy client. The Referer guard prevents any collision with EduPay.
+  handle /api/auth/institutional-login {
+    rewrite * /academy/api/auth/institutional-login
+    reverse_proxy academy:3000
+  }
+  @academyLogout {
+    path /api/auth/logout
+    header_regexp academy_ref Referer /academy
+  }
+  handle @academyLogout {
+    rewrite * /academy/api/auth/logout
+    reverse_proxy academy:3000
+  }
+  @academyLogin {
+    path /login
+    header_regexp academy_login_ref Referer /academy
+  }
+  redir @academyLogin /academy/login 303
+
+  handle /api/health {
+    rewrite * /health
+    reverse_proxy edupay_api:4000
+  }
+
+  handle /api/* {
+    reverse_proxy edupay_api:4000
+  }
+
+  redir /nexus /nexus/ 308
+  handle /nexus/api/health {
+    rewrite * /health
+    reverse_proxy nexus_api:5000
+  }
+  handle /nexus/api/* {
+    uri strip_prefix /nexus
+    reverse_proxy nexus_api:5000
+  }
+  handle_path /nexus/* {
+    reverse_proxy nexus_web:80
+  }
+
+  redir /kitchen /kitchen/ 308
+  handle /kitchen/api/health {
+    rewrite * /health
+    reverse_proxy kitchen_api:5100
+  }
+  handle /kitchen/api/* {
+    uri strip_prefix /kitchen
+    reverse_proxy kitchen_api:5100
+  }
+  handle_path /kitchen/* {
+    reverse_proxy kitchen_web:80
+  }
+  redir /savanex /savanex/ 308
+  handle /savanex/api/* {
+    uri strip_prefix /savanex
+    reverse_proxy savanex_api:8000
+  }
+  handle_path /savanex/* {
+    reverse_proxy savanex_web:80
+  }
+
+  handle {
+    reverse_proxy edupay_web:80
+  }
+}

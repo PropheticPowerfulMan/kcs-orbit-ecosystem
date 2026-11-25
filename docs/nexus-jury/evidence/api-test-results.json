@@ -1,0 +1,59 @@
+{
+  "runId": "71e0094e",
+  "results": [
+    {
+      "name": "health and canonical Nexus SSO",
+      "status": "PASS"
+    },
+    {
+      "name": "institutional launch preview cannot replace a session and requires explicit target identity",
+      "status": "PASS"
+    },
+    {
+      "name": "create project and import canonical roster",
+      "status": "PASS"
+    },
+    {
+      "name": "custom rubric version and three independent judges",
+      "status": "PASS"
+    },
+    {
+      "name": "zero is persisted, missing stays incomplete, stale drafts conflict",
+      "status": "PASS"
+    },
+    {
+      "name": "parallel independent evaluations and duplicate submit protection",
+      "status": "PASS"
+    },
+    {
+      "name": "immutable rubric and unauthorized access protection",
+      "status": "PASS"
+    },
+    {
+      "name": "consolidation, approval and unchanged marks",
+      "status": "PASS"
+    },
+    {
+      "name": "Gradebook preview converts 100 to 20 without writing",
+      "status": "PASS"
+    },
+    {
+      "name": "atomic publication, duplicate retry and actual Gradebook read-back",
+      "status": "PASS"
+    },
+    {
+      "name": "refresh and new-session persistence",
+      "status": "PASS"
+    },
+    {
+      "name": "controlled evaluation reopening preserves the previous Gradebook receipt",
+      "status": "PASS"
+    },
+    {
+      "name": "professional PDF generation from persisted academic data",
+      "status": "PASS"
+    }
+  ],
+  "projectId": "98586d36-02e5-4810-b2ed-473cc1cba48b",
+  "publicationId": "ba9a5e62-c0f5-45f6-bbad-2cff69a9fe8b"
+}

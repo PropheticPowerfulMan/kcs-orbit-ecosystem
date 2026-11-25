@@ -1,0 +1,6 @@
+{
+  "test": "Fixture refuses non-QA database before constructing Prisma or reading secrets",
+  "network": "none",
+  "expectedFailure": true,
+  "status": "PASS"
+}

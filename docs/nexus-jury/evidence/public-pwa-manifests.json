@@ -1,0 +1,34 @@
+{
+  "publicReadOnly": true,
+  "checks": [
+    {
+      "url": "https://kinshasachristianschool.org/",
+      "manifestUrl": "https://kinshasachristianschool.org/manifest.webmanifest",
+      "id": "./",
+      "scope": "./",
+      "startUrl": "./",
+      "display": "standalone",
+      "http": 200
+    },
+    {
+      "url": "https://kcsparentelection.kinshasachristianschool.org/",
+      "manifestUrl": "https://kcsparentelection.kinshasachristianschool.org/manifest.webmanifest",
+      "id": "kcs-parent-election",
+      "scope": "./",
+      "startUrl": "./",
+      "display": "standalone",
+      "http": 200
+    },
+    {
+      "url": "https://academy.kinshasachristianschool.org/",
+      "manifestUrl": "https://academy.kinshasachristianschool.org/manifest.webmanifest",
+      "id": "./",
+      "scope": "./",
+      "startUrl": "./",
+      "display": "standalone",
+      "http": 200
+    }
+  ],
+  "nativeOSCapture": "MANUAL_NOT_VERIFIED",
+  "sourceLaunchBehavior": "Canonical allowlisted origin/path; openerless new-context handoff; manual fallback after user activation expiry"
+}

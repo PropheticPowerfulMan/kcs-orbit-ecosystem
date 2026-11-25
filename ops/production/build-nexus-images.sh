@@ -10,5 +10,5 @@ ensure_api_path() { local value="${1%/}"; [[ "$value" == */api ]] && printf '%s'
 NEXUS_API_URL="$(ensure_api_path "$NEXUS_API_URL")"
 
 docker build -f "$ROOT_DIR/ops/staging/docker/nexus-api.Dockerfile" -t "kcs/nexus-api:$RELEASE" "$ROOT_DIR"
-docker build --build-arg "VITE_API_URL=$NEXUS_API_URL" -t "kcs/nexus-web:$RELEASE" "$ROOT_DIR/KCS Nexus/frontend"
+docker build --build-arg "VITE_API_URL=$NEXUS_API_URL" --build-arg "VITE_JURY_ENABLED=${JURY_ENABLED:-false}" --build-arg "VITE_JURY_PUBLIC_URL=${JURY_PUBLIC_URL:-}" -t "kcs/nexus-web:$RELEASE" "$ROOT_DIR/KCS Nexus/frontend"
 printf '%s\n' "$RELEASE"

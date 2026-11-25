@@ -1,0 +1,33 @@
+{
+  "runId": "f23bc9f0",
+  "results": [
+    {
+      "name": "inventory includes unsent expected recipients and distinguishes queue, active sending and failures",
+      "status": "PASS"
+    },
+    {
+      "name": "SMTP acceptance, manual delivered status and legacy acknowledgement cannot prove exact PDF receipt",
+      "status": "PASS"
+    },
+    {
+      "name": "signed personal receipt requires both email and PDF acknowledgements and is idempotent",
+      "status": "PASS"
+    },
+    {
+      "name": "latest resend is pending while previous confirmed copy remains traceable in history",
+      "status": "PASS"
+    },
+    {
+      "name": "Kitchen consumer password shortcut uses independent application credentials",
+      "status": "PASS"
+    }
+  ],
+  "cards": [
+    "qa-rc-f23bc9f0-1",
+    "qa-rc-f23bc9f0-2",
+    "qa-rc-f23bc9f0-3",
+    "qa-rc-f23bc9f0-4",
+    "qa-rc-f23bc9f0-5",
+    "qa-rc-f23bc9f0-6"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "run": "b7ae53e7",
+  "results": [
+    {
+      "name": "direct-fr",
+      "status": "PASS",
+      "addresses": 4,
+      "perAddressEvidence": true
+    },
+    {
+      "name": "targeted-en",
+      "status": "PASS",
+      "addresses": 4,
+      "perAddressEvidence": true
+    },
+    {
+      "name": "broadcast-fr",
+      "status": "PASS",
+      "addresses": 4,
+      "perAddressEvidence": true
+    },
+    {
+      "name": "report-fr",
+      "status": "PASS",
+      "addresses": 4,
+      "perAddressEvidence": true
+    },
+    {
+      "name": "report-en",
+      "status": "PASS",
+      "addresses": 4,
+      "perAddressEvidence": true
+    }
+  ],
+  "cardId": "cmww4j43w000hlnqzvziehygd"
+}

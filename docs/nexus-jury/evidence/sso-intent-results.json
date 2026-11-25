@@ -1,0 +1,12 @@
+{
+  "results": [
+    {
+      "name": "An attacker-owned ticket cannot silently replace the existing browser identity; cancellation preserves it",
+      "status": "PASS"
+    },
+    {
+      "name": "Explicitly confirmed legitimate account switching still works",
+      "status": "PASS"
+    }
+  ]
+}

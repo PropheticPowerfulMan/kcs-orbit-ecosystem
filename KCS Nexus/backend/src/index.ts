@@ -1,3 +1,4 @@
+import {startJuryWorkers} from './jury/worker.js'
 import {startMediaUploadCleanup} from './services/mediaUpload.service.js'
 import { startAcademicAutoClosureWorker } from './services/academicAutoClosure.service.js'
 import {startRegistryMirrorReconciliation} from './services/registryMirror.service.js'
@@ -25,6 +26,7 @@ const start = async () => {
     startMediaUploadCleanup()
     startSentinelStaffAttendanceSync()
     startRegistryMirrorReconciliation()
+    if(process.env.JURY_ENABLED==='true')startJuryWorkers()
   } catch (error) {
     setDatabaseReady(false)
     console.error('KCS Nexus database unavailable; starting API in degraded mode.', error)
