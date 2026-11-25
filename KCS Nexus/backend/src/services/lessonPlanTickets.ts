@@ -8,6 +8,7 @@ export type PlannerIdentity = {
   lastName: string;
   role: string;
   accessRoles: string[];
+  workspace?: "superadmin"|"principal"|"senior"|"teacher"|"student";
 };
 export type PlannerPurpose = "login" | "academy-read";
 export function createPlannerTickets(now = () => Date.now()) {

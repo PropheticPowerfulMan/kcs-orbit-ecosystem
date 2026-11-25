@@ -1,4 +1,5 @@
 const fr: Record<string, string> = {
+  "Senior Teacher · ST":"Responsable pédagogique · ST","Senior Teacher · ST Dashboard":"Tableau de bord pédagogique · ST",
   "Dashboard":"Tableau de bord","Curriculum":"Programme scolaire","Search":"Rechercher","Install App":"Installer l'application","New Lesson Plan":"Nouveau plan de leçon",
   "Toggle language":"Changer de langue","Toggle theme":"Changer de thème","Switch to French":"Passer en français","Switch to light theme":"Passer au thème clair","Switch to dark theme":"Passer au thème sombre",
   "Account security":"Sécurité du compte","Account Security":"Sécurité du compte","Logout":"Se déconnecter","KCS Lesson Planner":"Planificateur de leçons KCS","A4 print-ready":"Prêt pour l'impression A4",

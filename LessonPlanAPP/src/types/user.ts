@@ -5,6 +5,7 @@ export type UserStatus = "active" | "inactive";
 export type AuthMode = "cloud" | "local";
 
 export interface UserProfile {
+  institutionalWorkspace?: string;
   id: string;
   name: string;
   email: string;
@@ -54,3 +55,5 @@ export const roleLabels: Record<UserRole, string> = {
   "head-of-department": "Head of Department",
   teacher: "Teacher"
 };
+
+export const userRoleLabel=(user:Pick<UserProfile,"role"|"institutionalWorkspace">)=>user.institutionalWorkspace==="senior"&&user.role==="vice-principal"?"Senior Teacher · ST":roleLabels[user.role];

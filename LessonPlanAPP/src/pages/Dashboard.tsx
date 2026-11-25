@@ -1,3 +1,4 @@
+import {userRoleLabel} from "../types/user";
 import { motion } from "framer-motion";
 import {
   Activity,
@@ -83,7 +84,7 @@ export const Dashboard = () => {
   const calendar = useMemo(() => buildCalendar(new Date(), lessons), [lessons]);
   const context: DashboardContext = { lessons, users, currentUser, authMode, updateProfile, deleteUser, resetPassword, setUserPassword, navigate, createLesson, stats, recentActivity, upcoming, calendar };
 
-  const roleTitle = currentUser.role === "head-of-department" ? "HOD Dashboard" : `${roleLabels[currentUser.role]} Dashboard`;
+  const roleTitle = currentUser.role === "head-of-department" ? "HOD Dashboard" : `${userRoleLabel(currentUser)} Dashboard`;
 
   return (
     <div className="ep-dashboard space-y-6">

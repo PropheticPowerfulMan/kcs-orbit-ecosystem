@@ -1,3 +1,4 @@
+import {academicWorkspaceFor} from '../utils/academicApplicationAccess.js'
 import {readLessonPlanDashboardPhoto} from '../services/lessonPlanDashboardPhoto.js'
 import {assertAccountAccess} from '../services/accountAccess.service.js'
 import {plannerTickets} from '../services/lessonPlanTickets.js'
@@ -16,18 +17,24 @@ lessonPlanRouter.post('/launch', authenticate, requireRoles('teacher', 'staff', 
   if (!user || (!isTeacher && user.role !== 'ADMIN')) throw new ApiError(403, 'EduPlanner access is not enabled for this identity')
   if (!user.email) throw new ApiError(409, 'This institutional identity does not have an email address')
   await assertAccountAccess(user.id)
-  const ticket=plannerTickets.issue({userId:user.id,email:user.email,firstName:user.firstName,middleName:user.middleName,lastName:user.lastName,role:user.role,accessRoles})
+  const ticket=plannerTickets.issue({userId:user.id,email:user.email,firstName:user.firstName,middleName:user.middleName,lastName:user.lastName,role:user.role,accessRoles,workspace:academicWorkspaceFor(user,req.user!.sub==='configured-superadmin')||undefined})
   return success(res, { url: `/lesson-plan/#/sso?ticket=${encodeURIComponent(ticket)}` })
 }))
 lessonPlanRouter.post('/exchange', asyncHandler(async (req, res) => {
   const identity=plannerTickets.consume(req.body?.ticket)
   await assertAccountAccess(identity.userId)
-  return success(res,identity)
+  const user=await prisma.user.findUnique({where:{id:identity.userId},include:{teacherProfile:true}})
+  const workspace=academicWorkspaceFor(user,Boolean(user&&process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase()))
+  if(!user||!workspace||workspace==='student')throw new ApiError(403,'Eduplanner access is not enabled for this identity')
+  return success(res,{...identity,role:user.role,workspace})
 }))
 lessonPlanRouter.post('/academy-exchange',asyncHandler(async(req,res)=>{
  const identity=plannerTickets.consume(req.body?.ticket,'academy-read')
- await assertAccountAccess(identity.userId)
- return success(res,identity)
+  await assertAccountAccess(identity.userId)
+  const user=await prisma.user.findUnique({where:{id:identity.userId},include:{teacherProfile:true}})
+  const workspace=academicWorkspaceFor(user,Boolean(user&&process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase()))
+  if(!user||!workspace||workspace==='student')throw new ApiError(403,'Eduplanner access is not enabled for this identity')
+  return success(res,{...identity,role:user.role,workspace})
 }))
 
 // Eduplanner supplies its own session; only its server-verified link chooses the Nexus account.

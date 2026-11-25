@@ -1,3 +1,4 @@
+import {synchronizeAcademicProfile} from './academicProfileRole.mjs';
 import {readAcademyPlans} from './academyPlans.mjs';
 import {verifiedSessionAccess} from './sessionAccess.mjs';
 import {institutionalLogin} from './institutionalLogin.mjs';
@@ -234,8 +235,13 @@ const ecosystemSso = async (body) => {
   }
   const identity = {...nexusBody.data, id: nexusBody.data.id || nexusBody.data.userId};
   if (!identity.id || !identity.email) throw new Error("The institutional launch identity is incomplete.");
-  const { email } = await ensureSupabaseProfile(identity);
-  return createSupabaseSession(email);
+  const { email,profile } = await ensureSupabaseProfile(identity);
+  const admin=requireSupabaseAdmin();
+  const scope=await synchronizeAcademicProfile(identity,profile,{
+    readBinding:async id=>{const r=await admin.auth.admin.getUserById(id);if(r.error)throw r.error;return r.data.user;},
+    updateRole:async(id,role)=>{const r=await admin.from('profiles').update({role,updated_at:new Date().toISOString()}).eq('id',id).select('id,role').single();if(r.error)throw r.error;},
+  });
+  return {...await createSupabaseSession(email),institutional_workspace:scope.workspace};
 };
 
 const server = http.createServer(async (request, response) => {

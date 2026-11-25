@@ -1,3 +1,5 @@
+import {readNexusAcademySession} from '../services/academyNexusSessions.js'
+import {academicWorkspaceFor} from '../utils/academicApplicationAccess.js'
 import {Router} from 'express'
 import {Prisma} from '@prisma/client'
 import multer from 'multer'
@@ -7,7 +9,6 @@ import {env} from '../config/env.js'
 import {authenticate,type AuthenticatedRequest} from '../middleware/auth.js'
 import {asyncHandler,ApiError,success} from '../utils/api.js'
 import {assertAccountAccess} from '../services/accountAccess.service.js'
-import {hasSeniorWorkspaceAccess} from '../utils/staffWorkspace.js'
 import {academicCalendars} from '../services/reportAttendance.service.js'
 import {databaseActorId} from '../utils/databaseActor.js'
 import {z} from 'zod'
@@ -33,6 +34,8 @@ pedagogyRouter.use(asyncHandler(async(req:AuthenticatedRequest,res,next)=>{
  if(req.path.startsWith('/academy/')){
   const a=Buffer.from(req.header('x-api-key')||''),b=Buffer.from(env.ACADEMY_INTEGRATION_KEY||'')
   if(!b.length||a.length!==b.length||!timingSafeEqual(a,b))throw new ApiError(401,'PEDAGOGY_SESSION_REQUIRED')
+  const native=await readNexusAcademySession(req.header('x-academy-session'));
+  if(native){req.user={sub:native.nexusUserId,role:'admin'};req.url=req.url.replace(/^\/academy/,'');return next()}
   const r=await fetch((env.KCS_ORBIT_API_URL||'').replace(/\/$/,'')+'/api/academy/sso/validate',{method:'POST',headers:{'content-type':'application/json','x-api-key':env.ACADEMY_INTEGRATION_KEY!},body:JSON.stringify({token:req.header('x-academy-session')}),signal:AbortSignal.timeout(8000)})
   const identity=await r.json().catch(()=>null) as any
   if(!r.ok||identity?.organizationId!==env.KCS_ORBIT_ORGANIZATION_ID||!(identity.sourceIdentityId||identity.orbitId))throw new ApiError(401,'PEDAGOGY_SESSION_REQUIRED')
@@ -46,7 +49,8 @@ pedagogyRouter.use(asyncHandler(async(req:AuthenticatedRequest,res,next)=>{
  const a=await assertAccountAccess(req.user!.sub)
  const u=req.user!.sub==='configured-superadmin'?{id:req.user!.sub,role:'ADMIN',permissions:[] as string[],teacherProfile:null}:await prisma.user.findUnique({where:{id:req.user!.sub},include:{teacherProfile:true}})
  if(!u||u.permissions.includes('nexus:media-only'))throw new ApiError(403,'PEDAGOGY_ACCESS_REQUIRED')
- res.locals.actor=u;res.locals.manager=req.user!.sub==='configured-superadmin'||hasSeniorWorkspaceAccess(u);res.set('Cache-Control','private, no-store');next()
+ const workspace=academicWorkspaceFor(u,req.user!.sub==='configured-superadmin'||Boolean('email'in u&&process.env.SUPERADMIN_EMAIL&&String(u.email).toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase()));
+ res.locals.actor=u;res.locals.manager=Boolean(workspace&&['superadmin','principal','senior'].includes(workspace));res.set('Cache-Control','private, no-store');next()
 }))
 async function scope(req:any){const calendars=await academicCalendars({strict:true}),active=calendars.find(c=>c.isCurrent),academicYear=year.parse(req.query.academicYear||active?.name),semester=z.coerce.number().int().min(1).max(2).parse(req.query.semester||1);return{academicYear,semester,activeYear:active?.name,calendars}}
 const headKey=(s:any,c:string)=>`pedagogy:${s.academicYear}:${s.semester}:${c}`

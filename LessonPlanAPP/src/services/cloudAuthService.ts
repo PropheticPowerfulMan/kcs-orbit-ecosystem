@@ -11,6 +11,7 @@ const configuredFederatedSsoUrl = (import.meta.env.VITE_FEDERATED_SSO_URL as str
 const sessionKey = "powerful-lesson-planner:supabase-session";
 
 interface SupabaseSession {
+  institutional_workspace?: string;
   access_token: string;
   refresh_token: string;
   user: { id: string; email?: string };
@@ -34,6 +35,7 @@ interface StoredSession {
   accessToken: string;
   refreshToken: string;
   userId: string;
+  workspace?: string;
 }
 
 const hasUsableCloudConfig = Boolean(
@@ -94,7 +96,8 @@ const writeSession = (session: SupabaseSession) => {
   localStorage.setItem(sessionKey, JSON.stringify({
     accessToken: session.access_token,
     refreshToken: session.refresh_token,
-    userId: session.user.id
+    userId: session.user.id,
+    workspace: session.institutional_workspace || (readSession()?.userId===session.user.id?readSession()?.workspace:undefined)
   }));
 };
 
@@ -121,6 +124,7 @@ const toProfile = (row: Record<string, unknown>): UserProfile => ({
   name: String(row.name || ""),
   email: String(row.email || ""),
   role: String(row.role || "teacher") as UserRole,
+  institutionalWorkspace: readSession()?.userId === String(row.id) ? readSession()?.workspace : undefined,
   department: String(row.department || ""),
   subjects: Array.isArray(row.subjects) ? row.subjects.map(String) : [],
   gradeClasses: Array.isArray(row.grade_classes) ? row.grade_classes.map(String) : [],
