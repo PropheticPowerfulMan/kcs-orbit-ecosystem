@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exact, backed-up five-service Jury lot rollout; production operator invocation only."""
 from pathlib import Path
-import argparse,base64,datetime,fcntl,hashlib,json,os,re,secrets,shlex,shutil,subprocess,sys,urllib.request
+import argparse,base64,datetime,fcntl,hashlib,json,os,re,secrets,shlex,shutil,subprocess,sys,time,urllib.request
 ap=argparse.ArgumentParser();ap.add_argument('--release',required=True);ap.add_argument('--confirmation',required=True);ap.add_argument('--preflight',required=True);a=ap.parse_args()
 assert os.geteuid()==0,'Run with the authorized production administrator'
 assert re.fullmatch('[0-9a-f]{40}',a.release)and a.confirmation=='DEPLOY_JURY_TARGETED','Explicit exact release confirmation required'
@@ -87,8 +87,16 @@ try:
  run(compose+['up','-d','--no-build','--no-deps','--force-recreate','proxy'])
  preserved=preserve_others();checks=[]
  for url in ['https://kinshasachristianschool.org/','https://kinshasachristianschool.org/jury/','https://kinshasachristianschool.org/jury/api/health','https://kinshasachristianschool.org/kitchen/','https://kinshasachristianschool.org/sentinel/','https://edupay.kinshasachristianschool.org/','https://academy.kinshasachristianschool.org/','https://kcsparentelection.kinshasachristianschool.org/']:
-  with urllib.request.urlopen(url,timeout=20)as response:
-   assert response.status==200;checks.append({'url':url,'status':200})
+  # A recreated proxy is not immediately ready to accept TLS connections.
+  # Retry readiness; a persistent failure still triggers the same targeted rollback.
+  for attempt in range(20):
+   try:
+    with urllib.request.urlopen(url,timeout=5)as response:
+     assert response.status==200
+    checks.append({'url':url,'status':200,'readinessAttempts':attempt+1});break
+   except (OSError,AssertionError):
+    if attempt==19:raise
+    time.sleep(2)
  after=canonical_fingerprints();(backup/'academic.after.json').write_text(json.dumps(after));same=before==after
  # Concurrent genuine teacher edits are reported for review, never overwritten.
  assert all(after[t]['rows']>=before[t]['rows']for t in before),'An existing academic table lost rows'
