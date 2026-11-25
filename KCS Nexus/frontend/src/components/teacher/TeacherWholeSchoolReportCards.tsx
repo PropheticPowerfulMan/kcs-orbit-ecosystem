@@ -1,3 +1,4 @@
+import './TeacherWholeSchoolReportCards.css';
 import {useAcademicCycleSelection} from '@/hooks/useAcademicCycleSelection'
 import AcademicCycleNotice from '@/components/shared/AcademicCycleNotice'
 import { confirmPortalAction } from '@/utils/portalActionDialogs';
@@ -139,6 +140,8 @@ export default function TeacherWholeSchoolReportCards() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(() => readReportDashboardCache(userId, '2026-2027', sessions[0]));
   const [selectedId, setSelectedId] = useState('');
   const [query, setQuery] = useState('');
+  const [recordSection, setRecordSection] = useState<'subjects'|'review'>('subjects');
+  const [directoryExpanded, setDirectoryExpanded] = useState(()=>window.matchMedia('(min-width:1024px)').matches);
   const [classFilter, setClassFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'ready' | 'homeroom' | 'submitted'>('all');
   const [teacherComment, setTeacherComment] = useState('');
@@ -597,16 +600,16 @@ export default function TeacherWholeSchoolReportCards() {
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
-        <div className={`${panel} max-h-[760px] overflow-auto p-3`}>
-          <div className="mb-3 flex items-center justify-between px-2">
-            <h3 className="font-bold text-kcs-blue-950 dark:text-white">Learner directory</h3>
+      <div className="report-record-workspace grid items-start gap-5 lg:grid-cols-[minmax(220px,.34fr)_minmax(0,1fr)]">
+        <details open={directoryExpanded} onToggle={event=>setDirectoryExpanded(event.currentTarget.open)} className={`${panel} report-learner-directory min-w-0 self-start p-3`}>
+          <summary className="report-directory-heading flex cursor-pointer items-center justify-between gap-2 px-2 py-1">
+            <span className="min-w-0 font-bold text-kcs-blue-950 dark:text-white">{tr('Répertoire des élèves','Learner directory')}<small className="report-directory-selection">{selected?.name||tr('Choisir un élève','Choose a learner')}</small></span>
             <span className="text-xs font-bold text-gray-500">{visibleLearners.length}</span>
-          </div>
-          <div className="space-y-2">
+          </summary>
+          <div className="report-directory-list mt-3 space-y-2" role="region" aria-label={tr('Liste des élèves','Learner list')} tabIndex={0}>
       {periodReadOnly && <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{language === 'fr' ? 'Cette période est clôturée. Le bulletin est en lecture seule.' : 'This academic period is closed. Its report-card content is read-only.'}</p>}
             {visibleLearners.map((learner) => (
-              <button type="button" key={learner.id} onClick={() => setSelectedId(learner.id)} className={`w-full rounded-xl border p-3 text-left transition ${selected?.id === learner.id ? 'border-kcs-blue-500 bg-kcs-blue-50 ring-2 ring-kcs-blue-100 dark:bg-kcs-blue-950' : 'border-gray-100 hover:border-kcs-blue-200 dark:border-kcs-blue-800'}`}>
+              <button type="button" key={learner.id} onClick={() => {setSelectedId(learner.id);if(window.matchMedia('(max-width:1023px)').matches)setDirectoryExpanded(false)}} aria-current={selected?.id === learner.id ? 'true' : undefined} className={`w-full rounded-xl border p-3 text-left transition ${selected?.id === learner.id ? 'border-kcs-blue-500 bg-kcs-blue-50 ring-2 ring-kcs-blue-100 dark:bg-kcs-blue-950' : 'border-gray-100 hover:border-kcs-blue-200 dark:border-kcs-blue-800'}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-bold text-kcs-blue-950 dark:text-white">{learner.name}</p>
@@ -627,9 +630,9 @@ export default function TeacherWholeSchoolReportCards() {
             ))}
             {!visibleLearners.length && <p className="p-6 text-center text-sm text-gray-500">No learner matches these filters.</p>}
           </div>
-        </div>
+        </details>
 
-        <div className={panel}>
+        <div className={`${panel} report-record-editor min-w-0`}>
           {!selected ? (
             <p className="py-16 text-center text-sm text-gray-500">Select a learner to open the complete report-card file.</p>
           ) : (
@@ -660,6 +663,11 @@ export default function TeacherWholeSchoolReportCards() {
                 </div>
               </div>
 
+              <nav className="report-record-navigation" aria-label={tr('Parties du bulletin','Report card sections')}>
+                <button type="button" aria-pressed={recordSection==='subjects'} aria-controls="report-record-subjects" onClick={()=>setRecordSection('subjects')}><GraduationCap size={17}/>{tr('Cours et résultats','Courses & results')}<span>{selected.subjects.length}</span></button>
+                <button type="button" aria-pressed={recordSection==='review'} aria-controls="report-record-review" onClick={()=>setRecordSection('review')}><FileCheck2 size={17}/>{tr('Commentaires et présence','Comments & attendance')}</button>
+              </nav>
+              <div hidden={recordSection!=='subjects'}>
               <section data-submission-trace className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-kcs-blue-950">
                 <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-black text-kcs-blue-950 dark:text-sky-100">{tr('Envois à la Super Administration','Submissions to Super Administration')}</h4><span data-submission-count className="rounded-full bg-kcs-blue-700 px-3 py-1 text-xs font-black text-white">{selected.reportCard?.submissionHistory ? tr('Envois réussis : ','Successful submissions: ')+selected.reportCard.submissionHistory.count : selected.reportCard ? tr('Historique en cours de chargement','Submission history loading') : tr('Aucun envoi','Not yet submitted')}</span></div>
                 {selected.reportCard?.submissionHistory?.count ? <>
@@ -690,7 +698,8 @@ export default function TeacherWholeSchoolReportCards() {
                 </div>
               </div>
 
-              <div className="mt-5 overflow-hidden rounded-xl border border-gray-200 dark:border-kcs-blue-700">
+              </div>
+              <div id="report-record-subjects" hidden={recordSection!=='subjects'} className="mt-5 overflow-hidden rounded-xl border border-gray-200 dark:border-kcs-blue-700">
                 <div className="flex flex-col gap-3 border-b bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
                   <div>
                     <h4 className="font-bold text-kcs-blue-950 dark:text-white">Subject contributions from all teachers</h4>
@@ -704,7 +713,7 @@ export default function TeacherWholeSchoolReportCards() {
                     </button>
                   </div>}
                 </div>
-                <div className="overflow-x-auto">
+                <div className="report-subject-scroll overflow-auto" role="region" aria-label={tr('Cours et résultats de l’élève','Learner courses and results')} tabIndex={0}>
                   <table className="w-full min-w-[820px] text-sm">
                     <thead className="bg-kcs-blue-950 text-left text-xs uppercase text-white">
                       <tr>
@@ -751,7 +760,7 @@ export default function TeacherWholeSchoolReportCards() {
                 {!selected.subjects.length && <p className="p-6 text-center text-sm text-gray-500">No official course enrollment is linked to this learner yet.</p>}
               </div>
 
-              <div className="mt-5 grid gap-4 lg:grid-cols-[.7fr_1.3fr]">
+              <div id="report-record-review" hidden={recordSection!=='review'} className="mt-5 grid items-start gap-4 xl:grid-cols-[.55fr_1.45fr]">
                 <div className="rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-950">
                   <h4 className="font-bold text-kcs-blue-950 dark:text-white">Attendance summary</h4>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">

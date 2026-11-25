@@ -1,3 +1,4 @@
+import {userRoleLabel} from "../types/user";
 import {useNexusDashboardPhoto} from "../hooks/useNexusDashboardPhoto";
 import {eduplannerNexusReturn} from "../utils/nexusReturn";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
@@ -13,7 +14,6 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { useToast } from "../components/Toast";
 import { schoolDisplayName } from "../data/defaults";
-import { roleLabels } from "../types/user";
 
 export const AppLayout = () => {
   const [fromAcademy] = useState(()=>{try{if(new URL(window.location.href).searchParams.get('from')==='academy')sessionStorage.setItem('kcs-planner-origin','academy');return sessionStorage.getItem('kcs-planner-origin')==='academy'}catch{return false}});
@@ -126,7 +126,7 @@ export const AppLayout = () => {
         <nav aria-label={tr("Main navigation","Navigation principale")}>{links.map(({to,label,Icon})=><NavLink key={to} to={to} end={to==="/"} onClick={()=>setMenuOpen(false)} title={label} aria-label={label} className={({isActive})=>isActive?"ep-nav-link is-active":"ep-nav-link"}><Icon size={19}/><span>{label}</span></NavLink>)}</nav>
         {canCreateLessons&&<Button className="ep-create" title={tr("New lesson plan","Nouvelle préparation")} aria-label={tr("New lesson plan","Nouvelle préparation")} onClick={()=>{const lesson=createLesson();setMenuOpen(false);navigate("/editor/"+lesson.id)}}><Plus size={18}/><span>{tr("New lesson plan","Nouvelle préparation")}</span></Button>}
         <div className="ep-sidebar-note"><BookOpen size={22}/><strong>{tr("Every lesson, a step forward.","Chaque leçon, un pas de plus.")}</strong><p>{tr("Plan, review and share your teaching in one place.","Préparez, révisez et partagez votre enseignement au même endroit.")}</p></div>
-        <div className="ep-sidebar-footer"><a aria-label={tr("Back to Nexus AI","Retour à Nexus AI")} title={tr("Back to Nexus AI","Retour à Nexus AI")} href={eduplannerNexusReturn(currentUser.role)} data-nexus-return><ArrowLeft size={16}/><span>{tr("Back to Nexus AI","Retour à Nexus AI")}</span></a>{fromAcademy&&<a href="https://academy.kinshasachristianschool.org" className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-foreground hover:bg-accent"><BookOpen className="h-4 w-4"/>{language==='fr'?'Retour à Academy':'Back to Academy'}</a>}{showInstall&&<button type="button" aria-label={tr("Install app","Installer l’application")} title={tr("Install app","Installer l’application")} onClick={()=>void install().then(ok=>notify(ok?tr("Eduplanner installed","Eduplanner installé"):tr("Use your browser’s installation menu.","Utilisez le menu d’installation du navigateur.")))}><Download size={16}/><span>{tr("Install app","Installer l’application")}</span></button>}<button type="button" aria-label={tr("Sign out","Déconnexion")} title={tr("Sign out","Déconnexion")} onClick={()=>{signOut().finally(()=>navigate("/login",{replace:true}))}}><LogOut size={16}/><span>{tr("Sign out","Déconnexion")}</span></button></div>
+        <div className="ep-sidebar-footer"><a aria-label={tr("Back to Nexus AI","Retour à Nexus AI")} title={tr("Back to Nexus AI","Retour à Nexus AI")} href={eduplannerNexusReturn(currentUser.role,currentUser.institutionalWorkspace)} data-nexus-return target="_blank" rel="noopener noreferrer"><ArrowLeft size={16}/><span>{tr("Back to Nexus AI","Retour à Nexus AI")}</span></a>{fromAcademy&&<a href="https://academy.kinshasachristianschool.org" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-foreground hover:bg-accent"><BookOpen className="h-4 w-4"/>{language==='fr'?'Retour à Academy':'Back to Academy'}</a>}{showInstall&&<button type="button" aria-label={tr("Install app","Installer l’application")} title={tr("Install app","Installer l’application")} onClick={()=>void install().then(ok=>notify(ok?tr("Eduplanner installed","Eduplanner installé"):tr("Use your browser’s installation menu.","Utilisez le menu d’installation du navigateur.")))}><Download size={16}/><span>{tr("Install app","Installer l’application")}</span></button>}<button type="button" aria-label={tr("Sign out","Déconnexion")} title={tr("Sign out","Déconnexion")} onClick={()=>{signOut().finally(()=>navigate("/login",{replace:true}))}}><LogOut size={16}/><span>{tr("Sign out","Déconnexion")}</span></button></div>
       </aside>
       <div className="ep-body">
         <header className="ep-topbar">
@@ -135,7 +135,7 @@ export const AppLayout = () => {
           <div className="ep-toolbar"><button type="button" className="ep-search" onClick={()=>navigate("/plans?focus=search")}><Search size={17}/><span>{tr("Find a lesson…","Rechercher une préparation…")}</span><kbd>⌕</kbd></button>
             <button type="button" aria-label={tr("Change language","Changer la langue")} onClick={toggleLanguage} className="ep-icon-button"><Languages size={17}/><b>{language==="en"?"FR":"EN"}</b></button>
             <button type="button" aria-label={tr("Change theme","Changer de thème")} onClick={toggleDark} className="ep-icon-button">{dark?<Sun size={18}/>:<Moon size={18}/>}</button>
-            <button type="button" className="ep-profile" aria-label={tr("Account security","Sécurité du compte")} onClick={openAccount}>{dashboardPhoto?<img src={dashboardPhoto} alt=""/>:<span><UserRound size={19}/></span>}<div><strong>{currentUser.name}</strong><small>{roleLabels[currentUser.role]}</small></div><ShieldCheck size={16}/></button>
+            <button type="button" className="ep-profile" aria-label={tr("Account security","Sécurité du compte")} onClick={openAccount}>{dashboardPhoto?<img src={dashboardPhoto} alt=""/>:<span><UserRound size={19}/></span>}<div><strong>{currentUser.name}</strong><small>{userRoleLabel(currentUser)}</small></div><ShieldCheck size={16}/></button>
           </div>
         </header>
         <main className="ep-main"><Outlet/></main>

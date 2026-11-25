@@ -1,3 +1,5 @@
+import {academyNexusSessions,readNexusAcademySession} from '../services/academyNexusSessions.js';
+import {academicWorkspaceFor,academyRoleFor,academicNexusHome} from '../utils/academicApplicationAccess.js';
 import { timingSafeEqual } from "node:crypto";
 import { Router } from "express";
 import { env } from "../config/env.js";
@@ -49,13 +51,19 @@ academyRouter.post(
             where: { id: req.user!.sub },
             include: { teacherProfile: true, studentProfile: true },
           });
+    const applicationWorkspace = academicWorkspaceFor(user, req.user!.sub === "configured-superadmin");
     const isTeacher =
       user?.role === "TEACHER" ||
       (user?.role === "STAFF" && Boolean(user.teacherProfile));
-    if (!user || (!isTeacher && !["STUDENT", "ADMIN"].includes(user.role)))
+    if (!user || !applicationWorkspace || (!isTeacher && !["STUDENT", "ADMIN"].includes(user.role)))
       throw new ApiError(403, "Academy access is not enabled for this role");
 
     await assertAccountAccess(user.id);
+    if (!user.orbitUserId && applicationWorkspace === 'superadmin') {
+      const url=new URL('api/auth/callback',env.ACADEMY_PUBLIC_URL.endsWith('/')?env.ACADEMY_PUBLIC_URL:env.ACADEMY_PUBLIC_URL+'/');
+      url.searchParams.set('ticket',academyNexusSessions.issue(user.id));url.searchParams.set('issuer','nexus');url.searchParams.set('nexusReturn','/admin');
+      return success(res,{url:url.toString()});
+    }
     if (!user.orbitUserId) {
       if (!env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID)
         throw new ApiError(
@@ -160,6 +168,7 @@ academyRouter.post(
       : env.ACADEMY_PUBLIC_URL + "/";
     const url = new URL("api/auth/callback", academyBaseUrl);
     url.searchParams.set("ticket", payload.ticket);
+    url.searchParams.set("nexusReturn", academicNexusHome(applicationWorkspace));
     return success(res, { url: url.toString() });
   }),
 );
@@ -172,6 +181,32 @@ function validAcademyKey(provided: string | undefined) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
+// Academy validates its Orbit session first; this service maps the bound identity to live Nexus grants.
+for(const operation of ['exchange','validate','revoke'] as const)academyRouter.post('/nexus-session/'+operation,asyncHandler(async(req,res)=>{
+ res.set('Cache-Control','private, no-store');
+ if(!validAcademyKey(req.header('x-api-key')))throw new ApiError(401,'Unauthorized Academy service');
+ if(operation==='revoke'){academyNexusSessions.revoke(req.body?.token);return success(res,{ok:true})}
+ const issued=operation==='exchange'?academyNexusSessions.exchange(req.body?.ticket):null;
+ const token=issued?.token||req.body?.token;
+ if(operation==='exchange'&&!issued)throw new ApiError(401,'Academy launch expired or already used');
+ const identity=await readNexusAcademySession(token);if(!identity)throw new ApiError(401,'Academy session expired or access denied');
+ return success(res,operation==='exchange'?{sessionToken:token,identity,expiresAt:identity.expiresAt}:identity);
+}));
+
+academyRouter.post('/access',asyncHandler(async(req,res)=>{
+ res.set('Cache-Control','private, no-store');
+ if(!validAcademyKey(req.header('x-api-key')))throw new ApiError(401,'Unauthorized Academy service');
+ const orbitId=String(req.body?.orbitId||'');
+ if(!orbitId||orbitId.length>128)throw new ApiError(400,'A verified Orbit identity is required');
+ const user=await prisma.user.findUnique({where:{orbitUserId:orbitId},include:{teacherProfile:true}});
+ if(!user)throw new ApiError(403,'Academy identity mismatch');
+ await assertAccountAccess(user.id);
+ const configured=Boolean(process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase());
+ const workspace=academicWorkspaceFor(user,configured);
+ if(!workspace)throw new ApiError(403,'Academy access is not enabled for this identity');
+ return success(res,{role:academyRoleFor(workspace),workspace,nexusReturnPath:academicNexusHome(workspace)});
+}));
+
 // This private service endpoint binds the verified Orbit registry identity. No credential or grade is returned.
 academyRouter.post(
   "/context",
@@ -182,7 +217,9 @@ academyRouter.post(
     const user = await prisma.user.findUnique({
       // Preserve the previous private service contract during a rolling deployment.
       // An explicit registry ID always takes precedence and never falls back to email.
-      where: req.body?.orbitId
+      where: req.body?.nexusUserId
+        ? {id:String(req.body.nexusUserId)}
+        : req.body?.orbitId
         ? { orbitUserId: String(req.body.orbitId) }
         : {
             email: String(req.body?.email || "")
@@ -194,6 +231,9 @@ academyRouter.post(
     if (!user || (req.body?.orbitId && user.orbitUserId !== req.body.orbitId))
       throw new ApiError(403, "Academy identity mismatch");
     await assertAccountAccess(user.id);
+    const applicationWorkspace = academicWorkspaceFor(user,Boolean(process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase()));
+    const leader = applicationWorkspace && ["superadmin","principal","senior"].includes(applicationWorkspace);
+    if(req.body?.nexusUserId && applicationWorkspace!=="superadmin")throw new ApiError(403,"Academy identity mismatch");
     const teacher =
       Boolean(user.teacherProfile) && ["TEACHER", "STAFF"].includes(user.role);
     if (
@@ -202,7 +242,7 @@ academyRouter.post(
         (role === "STUDENT" &&
           user.role === "STUDENT" &&
           user.studentProfile) ||
-        (["ADMIN", "SUPER_ADMIN"].includes(role) && user.role === "ADMIN")
+        (["ADMIN", "SUPER_ADMIN"].includes(role) && leader)
       )
     )
       throw new ApiError(403, "Academy role mismatch");
@@ -507,7 +547,8 @@ academyRouter.post(
     if (!validAcademyKey(req.header("x-api-key")))
       throw new ApiError(401, "Unauthorized Academy service");
     if (!env.KCS_ORBIT_API_URL) throw new ApiError(503, "Orbit is unavailable");
-    const verified = await fetch(
+    const native=await readNexusAcademySession(req.body?.sessionToken);
+    const verified = native?null:await fetch(
       env.KCS_ORBIT_API_URL.replace(/\/$/, "") + "/api/academy/sso/validate",
       {
         method: "POST",
@@ -519,15 +560,15 @@ academyRouter.post(
         signal: AbortSignal.timeout(8000),
       },
     );
-    const identity = (await verified.json().catch(() => null)) as any;
+    const identity = native || (await verified!.json().catch(() => null)) as any;
     if (
-      !verified.ok ||
-      !identity?.orbitId ||
+      (!native && !verified!.ok) ||
+      (!native && !identity?.orbitId) ||
       identity.organizationId !== env.KCS_ORBIT_ORGANIZATION_ID
     )
       throw new ApiError(401, "The Academy session could not be verified");
     const user = await prisma.user.findUnique({
-      where: { orbitUserId: identity.sourceIdentityId || identity.orbitId },
+      where: native?{id:native.nexusUserId}:{ orbitUserId: identity.sourceIdentityId || identity.orbitId },
       include: { teacherProfile: true },
     });
     if (!user || !user.email || (!user.teacherProfile && user.role !== "ADMIN"))
@@ -546,6 +587,7 @@ academyRouter.post(
         middleName: user.middleName,
         lastName: user.lastName,
         role: user.role,
+        workspace: academicWorkspaceFor(user,Boolean(process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase())) || undefined,
         accessRoles: [
           user.role.toLowerCase(),
           ...(user.teacherProfile ? ["teacher"] : []),

@@ -6,4 +6,4 @@ export function safeNexusReturn(value:unknown):string|null{
 export function defaultNexusReturn(role:string){return ['admin','super_admin','administrator','principal'].includes(role.toLowerCase())?'/admin':['student','parent','staff'].includes(role.toLowerCase())?'/portal/'+role.toLowerCase():'/portal/teacher'}
 export const nexusReturnUrl=(value:unknown,role:string)=>nexusOrigin+(safeNexusReturn(value)||defaultNexusReturn(role))
 export function rememberNexusReturn(value:unknown){const path=safeNexusReturn(value);if(path)try{sessionStorage.setItem('kcs-edup-nexus-return',path)}catch{}}
-export function eduplannerNexusReturn(role:string){let path:string|null=null;try{path=sessionStorage.getItem('kcs-edup-nexus-return')}catch{}return nexusReturnUrl(path,role)}
+export function eduplannerNexusReturn(role:string,workspace?:string){if(workspace==='senior')return nexusOrigin+'/portal/senior';if(workspace==='superadmin'||workspace==='principal')return nexusOrigin+'/admin';let path:string|null=null;try{path=sessionStorage.getItem('kcs-edup-nexus-return')}catch{}return nexusReturnUrl(path,role)}

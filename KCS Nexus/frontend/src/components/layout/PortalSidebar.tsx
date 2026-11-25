@@ -143,6 +143,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const [electionOpening,setElectionOpening]=useState(false)
   const [electionManualUrl,setElectionManualUrl]=useState<string|null>(null)
   const [academyOpening,setAcademyOpening]=useState(false)
+  const [academyManualUrl,setAcademyManualUrl]=useState<string|null>(null)
   const academyLock=useRef(false)
   const electionLock=useRef(false)
   const [avatarLoadVersion, setAvatarLoadVersion] = useState(0)
@@ -276,8 +277,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   }
   const openAcademy=async()=>{
    if(academyLock.current)return
-   academyLock.current=true;setAcademyOpening(true)
-   try{const owner=user.id;await launchNexusWorkspace('academy',async()=>{const response=await academyAPI.launch();return response.data.data.url},{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner})}
+   academyLock.current=true;setAcademyOpening(true);setAcademyManualUrl(null)
+   try{const owner=user.id;const result=await launchNexusWorkspace('academy',async()=>{const response=await academyAPI.launch();return response.data.data.url},{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner});if(result?.manualUrl&&useAuthStore.getState().user?.id===owner){setAcademyManualUrl(result.manualUrl);setTimeout(()=>setAcademyManualUrl(null),30000)}}
    catch(error){await alertPortalMessage(error instanceof WorkspaceLaunchError&&error.message==='POPUP_BLOCKED'?(language==='fr'?'Autorisez l’ouverture d’un nouvel onglet pour accéder à Academy.':'Allow a new tab to open Academy.'):language==='fr'?'Academy n’a pas pu être ouverte. Vérifiez votre connexion et réessayez.':'Academy could not be opened. Check your connection and retry.')}
    finally{academyLock.current=false;setAcademyOpening(false)}
   }
@@ -357,18 +358,6 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const menuText=(fr:string,en:string)=>language==='fr'?fr:en
   const renderNavigation = (isMobile = false) => (
     <>
-      {user.id === 'configured-superadmin' && (
-        <div className="px-3 pt-3">
-          <Link to="/admin" data-superadministration-home
-            className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
-            title={currentLanguage === 'fr' ? 'Superadministration' : 'Super Administration'}
-            aria-current={location.pathname === '/admin' ? 'page' : undefined}
-            onClick={() => { setSidebarOpen(false); document.body.style.overflow = '' }}>
-            <Shield size={18}/>
-            {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Superadministration' : 'Super Administration'}</span>}
-          </Link>
-        </div>
-      )}
       {(isMobile||!sidebarCollapsed)&&<div className="nexus-menu-finder" translate="no">
         <div className="nexus-menu-caption"><span>{menuText('Votre espace','Your workspace')}</span><span>{visibleNavItems.length} / {navItemsWithBadges.length}</span></div>
         <div className="nexus-menu-search"><Search size={16} aria-hidden="true"/><input type="search" value={menuQuery} onChange={event=>setMenuQuery(event.target.value)} placeholder={menuText('Trouver une rubrique…','Find a section…')} aria-label={menuText('Rechercher dans le menu','Search menu')} autoComplete="off"/>{menuQuery&&<button type="button" onClick={()=>setMenuQuery('')} aria-label={menuText('Effacer la recherche du menu','Clear menu search')}><X size={14}/></button>}</div>
@@ -438,7 +427,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             <UserCheck size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Mon espace habituel':'My usual workspace'}</span>}
           </Link>
         )}
-        {canUseDisciplineWorkspace(user)&&!disciplineWorkspace&&<Link to="/portal/discipline" className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={currentLanguage==='fr'?'Direction de discipline':'Discipline Director'}><ShieldAlert size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Discipline':'Discipline workspace'}</span>}</Link>}
+        {user.id==='configured-superadmin'?<Link to={disciplineWorkspace?'/admin':'/portal/discipline'} data-superadmin-workspace-switch data-superadministration-home={disciplineWorkspace?true:undefined} className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={disciplineWorkspace?(currentLanguage==='fr'?'Superadministration':'Super Administration'):(currentLanguage==='fr'?'Espace Discipline':'Discipline workspace')} onClick={()=>{setSidebarOpen(false);document.body.style.overflow=''}}>{disciplineWorkspace?<Shield size={18}/>:<ShieldAlert size={18}/>} {(isMobile||!sidebarCollapsed)&&<span>{disciplineWorkspace?(currentLanguage==='fr'?'Superadministration':'Super Administration'):(currentLanguage==='fr'?'Espace Discipline':'Discipline workspace')}</span>}</Link>:canUseDisciplineWorkspace(user)&&!disciplineWorkspace&&<Link to="/portal/discipline" className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={currentLanguage==='fr'?'Direction de discipline':'Discipline Director'}><ShieldAlert size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Discipline':'Discipline workspace'}</span>}</Link>}
         {canUseSeniorWorkspace(user)&&!seniorWorkspace&&<Link to="/portal/senior" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title="Senior Teacher · ST"><GraduationCap size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Senior Teacher · ST':'Senior Teacher workspace'}</span>}</Link>}
         {user.id !== 'configured-superadmin' && canUsePrincipalWorkspace(user) && !/^\/admin(?:\/|$)/.test(location.pathname) && (
           <Link to="/admin" className={isMobile?'nexus-mobile-action':`sidebar-link w-full ${sidebarCollapsed?'justify-center px-0':''}`} title={currentLanguage==='fr'?'Espace Principal':'Principal workspace'}>
@@ -455,7 +444,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           {(isMobile||!sidebarCollapsed)&&<span>{electionOpening?(language==='fr'?'Ouverture sécurisée…':'Opening securely…'):electionLabel}</span>}
         </button>)}
         {(accessRoles.includes('teacher') || user.role === 'admin') && (
-          <button type="button" onClick={()=>void openAcademy()} disabled={academyOpening} aria-busy={academyOpening} data-kcs-no-processing="true" data-academy-launch
+          academyManualUrl?<a href={academyManualUrl} target="_blank" rel="noopener noreferrer" data-academy-native-launch onClick={()=>{setTimeout(()=>setAcademyManualUrl(null),0)}} className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title="KCS Nexus Academy"><GraduationCap size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{language==='fr'?'Ouvrir l’application Academy':'Open the Academy app'}</span>}</a>:<button type="button" onClick={()=>void openAcademy()} disabled={academyOpening} aria-busy={academyOpening} data-kcs-no-processing="true" data-academy-launch
             className={isMobile ? "nexus-mobile-action" : `sidebar-link w-full ${!sidebarCollapsed ? "" : "justify-center px-0"}`}
             title={!isMobile && sidebarCollapsed ? "KCS Nexus Academy" : undefined}>
             <GraduationCap size={18} className={academyOpening?"animate-pulse":undefined}/>
