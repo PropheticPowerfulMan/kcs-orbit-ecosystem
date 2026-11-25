@@ -1,0 +1,58 @@
+{
+  "status": "PASS",
+  "url": "https://kinshasachristianschool.org/jury/",
+  "results": [
+    {
+      "width": 1440,
+      "pageType": "login",
+      "dimensions": {
+        "width": 41,
+        "height": 41,
+        "naturalWidth": 542,
+        "naturalHeight": 481,
+        "fit": "contain",
+        "src": "./kcs-emblem.jpg"
+      },
+      "status": "PASS"
+    },
+    {
+      "width": 1440,
+      "pageType": "verification",
+      "dimensions": {
+        "width": 56,
+        "height": 56,
+        "naturalWidth": 542,
+        "naturalHeight": 481,
+        "fit": "contain",
+        "src": "./kcs-emblem.jpg"
+      },
+      "status": "PASS"
+    },
+    {
+      "width": 390,
+      "pageType": "login",
+      "dimensions": {
+        "width": 41,
+        "height": 41,
+        "naturalWidth": 542,
+        "naturalHeight": 481,
+        "fit": "contain",
+        "src": "./kcs-emblem.jpg"
+      },
+      "status": "PASS"
+    },
+    {
+      "width": 390,
+      "pageType": "verification",
+      "dimensions": {
+        "width": 56,
+        "height": 56,
+        "naturalWidth": 542,
+        "naturalHeight": 481,
+        "fit": "contain",
+        "src": "./kcs-emblem.jpg"
+      },
+      "status": "PASS"
+    }
+  ]
+}
