@@ -137,3 +137,5 @@ Official Nexus public/images/kcs.jpg is used byte-for-byte in Jury report header
 - Verified backups before and after deployment; the post-deploy archive includes the actual Jury private volume and wrapping-key file.
 - Read-only production browser tests pass on desktop/mobile with no uncaught errors or horizontal overflow. PWA identity/scope is distinct; native OS acceptance remains manual.
 - Updated three institutional manuals to the production URL while clearly identifying synthetic staging screenshots.
+
+- Final visual follow-up: PR #90 corrects only Jury frontend emblem sizing. Jury Web release edfca7d731c7e08ef5af642a78823554379bb5b7 passed four staging/four production browser checks and preserved all 27 other active containers. Base lot remains b0f6a15cea83e291bdcc8946ac1c7fc2bb7a1516.

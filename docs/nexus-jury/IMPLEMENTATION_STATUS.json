@@ -219,5 +219,10 @@
   "productionRelease": "b0f6a15cea83e291bdcc8946ac1c7fc2bb7a1516",
   "productionVerification": "evidence/production-targeted-release.json",
   "productionHealth": "PASS",
-  "stagingHealth": "PASS"
+  "stagingHealth": "PASS",
+  "productionSourceCommit": "edfca7d731c7e08ef5af642a78823554379bb5b7",
+  "productionServiceOverrides": {
+    "jury_web": "edfca7d731c7e08ef5af642a78823554379bb5b7"
+  },
+  "officialEmblemProductionVisualCheck": "PASS"
 }

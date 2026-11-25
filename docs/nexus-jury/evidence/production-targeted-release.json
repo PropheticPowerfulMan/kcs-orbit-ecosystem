@@ -107,5 +107,28 @@
     "horizontalOverflow": false,
     "juryPwaId": "https://kinshasachristianschool.org/jury/kcs-nexus-jury",
     "juryPwaScope": "/jury/"
+  },
+  "repositoryApplicationSourceCommit": "edfca7d731c7e08ef5af642a78823554379bb5b7",
+  "subsequentJuryWebOnlyRollout": {
+    "status": "PASS",
+    "application": "jury_web",
+    "release": "edfca7d731c7e08ef5af642a78823554379bb5b7",
+    "fullLotBaseRelease": "b0f6a15cea83e291bdcc8946ac1c7fc2bb7a1516",
+    "otherActiveContainersPreserved": 27,
+    "databaseOrProxyRestarted": false,
+    "backupReference": "/opt/kcs-orbit/backups/daily/kcs-orbit-vps123503-20261125T201914Z.tar.gz",
+    "verifiedAtUtc": "2026-11-25T20:40:49.890677+00:00"
+  },
+  "officialEmblemBrowserCheck": {
+    "status": "PASS",
+    "views": [
+      "login",
+      "verification"
+    ],
+    "viewports": [
+      1440,
+      390
+    ],
+    "officialSourceHashMatched": true
   }
 }
