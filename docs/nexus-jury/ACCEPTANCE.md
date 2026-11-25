@@ -1,6 +1,6 @@
 # Staging acceptance — 25 November 2026
 
-All school records in these tests are synthetic canonical fixtures. PASS describes observed test behavior, not a guarantee against every future failure. Production remains untouched.
+All school records in these tests are synthetic canonical fixtures. PASS describes observed test behavior, not a guarantee against every future failure. Staging fixtures never target production. The separately authorized production rollout is recorded below.
 
 | # | Scenario | Result | Evidence |
 |---|---|---|---|
@@ -49,10 +49,16 @@ All school records in these tests are synthetic canonical fixtures. PASS describ
 
 PWA manifest identity, scope, public-only service-worker caching, offline shell and Chromium installability criteria passed. Native Windows install/launch and device-specific Nexus↔election/Academy capture remain manual: the Windows helper stopped before input because it could not verify the browser URL, and headless Chromium 140/156 did not expose an implemented PWA.install command. Public manifests are distinct and canonical openerless handoffs are preserved; the OS decides installed-app capture.
 
-No production DNS, migration, real-account provisioning, delivery capacity test, external backup destination or production deployment has been performed. Optional AI remains disabled until explicitly configured. Security review status is recorded separately after the immutable patch review.
+Production was deployed on 25 November 2026 using two additive Jury migrations and only the six reviewed services. No DNS change or real-account provisioning was required. Real-provider delivery capacity and the external backup destination remain operational acceptance items. Optional AI remains disabled until explicitly configured. Security review status is recorded separately after the immutable patch review.
 
 ## Final integrity follow-up
 
 The current core suite also proves that a changed candidate/participant invalidates the pending result and prevents approval until reconsolidation. Private-file tests repeat malformed multipart metadata and compare actual private-directory contents and database counts: denied requests leave neither an orphan file nor a quota bypass. The real browser identity-intent test confirms that cancellation preserves the existing session and that an explicitly confirmed account switch still works. All fixture login helpers use the preview/confirmed-reference contract.
 
 The hosted security scan could not be registered despite a validated Git worktree; no tool-owned scan or sealed report exists. Three independent source reviews and targeted runtime regressions were completed instead. See REVIEW_NOTES.md for the exact scope and limits; these are implementation review notes, not a substitute canonical scan artifact.
+
+## Authorized production verification
+
+Release `b0f6a15cea83e291bdcc8946ac1c7fc2bb7a1516` is deployed at https://kinshasachristianschool.org/jury/. Five immutable application images and the required proxy route were applied. All 22 other original active containers retain their IDs and image digests. All 21 teacher workspaces and 2,871 Grade records retain their exact pre-rollout fingerprints. Read-only Chromium checks pass for eight public application pages across desktop/mobile; Jury has its own manifest identity and /jury/ scope.
+
+Complete verified backups preceded deployment. A verified post-deploy archive includes seven PostgreSQL databases, the private Jury volume and the exact protected wrapping-key file. Off-server storage is not configured. The first rollout safely restored target images when an early HTTPS probe preceded proxy readiness; the bounded readiness retry was tested and the second rollout passed. See [production evidence](evidence/production-targeted-release.json).

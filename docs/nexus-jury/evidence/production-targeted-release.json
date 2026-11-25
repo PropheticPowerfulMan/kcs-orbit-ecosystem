@@ -1,0 +1,111 @@
+{
+  "status": "PASS",
+  "release": "b0f6a15cea83e291bdcc8946ac1c7fc2bb7a1516",
+  "startedAtUtc": "2026-11-25T20:16:44.703086+00:00",
+  "finishedAtUtc": "2026-11-25T20:17:39.356666+00:00",
+  "services": [
+    "nexus_api",
+    "nexus_web",
+    "jury_web",
+    "edupay_web",
+    "kitchen_web",
+    "proxy"
+  ],
+  "untargetedContainersPreserved": 22,
+  "academicSnapshotUnchanged": true,
+  "academicSnapshots": {
+    "before": {
+      "TeacherWorkspace": {
+        "rows": 21,
+        "sha256": "e8e44b2bdf00bfcbfafea9bde7795cff7faebe34347377bd95d4c0f6c5491803"
+      },
+      "Grade": {
+        "rows": 2871,
+        "sha256": "c63a4acf62ae10430fbe26c1b23c4f81d2418a30edea3410c78f258dfda38794"
+      }
+    },
+    "after": {
+      "TeacherWorkspace": {
+        "rows": 21,
+        "sha256": "e8e44b2bdf00bfcbfafea9bde7795cff7faebe34347377bd95d4c0f6c5491803"
+      },
+      "Grade": {
+        "rows": 2871,
+        "sha256": "c63a4acf62ae10430fbe26c1b23c4f81d2418a30edea3410c78f258dfda38794"
+      }
+    }
+  },
+  "http": [
+    {
+      "url": "https://kinshasachristianschool.org/",
+      "status": 200,
+      "readinessAttempts": 2
+    },
+    {
+      "url": "https://kinshasachristianschool.org/jury/",
+      "status": 200,
+      "readinessAttempts": 1
+    },
+    {
+      "url": "https://kinshasachristianschool.org/jury/api/health",
+      "status": 200,
+      "readinessAttempts": 1
+    },
+    {
+      "url": "https://kinshasachristianschool.org/kitchen/",
+      "status": 200,
+      "readinessAttempts": 1
+    },
+    {
+      "url": "https://kinshasachristianschool.org/sentinel/",
+      "status": 200,
+      "readinessAttempts": 1
+    },
+    {
+      "url": "https://edupay.kinshasachristianschool.org/",
+      "status": 200,
+      "readinessAttempts": 1
+    },
+    {
+      "url": "https://academy.kinshasachristianschool.org/",
+      "status": 200,
+      "readinessAttempts": 1
+    },
+    {
+      "url": "https://kcsparentelection.kinshasachristianschool.org/",
+      "status": 200,
+      "readinessAttempts": 1
+    }
+  ],
+  "backupDirectory": "/opt/kcs-orbit/production-backups/jury-20261125-retry",
+  "juryWrappingKeyBackedUp": true,
+  "juryPrivateVolumeIncludedInPeriodicBackup": true,
+  "offserverBackupConfigured": false,
+  "verificationAtUtc": "2026-11-25T20:24:45.313548+00:00",
+  "originalBaselineUntargetedContainersPreserved": 22,
+  "allProductionContainersRunning": 28,
+  "allApplicationHealthChecksPassed": true,
+  "preDeploymentArchive": "/opt/kcs-orbit/backups/daily/kcs-orbit-vps123503-20261125T201321Z.tar.gz",
+  "postDeploymentArchive": "/opt/kcs-orbit/backups/daily/kcs-orbit-vps123503-20261125T201914Z.tar.gz",
+  "backupPostDeployVerified": true,
+  "backupPostDeployDatabaseCount": 7,
+  "backupPostDeployWrappingKeyContentMatched": true,
+  "nativeOsPwaAcceptance": "MANUAL",
+  "hostedSecurityScan": "NOT_STARTED_REGISTRATION_UNAVAILABLE",
+  "notes": [
+    "First rollout safely restored target images because the HTTPS probe preceded proxy readiness; bounded retry verified and released.",
+    "Compose reconciled stopped duplicate rollback containers belonging to target services; prior release images and persistent volumes are retained."
+  ],
+  "publicBrowserChecks": {
+    "status": "PASS",
+    "viewports": [
+      1440,
+      390
+    ],
+    "applicationPages": 8,
+    "uncaughtPageErrors": 0,
+    "horizontalOverflow": false,
+    "juryPwaId": "https://kinshasachristianschool.org/jury/kcs-nexus-jury",
+    "juryPwaScope": "/jury/"
+  }
+}

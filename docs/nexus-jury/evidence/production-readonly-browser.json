@@ -1,0 +1,107 @@
+{
+  "status": "PASS",
+  "results": [
+    {
+      "name": "jury",
+      "width": 1440,
+      "status": 200,
+      "title": "KCS Nexus Jury",
+      "dimensions": {
+        "viewport": 1440,
+        "scroll": 1440
+      },
+      "scriptErrors": []
+    },
+    {
+      "name": "jury-independent-pwa",
+      "width": 1440,
+      "id": "https://kinshasachristianschool.org/jury/kcs-nexus-jury",
+      "scope": "/jury/",
+      "status": "PASS"
+    },
+    {
+      "name": "nexus",
+      "width": 1440,
+      "status": 200,
+      "title": "KCS Nexus — Kinshasa Christian School",
+      "dimensions": {
+        "viewport": 1440,
+        "scroll": 1440
+      },
+      "scriptErrors": []
+    },
+    {
+      "name": "kitchen",
+      "width": 1440,
+      "status": 200,
+      "title": "KCS Kitchen",
+      "dimensions": {
+        "viewport": 1440,
+        "scroll": 1440
+      },
+      "scriptErrors": []
+    },
+    {
+      "name": "edupay",
+      "width": 1440,
+      "status": 200,
+      "title": "EduPay KCS",
+      "dimensions": {
+        "viewport": 1440,
+        "scroll": 1440
+      },
+      "scriptErrors": []
+    },
+    {
+      "name": "jury",
+      "width": 390,
+      "status": 200,
+      "title": "KCS Nexus Jury",
+      "dimensions": {
+        "viewport": 390,
+        "scroll": 390
+      },
+      "scriptErrors": []
+    },
+    {
+      "name": "jury-independent-pwa",
+      "width": 390,
+      "id": "https://kinshasachristianschool.org/jury/kcs-nexus-jury",
+      "scope": "/jury/",
+      "status": "PASS"
+    },
+    {
+      "name": "nexus",
+      "width": 390,
+      "status": 200,
+      "title": "KCS Nexus — Kinshasa Christian School",
+      "dimensions": {
+        "viewport": 390,
+        "scroll": 390
+      },
+      "scriptErrors": []
+    },
+    {
+      "name": "kitchen",
+      "width": 390,
+      "status": 200,
+      "title": "KCS Kitchen",
+      "dimensions": {
+        "viewport": 390,
+        "scroll": 390
+      },
+      "scriptErrors": []
+    },
+    {
+      "name": "edupay",
+      "width": 390,
+      "status": 200,
+      "title": "EduPay KCS",
+      "dimensions": {
+        "viewport": 390,
+        "scroll": 390
+      },
+      "scriptErrors": []
+    }
+  ]
+}
