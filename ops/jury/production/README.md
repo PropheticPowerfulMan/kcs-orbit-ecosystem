@@ -1,0 +1,11 @@
+# Authorized targeted Jury production rollout
+
+Production authorization was received on25November2026 after the staging presentation. The production address is `https://kinshasachristianschool.org/jury/`; no DNS change is needed. This adds a distinct manifest/scope and independent Jury session, while reusing canonical Nexus identities.
+
+Build the clean exact Git release with `build-lot.sh`. It builds only Nexus API/Web, Jury Web, EduPay Web and Kitchen Web using production public URLs. The official Nexus API image must include `assets/jury` and the Nexus frontend must receive its two explicit Jury build arguments. The production Compose model adds the private Jury volume and service; Caddy adds only the Jury subpath routes. Existing settings/images are retained.
+
+A root-owned preflight directory under `/opt/kcs-orbit/production-backups/jury-*` must contain a successfully verified existing full pre-deployment backup, the prior resolved Compose model, a rollback model pointing to the saved exact Caddyfile, protected environment snapshots, and container IDs/images. These contain secrets and must never be committed or copied to public artifacts.
+
+Run the operator script from the clean exact production release only, with `--release FULL_SHA --confirmation DEPLOY_JURY_TARGETED --preflight PROTECTED_DIRECTORY`. It creates/preserves a32-byte wrapping key, adds Jury files/key to periodic backups, validates the planned Compose model and exact two pending additive migrations, performs deploy-only migration, and starts only the five changed services plus the changed proxy. No other API, database service or file volume is restarted. Failure restores the prior target images/configuration while retaining database/file volumes and additive tables. A full database restore is a separate incident decision.
+
+The script compares untouched container IDs/images and fingerprints existing Grade/TeacherWorkspace rows. Concurrent real teacher edits are reported for review, never overwritten. Native installed-app link capture still requires school-device acceptance. External backup storage remains unconfigured; a VPS-local backup cannot cover total server loss. See the final deployment record for actual release/backup/health evidence.

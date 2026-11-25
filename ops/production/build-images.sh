@@ -23,7 +23,7 @@ EDUSYNC_API_URL="$(ensure_api_path "$EDUSYNC_API_URL")"
 
 docker build -f "$ROOT_DIR/kcs-orbit-api/Dockerfile" -t "kcs/orbit-api:$RELEASE" "$ROOT_DIR"
 docker build -f "$ROOT_DIR/ops/staging/docker/nexus-api.Dockerfile" -t "kcs/nexus-api:$RELEASE" "$ROOT_DIR"
-docker build --build-arg "VITE_API_URL=$NEXUS_API_URL" -t "kcs/nexus-web:$RELEASE" "$ROOT_DIR/KCS Nexus/frontend"
+docker build --build-arg "VITE_API_URL=$NEXUS_API_URL" --build-arg "VITE_JURY_ENABLED=${JURY_ENABLED:-false}" --build-arg "VITE_JURY_PUBLIC_URL=${JURY_PUBLIC_URL:-}" -t "kcs/nexus-web:$RELEASE" "$ROOT_DIR/KCS Nexus/frontend"
 docker build -f "$ROOT_DIR/ops/staging/docker/kitchen-api.Dockerfile" -t "kcs/kitchen-api:$RELEASE" "$ROOT_DIR"
 docker build -f "$ROOT_DIR/ops/staging/docker/kitchen-web.Dockerfile" --build-arg "VITE_API_URL=/kitchen/api" --build-arg "VITE_BASE_PATH=/kitchen/" -t "kcs/kitchen-web:$RELEASE" "$ROOT_DIR"
 docker build -f "$ROOT_DIR/KCS Sentinel/apps/api/Dockerfile" -t "kcs/sentinel-api:$RELEASE" "$ROOT_DIR/KCS Sentinel"
@@ -35,5 +35,7 @@ docker build -t "kcs/savanex-api:$RELEASE" "$ROOT_DIR/SAVANEX Project/backend"
 docker build --build-arg "VITE_API_URL=$SAVANEX_API_URL" --build-arg "VITE_NEXUS_URL=https://$NEXUS_DOMAIN" --build-arg "VITE_BASE_PATH=/" -t "kcs/savanex-web:$RELEASE" "$ROOT_DIR/SAVANEX Project/frontend"
 docker build -t "kcs/edusync-api:$RELEASE" "$ROOT_DIR/EduSync AI/backend"
 docker build --build-arg "VITE_API_URL=$EDUSYNC_API_URL" -t "kcs/edusync-web:$RELEASE" "$ROOT_DIR/EduSync AI/frontend"
+
+docker build -f "$ROOT_DIR/ops/jury/Dockerfile.web" --build-arg "VITE_BASE_PATH=/jury/" -t "kcs/jury-web:$RELEASE" "$ROOT_DIR"
 
 printf '%s\n' "$RELEASE"

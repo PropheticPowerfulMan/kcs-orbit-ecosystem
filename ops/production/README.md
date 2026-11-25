@@ -53,3 +53,7 @@ For a Nexus-only rollout, select `deploy-nexus`, leave `release` blank, and type
 For a Kitchen-only rollout, select `deploy-kitchen`, leave `release` blank, and type `DEPLOY_KITCHEN_PRODUCTION`. It builds only the Kitchen API and web images, makes the existing pre-deploy backup, and restarts only `kitchen_api` and `kitchen_web`. It verifies that all other running production containers remain unchanged and restores the previous Kitchen image references if health checks fail.
 
 For an application rollback, select `rollback`, enter the full 40-character SHA of an image release retained on the VPS, and type `ROLLBACK_PRODUCTION`. Rollback never reverses database migrations or removes volumes, so every migration must remain backward-compatible.
+
+## First Jury installation and targeted lot
+
+Jury uses `https://kinshasachristianschool.org/jury/`, an independent PWA scope/identity and `/etc/kcs-orbit/jury.env` (mode600). Its32-byte wrapping key must be preserved. First installation follows `ops/jury/production/README.md` and the exact five-service operator script; it does not run a whole-ecosystem deployment. Subsequent full/Nexus builds retain the configured Jury launcher and the explicit Jury web release. The private `jury_private_files` volume and protected wrapping-key file are included in periodic backup paths. Off-server recovery remains a separate configured requirement.

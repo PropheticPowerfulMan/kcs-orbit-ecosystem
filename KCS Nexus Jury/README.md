@@ -1,3 +1,5 @@
+> Release update25November2026: targeted production deployment has now been explicitly authorized. The staging results below remain historical validation evidence. See `ops/jury/production/README.md` and the final deployment record for the actual rollout result.
+
 # KCS Nexus Jury
 
 **Evaluate fairly. Empower excellence.**

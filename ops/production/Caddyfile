@@ -21,6 +21,14 @@
 {$NEXUS_DOMAIN} {
   import security_headers
 
+  redir /jury /jury/ 308
+  handle_path /jury/api/* {
+    rewrite * /api/jury{path}
+    reverse_proxy nexus_api:5000
+  }
+  handle_path /jury/* {
+    reverse_proxy jury_web:8080
+  }
   redir /kitchen /kitchen/ 308
   handle /kitchen/api/health {
     rewrite * /health

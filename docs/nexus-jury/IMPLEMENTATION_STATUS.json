@@ -1,7 +1,7 @@
 {
   "project": "KCS Nexus Jury",
-  "phase": "Staging candidate prepared for production review; native device checks and explicit release authorization remain",
-  "productionAuthorized": false,
+  "phase": "Targeted production release authorized; production image build and backup in progress",
+  "productionAuthorized": true,
   "baseline": "9306a969267d9d7a9013e04bc8c40be5d50a98e5",
   "stagingUrl": "https://staging.kinshasachristianschool.org/jury/",
   "unitTests": {
@@ -205,5 +205,14 @@
     "kitchen": "002325539182ae7d887ed20a0bc41ac0ad826766"
   },
   "readyForProductionReview": true,
-  "productionDeploymentPerformed": false
+  "productionDeploymentPerformed": false,
+  "authorizedTargets": [
+    "nexus_api",
+    "nexus_web",
+    "jury_web",
+    "edupay_web",
+    "kitchen_web",
+    "proxy"
+  ],
+  "productionAddress": "https://kinshasachristianschool.org/jury/"
 }
