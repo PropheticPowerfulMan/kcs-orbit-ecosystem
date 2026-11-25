@@ -41,9 +41,13 @@ export async function warmAllStaffRoutes() {
  }
 }
 export async function warmRouteData(path:string){
+ if(path==="/students"){
+  await Promise.allSettled([api("/api/shared-directory"),api("/api/classes")]);
+  return;
+ }
  if(path!=="/parent-payments")return;
  const token=localStorage.getItem("edupay_token");
- const rows=await api<Array<{id:string}>>("/api/parents");
+ const rows=await api<Array<{id:string}>>("/api/parents/options");
  if(token!==localStorage.getItem("edupay_token"))return;
  await Promise.allSettled([api("/api/finance/catalog"),...(rows[0]?[api("/api/finance/parents/"+rows[0].id+"/profile")]:[])]);
 }
