@@ -248,15 +248,17 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
     }
   })
 
-  const targets = deliveryParents.map((parent) => ({ userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' '), email: parent.email, phone: parent.phone }))
-  const allTargets: Array<typeof targets[number] & { relationship?: string }> = [...targets]
-  for (const parent of deliveryParents.filter((person) => person.role === 'PARENT')) {
+  // Resolve families by their verified Nexus/Orbit linkage, never by name alone.
+  // The shared resolver includes the primary, additional and family-contact emails.
+  const families = await familyEmailRecipients(parents.filter(parent => parent.role === 'PARENT'))
+  const allTargets = deliveryParents.flatMap(parent => parent.role === 'PARENT'
+    ? (families.get(parent.id) ?? []).map(target => ({ userId: parent.id, name: target.name, email: target.email, phone: target.phone, relationship: target.relationship }))
+    : [{ userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' '), email: parent.email, phone: parent.phone, relationship: 'PRIMARY' }])
+  // Retain phone-only family contacts for SMS; email fan-out is validated above.
+  for (const parent of deliveryParents.filter(person => person.role === 'PARENT')) {
     const official = findOfficialContact(directory, parent)
-    for (const email of official?.additionalEmails ?? []) allTargets.push({ userId: parent.id, name: [parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '), email, phone: null, relationship: 'PARENT_ADDITIONAL' })
-    for (const mother of (official?.familyContacts ?? []).filter((contact) => (contact.email || contact.phone))) {
-      if (mother.email?.trim().toLowerCase() === parent.email?.trim().toLowerCase() && mother.phone?.trim() === parent.phone?.trim()) continue
-      allTargets.push({ userId: parent.id, name: [mother.lastName, mother.middleName, mother.firstName].filter(Boolean).join(' ') || 'Family contact / Contact familial', email: mother.email || null, phone: mother.phone || null, relationship: mother.kind||'FAMILY_CONTACT' })
-    }
+    if (parent.phone) allTargets.push({ userId: parent.id, name: contactName(parent), email: null, phone: parent.phone, relationship: 'PARENT' })
+    for (const contact of official?.familyContacts ?? []) if (contact.phone) allTargets.push({ userId: parent.id, name: contactName(contact) || contactName(parent), email: null, phone: contact.phone, relationship: contact.kind || 'FAMILY_CONTACT' })
   }
   const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients: deliveryParents.map((parent) => ({ id: parent.id, role: parent.role, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') })), targets: allTargets, channels: data.channels, attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: false, intent: { recipientIds: [...recipientIds].sort() } })
   return success(res, { ...result, requestedRecipients: recipientIds.length, skippedRecipients: skippedRecipientIds.length }, 'Parent communication recorded for every valid recipient; external delivery safely queued', 201)
@@ -265,26 +267,36 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
 messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const data = messageSchema.parse(req.body)
   const senderId = await resolveMessageActorId(req)
-  const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true, permissions: true, email: true, phone: true, firstName: true, middleName: true, lastName: true, accountBlockedAt: true } })
+  const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { id: true, role: true, permissions: true, email: true, phone: true, firstName: true, middleName: true, lastName: true, accountBlockedAt: true } })
   if (!recipient || recipient.accountBlockedAt) throw new ApiError(404, 'Active recipient not found')
   if ((req.user!.role === 'parent' || req.user!.role === 'student') && !['ADMIN', 'STAFF', 'TEACHER'].includes(recipient.role)&&!hasDisciplineWorkspaceAccess(recipient)) {
     throw new ApiError(403, 'Parents and students may only contact authorized school staff.')
   }
   const { language = 'fr', ...messageData } = data
   const emailBody = data.body
+  const familyTargets = req.user!.sub === 'configured-superadmin' && recipient.role === 'PARENT'
+    ? (await familyEmailRecipients([recipient])).get(recipient.id) ?? []
+    : null
+  if (familyTargets && !familyTargets.length) throw new ApiError(409, 'No valid registered family email. Update the parent contacts before sending.')
   const message = await prisma.$transaction(async (tx) => {
     const created = await tx.internalMessage.create({ data: { ...messageData, body: emailBody, senderId, attachmentName: req.file?.originalname, attachmentMime: req.file?.mimetype, attachmentSize: req.file?.size, attachmentData: req.file?.buffer }, include: { sender: true, recipient: true } })
     await tx.notification.create({ data: { userId: data.recipientId, title: data.subject, message: data.body, type: 'MESSAGE', link: messageLink(recipient.role) } })
+    if (familyTargets) await tx.correspondenceLog.createMany({ data: familyTargets.map(target => ({
+      channel: 'EMAIL', status: 'QUEUED', subject: data.subject, body: emailBody,
+      senderId, recipientName: target.name, recipientEmail: target.email, recipientPhone: target.phone,
+      metadata: { mailQueueVersion: 1, internalMessageId: created.id, recipientId: recipient.id,
+        relationship: target.relationship, attempts: 0, nextAttemptAt: new Date().toISOString(), priority: 'HIGH', language },
+    })) })
     return created
   })
   const delivery = req.user!.sub === 'configured-superadmin'
     ? await Promise.all([
-        sendSchoolMail({ to: recipient.email, replyTo: env.SCHOOL_EMAIL, subject: data.subject, text: emailBody, language, attachments: req.file ? [{ filename: req.file.originalname, content: req.file.buffer, contentType: req.file.mimetype }] : undefined, branded: true }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
+        familyTargets ? Promise.resolve({ sent: false, queued: true, recipients: familyTargets.length, reason: 'QUEUED' }) : sendSchoolMail({ to: recipient.email, replyTo: env.SCHOOL_EMAIL, subject: data.subject, text: emailBody, language, attachments: req.file ? [{ filename: req.file.originalname, content: req.file.buffer, contentType: req.file.mimetype }] : undefined, branded: true }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
         sendSchoolSms(recipient.phone, `${data.subject}\n\n${data.body}`, { brand: false }).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
       ])
     : []
   const { attachmentData: _attachmentData, ...safeMessage } = message
-  return success(res, { ...safeMessage, hasAttachment: Boolean(message.attachmentName), delivery }, 'Message sent', 201)
+  return success(res, { ...safeMessage, hasAttachment: Boolean(message.attachmentName), delivery, ...(familyTargets ? { emailQueued: familyTargets.length } : {}) }, familyTargets ? 'Message recorded; all registered family emails safely queued' : 'Message sent', 201)
 }))
 
 messagesRouter.post('/broadcast', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {

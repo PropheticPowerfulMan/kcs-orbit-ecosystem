@@ -1,0 +1,8 @@
+FROM kcs/nexus-api:9306a969267d9d7a9013e04bc8c40be5d50a98e5
+WORKDIR /workspace/KCS Nexus/backend
+COPY ["KCS Nexus/backend/src", "./src"]
+COPY ["KCS Nexus/backend/tsconfig.json", "./tsconfig.json"]
+COPY ["KCS Nexus/backend/prisma", "./prisma"]
+COPY ["KCS Nexus/backend/assets/jury", "./assets/jury"]
+RUN node node_modules/prisma/build/index.js generate --schema prisma/schema.prisma && npm run build
+CMD ["node", "dist/jury/staging-entry.js"]

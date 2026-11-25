@@ -24,3 +24,5 @@ test('new receipt signatures include the exact attached PDF hash and retain old 
  assert.equal(reportCardReceiptToken({...updated,metadata:{...updated.metadata,reportCardAttachmentSha256:''}},'synthetic-test-secret'),null)
  assert.equal(verifyReportCardReceipt(row,reportCardReceiptToken(row,'synthetic-test-secret'),'synthetic-test-secret'),true)
 })
+
+test('receipt links preserve a staging or installation path prefix',()=>{const row={id:'qa-delivery',reportCardId:'qa-report',recipientEmail:'qa@example.invalid',metadata:{reportCardReceiptVersion:2,receiptDocumentId:'qa-document',receiptFingerprint:'f',reportCardAttachmentSha256:'a'.repeat(64)}};const url=reportCardReceiptUrl(row,'https://staging.example.invalid/nexus/','qa-secret','fr');assert.equal(new URL(url!).pathname,'/nexus/api/report-card-receipts/qa-delivery')})

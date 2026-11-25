@@ -12,12 +12,30 @@ type Result = { sent: boolean; queued?: boolean; reason?: string }
 type Delivery = { userId: string; name: string; relationship?: string; email?: Result; sms?: Result }
 export type MessageBatchResult = { batchId: string; recipients: number; primaryRecipients: number; channels: Channel[]; delivery: Delivery[]; externalDeliverySucceeded: boolean; emailQueued: number; smsQueued: number }
 
+// A single communication must not deliver repeated copies to an address shared
+// by several selected parents, or send repeated SMS to the same family phone.
+export function uniqueMessageTargets(targets: Target[]): Target[] {
+  const emails = new Set<string>(), phones = new Set<string>()
+  return targets.flatMap(target => {
+    let email = target.email?.trim().toLowerCase() || null
+    let phone = target.phone?.trim() || null
+    const phoneKey = phone?.replace(/[\s().-]/g, '')
+    if (email && emails.has(email)) email = null
+    if (phoneKey && phones.has(phoneKey)) phone = null
+    if (!email && !phone && (target.email || target.phone)) return []
+    if (email) emails.add(email)
+    if (phone && phoneKey) phones.add(phoneKey)
+    return [{ ...target, email, phone }]
+  })
+}
+
 const messageLink = (role: string) => role === 'PARENT' ? '/portal/parent/messages' : role === 'STUDENT' ? '/portal/student/messages' : role === 'TEACHER' ? '/portal/teacher/messages' : role === 'STAFF' ? '/portal/staff/messages' : '/admin/communications'
 
 export async function queueMessageBatch(input: {
   senderId: string; subject: string; body: string; recipients: Recipient[]; targets: Target[];
   channels: Channel[]; attachment?: Attachment; requestId?: string; intent: unknown; language?: 'fr' | 'en'; personalizeParents?: boolean
 }): Promise<MessageBatchResult> {
+  const targets = uniqueMessageTargets(input.targets)
   const requestId = input.requestId || randomUUID()
   const batchId = 'message-batch-' + createHash('sha256').update(input.senderId + ':' + requestId).digest('hex')
   const requestHash = createHash('sha256').update(JSON.stringify({ intent: input.intent, subject: input.subject, body: input.body, language: input.language ?? 'en', personalizeParents: Boolean(input.personalizeParents), channels: [...input.channels].sort(), attachment: input.attachment ? { name: input.attachment.originalname, mime: input.attachment.mimetype, hash: createHash('sha256').update(input.attachment.buffer).digest('hex') } : null })).digest('hex')
@@ -37,11 +55,15 @@ export async function queueMessageBatch(input: {
     ? personalizeParentCorrespondence(input.body, name, input.language ?? 'en', batchId + ':' + id)
     : input.body
   const now = new Date()
-  const delivery: Delivery[] = input.targets.map((target) => {
+  const availableChannels = new Set(targets.flatMap(target => [target.email ? target.userId + ':email' : '', target.phone ? target.userId + ':sms' : ''].filter(Boolean)))
+  const delivery: Delivery[] = targets.map((target) => {
     const row: Delivery = { userId: target.userId, name: target.name, ...(target.relationship ? { relationship: target.relationship } : {}) }
     for (const channel of input.channels) {
       const available = Boolean(channel === 'email' ? target.email : target.phone)
-      row[channel] = available ? { sent: false, queued: true, reason: 'QUEUED' } : { sent: false, reason: channel === 'email' ? 'MISSING_OFFICIAL_EMAIL' : 'PHONE_MISSING' }
+      // Supplementary email-only / phone-only targets are not failures when
+      // another target already supplies that channel for this same account.
+      const suppliedElsewhere = availableChannels.has(target.userId + ':' + channel)
+      if (available || !suppliedElsewhere) row[channel] = available ? { sent: false, queued: true, reason: 'QUEUED' } : { sent: false, reason: channel === 'email' ? 'MISSING_OFFICIAL_EMAIL' : 'PHONE_MISSING' }
     }
     return row
   })
@@ -58,7 +80,7 @@ export async function queueMessageBatch(input: {
         if (created.count !== recipients.length) throw new ApiError(500, 'The complete recipient batch could not be recorded.')
         await tx.notification.createMany({ data: recipients.map((recipient) => ({ userId: recipient.id, title: input.subject, message: parentBody(recipient.id, recipient.name), type: 'MESSAGE', link: messageLink(recipient.role) })) })
       }
-      const logs = input.targets.flatMap((target, index) => input.channels.map((channel) => {
+      const logs = targets.flatMap((target, index) => input.channels.filter(channel => delivery[index][channel]).map((channel) => {
         const queued = Boolean(delivery[index][channel]?.queued)
         return { channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const, status: queued ? 'QUEUED' as const : 'FAILED' as const, subject: input.subject, body: channel === 'email' ? parentBody(target.userId, target.name) : input.body, senderId: input.senderId, recipientName: target.name, recipientEmail: target.email, recipientPhone: target.phone, failureReason: queued ? null : delivery[index][channel]?.reason ?? 'CONTACT_MISSING', metadata: { internalMessageId: ids.get(target.userId), recipientId: target.userId, batchId, relationship: target.relationship ?? 'PRIMARY', ...(channel === 'email' ? { mailQueueVersion: 1 } : { smsQueueVersion: 1 }), attempts: 0, nextAttemptAt: now.toISOString(), priority: input.recipients.length <= 10 ? 'HIGH' : 'BULK', language: input.language ?? 'en' } }
       }))

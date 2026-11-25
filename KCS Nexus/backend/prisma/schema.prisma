@@ -368,6 +368,13 @@ model User {
   electiveOfferingsProposed      ElectiveOffering[]       @relation("ElectiveOfferingProposer")
   shiningStudentSchedulesCreated ShiningStudentSchedule[] @relation("ShiningStudentScheduleCreator")
   eventReminderDeliveries        EventReminderDelivery[]
+  juryProject_owner JuryProject[] @relation("JuryProject_owner")
+  juryMember_user JuryMember[] @relation("JuryMember_user")
+  juryRubricTemplate_owner JuryRubricTemplate[] @relation("JuryRubricTemplate_owner")
+  juryAppSession_user JuryAppSession[] @relation("JuryAppSession_user")
+  juryLaunchTicket_user JuryLaunchTicket[] @relation("JuryLaunchTicket_user")
+  juryDraftKey_user JuryDraftKey[] @relation("JuryDraftKey_user")
+  juryRoleGrant_user JuryRoleGrant[] @relation("JuryRoleGrant_user")
 }
 
 model TeacherWorkspace {
@@ -465,6 +472,7 @@ model StudentProfile {
   shiningStudentSchedules ShiningStudentSchedule[]
   archive                 StudentArchive?
   coursePresences StudentCoursePresence[]
+  juryParticipant_student JuryParticipant[] @relation("JuryParticipant_student")
 }
 
 /// Immutable administrative snapshot created when a learner is permanently
@@ -571,6 +579,9 @@ model Course {
   enrollments Enrollment[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  juryProjectCourse_course JuryProjectCourse[] @relation("JuryProjectCourse_course")
+  juryGradebookLink_course JuryGradebookLink[] @relation("JuryGradebookLink_course")
+  juryPublication_course JuryPublication[] @relation("JuryPublication_course")
 }
 
 model AcademicScheduleEntry {
@@ -1864,4 +1875,653 @@ model StudentCoursePresence {
   student StudentProfile? @relation(fields:[studentId], references:[id], onDelete:SetNull)
   @@unique([sessionId,studentReference])
   @@index([studentReference,markedAt])
+}
+
+
+model JuryProject {
+  id String @id @default(uuid())
+title String
+  description String @default("")
+  objectives String @default("")
+  instructions String @default("")
+  kind String @default("PROJECT_PRESENTATION")
+  mode String @default("INDIVIDUAL")
+  status String @default("DRAFT")
+  academicYear String
+  semester Int
+  quarter Int
+  term String
+  maximum Decimal @db.Decimal(20,8)
+  settings Json
+  revision Int @default(1)
+  resultVersion Int @default(0)
+  ownerReference String
+  registrationDeadline DateTime?
+  submissionDeadline DateTime?
+  presentationAt DateTime?
+  durationSeconds Int @default(600)
+  venue String @default("")
+  archivedAt DateTime?
+  cancelledAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([academicYear, semester, quarter, status])
+  @@index([ownerReference, status, updatedAt])
+  ownerId String?
+  owner User? @relation("JuryProject_owner", fields:[ownerId], references:[id], onDelete:SetNull)
+  activeRubricId String?
+  activeRubric JuryRubricVersion? @relation("JuryProject_activeRubric", fields:[activeRubricId], references:[id], onDelete:SetNull)
+  juryProjectCourse_project JuryProjectCourse[] @relation("JuryProjectCourse_project")
+  juryProjectSession_project JuryProjectSession[] @relation("JuryProjectSession_project")
+  juryParticipant_project JuryParticipant[] @relation("JuryParticipant_project")
+  juryGroup_project JuryGroup[] @relation("JuryGroup_project")
+  juryGroupMember_project JuryGroupMember[] @relation("JuryGroupMember_project")
+  juryCandidate_project JuryCandidate[] @relation("JuryCandidate_project")
+  juryPanel_project JuryPanel[] @relation("JuryPanel_project")
+  juryInvitation_project JuryInvitation[] @relation("JuryInvitation_project")
+  juryRubricVersion_project JuryRubricVersion[] @relation("JuryRubricVersion_project")
+  juryReopenRequest_project JuryReopenRequest[] @relation("JuryReopenRequest_project")
+  juryResultRun_project JuryResultRun[] @relation("JuryResultRun_project")
+  juryPublicationPreview_project JuryPublicationPreview[] @relation("JuryPublicationPreview_project")
+  juryGradebookLink_project JuryGradebookLink[] @relation("JuryGradebookLink_project")
+  juryPublication_project JuryPublication[] @relation("JuryPublication_project")
+  jurySubmission_project JurySubmission[] @relation("JurySubmission_project")
+  juryAttachment_project JuryAttachment[] @relation("JuryAttachment_project")
+  juryAward_project JuryAward[] @relation("JuryAward_project")
+  juryCertificate_project JuryCertificate[] @relation("JuryCertificate_project")
+  juryAudit_project JuryAudit[] @relation("JuryAudit_project")
+  juryOutbox_project JuryOutbox[] @relation("JuryOutbox_project")
+  @@index([ownerId,updatedAt])
+}
+
+model JuryProjectCourse {
+  id String @id @default(uuid())
+courseReference String
+  @@unique([projectId,courseReference])
+  projectId String
+  project JuryProject @relation("JuryProjectCourse_project", fields:[projectId], references:[id], onDelete:Cascade)
+  courseId String?
+  course Course? @relation("JuryProjectCourse_course", fields:[courseId], references:[id], onDelete:SetNull)
+}
+
+model JuryProjectSession {
+  id String @id @default(uuid())
+title String
+  scheduledAt DateTime?
+  venue String @default("")
+  state String @default("WAITING")
+  startedAt DateTime?
+  pausedAt DateTime?
+  elapsedMilliseconds Int @default(0)
+  durationSeconds Int @default(600)
+  questionsSeconds Int @default(180)
+  revision Int @default(1)
+  displayTokenHash String? @unique
+  displayExpiresAt DateTime?
+  updatedAt DateTime @updatedAt
+  projectId String
+  project JuryProject @relation("JuryProjectSession_project", fields:[projectId], references:[id], onDelete:Cascade)
+  currentCandidateId String?
+  currentCandidate JuryCandidate? @relation("JuryProjectSession_currentCandidate", fields:[currentCandidateId], references:[id], onDelete:SetNull)
+}
+
+model JuryParticipant {
+  id String @id @default(uuid())
+studentReference String
+  displayNameSnapshot String
+  gradeSnapshot String
+  sectionSnapshot String @default("")
+  status String @default("ACTIVE")
+  statusReason String @default("")
+  registeredAt DateTime @default(now())
+  revision Int @default(1)
+  @@unique([projectId,studentReference])
+  @@index([studentReference,projectId])
+  projectId String
+  project JuryProject @relation("JuryParticipant_project", fields:[projectId], references:[id], onDelete:Cascade)
+  studentId String?
+  student StudentProfile? @relation("JuryParticipant_student", fields:[studentId], references:[id], onDelete:SetNull)
+  juryGroupMember_participant JuryGroupMember[] @relation("JuryGroupMember_participant")
+  juryCandidate_participant JuryCandidate[] @relation("JuryCandidate_participant")
+  juryStudentResult_participant JuryStudentResult[] @relation("JuryStudentResult_participant")
+  juryPublicationItem_participant JuryPublicationItem[] @relation("JuryPublicationItem_participant")
+  juryAward_participant JuryAward[] @relation("JuryAward_participant")
+  juryCertificate_participant JuryCertificate[] @relation("JuryCertificate_participant")
+}
+
+model JuryGroup {
+  id String @id @default(uuid())
+name String
+  topic String @default("")
+  leaderParticipantId String?
+  avatarAttachmentId String?
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  @@unique([projectId,name])
+  projectId String
+  project JuryProject @relation("JuryGroup_project", fields:[projectId], references:[id], onDelete:Cascade)
+  juryGroupMember_group JuryGroupMember[] @relation("JuryGroupMember_group")
+  juryCandidate_group JuryCandidate[] @relation("JuryCandidate_group")
+}
+
+model JuryGroupMember {
+  id String @id @default(uuid())
+@@unique([projectId,participantId])
+  projectId String
+  project JuryProject @relation("JuryGroupMember_project", fields:[projectId], references:[id], onDelete:Cascade)
+  groupId String
+  group JuryGroup @relation("JuryGroupMember_group", fields:[groupId], references:[id], onDelete:Cascade)
+  participantId String
+  participant JuryParticipant @relation("JuryGroupMember_participant", fields:[participantId], references:[id], onDelete:Cascade)
+}
+
+model JuryCandidate {
+  id String @id @default(uuid())
+topic String @default("")
+  position Int
+  checkIn String @default("PENDING")
+  checkInAt DateTime?
+  statusReason String @default("")
+  revision Int @default(1)
+  @@unique([projectId,participantId])
+  @@unique([projectId,groupId])
+  @@index([projectId,position])
+  projectId String
+  project JuryProject @relation("JuryCandidate_project", fields:[projectId], references:[id], onDelete:Cascade)
+  participantId String?
+  participant JuryParticipant? @relation("JuryCandidate_participant", fields:[participantId], references:[id], onDelete:SetNull)
+  groupId String?
+  group JuryGroup? @relation("JuryCandidate_group", fields:[groupId], references:[id], onDelete:SetNull)
+  juryProjectSession_currentCandidate JuryProjectSession[] @relation("JuryProjectSession_currentCandidate")
+  juryAssignment_candidate JuryAssignment[] @relation("JuryAssignment_candidate")
+  juryCandidateResult_candidate JuryCandidateResult[] @relation("JuryCandidateResult_candidate")
+  jurySubmission_candidate JurySubmission[] @relation("JurySubmission_candidate")
+  juryAward_candidate JuryAward[] @relation("JuryAward_candidate")
+}
+
+model JuryPanel {
+  id String @id @default(uuid())
+title String
+  revision Int @default(1)
+  @@unique([projectId])
+  projectId String
+  project JuryProject @relation("JuryPanel_project", fields:[projectId], references:[id], onDelete:Cascade)
+  presidentId String?
+  president JuryMember? @relation("JuryPanel_president", fields:[presidentId], references:[id], onDelete:SetNull)
+  juryMember_panel JuryMember[] @relation("JuryMember_panel")
+}
+
+model JuryInvitation {
+  id String @id @default(uuid())
+email String
+  displayName String
+  tokenHash String @unique
+  expiresAt DateTime
+  acceptedAt DateTime?
+  revokedAt DateTime?
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  createdByReference String
+  @@index([projectId,email])
+  projectId String
+  project JuryProject @relation("JuryInvitation_project", fields:[projectId], references:[id], onDelete:Cascade)
+  juryMember_invitation JuryMember[] @relation("JuryMember_invitation")
+  juryAppSession_invitation JuryAppSession[] @relation("JuryAppSession_invitation")
+  juryDraftKey_invitation JuryDraftKey[] @relation("JuryDraftKey_invitation")
+}
+
+model JuryMember {
+  id String @id @default(uuid())
+userReference String?
+  role String @default("MEMBER")
+  weight Decimal @default(1) @db.Decimal(20,8)
+  status String @default("INVITED")
+  availability Json
+  conflictOfInterest Boolean @default(false)
+  conflictReason String @default("")
+  conflictAcknowledgedBy String?
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  @@unique([panelId,userReference])
+  @@unique([panelId,invitationId])
+  panelId String
+  panel JuryPanel @relation("JuryMember_panel", fields:[panelId], references:[id], onDelete:Cascade)
+  userId String?
+  user User? @relation("JuryMember_user", fields:[userId], references:[id], onDelete:SetNull)
+  invitationId String?
+  invitation JuryInvitation? @relation("JuryMember_invitation", fields:[invitationId], references:[id], onDelete:SetNull)
+  juryPanel_president JuryPanel[] @relation("JuryPanel_president")
+  juryAssignment_member JuryAssignment[] @relation("JuryAssignment_member")
+  juryCertificate_member JuryCertificate[] @relation("JuryCertificate_member")
+}
+
+model JuryAssignment {
+  id String @id @default(uuid())
+criterionIds String[] @default([])
+  enabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  @@unique([memberId,candidateId])
+  memberId String
+  member JuryMember @relation("JuryAssignment_member", fields:[memberId], references:[id], onDelete:Cascade)
+  candidateId String
+  candidate JuryCandidate @relation("JuryAssignment_candidate", fields:[candidateId], references:[id], onDelete:Cascade)
+  juryEvaluation_assignment JuryEvaluation[] @relation("JuryEvaluation_assignment")
+  @@index([candidateId,enabled])
+}
+
+model JuryRubricTemplate {
+  id String @id @default(uuid())
+name String
+  description String @default("")
+  visibility String @default("PRIVATE")
+  definition Json
+  version Int @default(1)
+  revision Int @default(1)
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ownerId String?
+  owner User? @relation("JuryRubricTemplate_owner", fields:[ownerId], references:[id], onDelete:SetNull)
+}
+
+model JuryRubricVersion {
+  id String @id @default(uuid())
+version Int
+  revision Int @default(1)
+  title String
+  maximum Decimal @db.Decimal(20,8)
+  weightingMode String @default("MANUAL")
+  sourceTemplateId String?
+  sourceTemplateVersion Int?
+  lockedAt DateTime?
+  definitionHash String
+  createdAt DateTime @default(now())
+  @@unique([projectId,version])
+  projectId String
+  project JuryProject @relation("JuryRubricVersion_project", fields:[projectId], references:[id], onDelete:Cascade)
+  juryProject_activeRubric JuryProject[] @relation("JuryProject_activeRubric")
+  juryCriterion_rubric JuryCriterion[] @relation("JuryCriterion_rubric")
+  juryEvaluation_rubric JuryEvaluation[] @relation("JuryEvaluation_rubric")
+  juryResultRun_rubric JuryResultRun[] @relation("JuryResultRun_rubric")
+}
+
+model JuryCriterion {
+  id String @id @default(uuid())
+key String
+  name String
+  description String @default("")
+  instructions String @default("")
+  maximum Decimal @db.Decimal(20,8)
+  weight Decimal @db.Decimal(20,8)
+  mandatory Boolean @default(true)
+  applicability String @default("BOTH")
+  commentRule String @default("OPTIONAL")
+  commentThreshold Decimal @default(50) @db.Decimal(20,8)
+  minimumJudges Int @default(1)
+  position Int
+  @@unique([rubricVersionId,key])
+  rubricVersionId String
+  rubric JuryRubricVersion @relation("JuryCriterion_rubric", fields:[rubricVersionId], references:[id], onDelete:Cascade)
+  parentId String?
+  parent JuryCriterion? @relation("JuryCriterion_parent", fields:[parentId], references:[id], onDelete:SetNull)
+  juryCriterion_parent JuryCriterion[] @relation("JuryCriterion_parent")
+  juryPerformanceLevel_criterion JuryPerformanceLevel[] @relation("JuryPerformanceLevel_criterion")
+  juryEvaluationScore_criterion JuryEvaluationScore[] @relation("JuryEvaluationScore_criterion")
+}
+
+model JuryPerformanceLevel {
+  id String @id @default(uuid())
+label String
+  description String @default("")
+  minimum Decimal @db.Decimal(20,8)
+  maximum Decimal @db.Decimal(20,8)
+  position Int
+  criterionId String
+  criterion JuryCriterion @relation("JuryPerformanceLevel_criterion", fields:[criterionId], references:[id], onDelete:Cascade)
+}
+
+model JuryEvaluation {
+  id String @id @default(uuid())
+status String @default("DRAFT")
+  revision Int @default(0)
+  comment String @default("")
+  total Decimal? @db.Decimal(20,8)
+  submittedAt DateTime?
+  reopenedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([assignmentId,rubricVersionId])
+  assignmentId String
+  assignment JuryAssignment @relation("JuryEvaluation_assignment", fields:[assignmentId], references:[id], onDelete:Cascade)
+  rubricVersionId String
+  rubric JuryRubricVersion @relation("JuryEvaluation_rubric", fields:[rubricVersionId], references:[id], onDelete:Restrict)
+  juryEvaluationScore_evaluation JuryEvaluationScore[] @relation("JuryEvaluationScore_evaluation")
+  juryEvaluationRevision_evaluation JuryEvaluationRevision[] @relation("JuryEvaluationRevision_evaluation")
+  juryReopenRequest_evaluation JuryReopenRequest[] @relation("JuryReopenRequest_evaluation")
+}
+
+model JuryEvaluationScore {
+  id String @id @default(uuid())
+kind String @default("UNSCORED")
+  points Decimal? @db.Decimal(20,8)
+  comment String @default("")
+  @@unique([evaluationId,criterionId])
+  evaluationId String
+  evaluation JuryEvaluation @relation("JuryEvaluationScore_evaluation", fields:[evaluationId], references:[id], onDelete:Cascade)
+  criterionId String
+  criterion JuryCriterion @relation("JuryEvaluationScore_criterion", fields:[criterionId], references:[id], onDelete:Restrict)
+}
+
+model JuryEvaluationRevision {
+  id String @id @default(uuid())
+revision Int
+  requestId String
+  requestHash String
+  snapshot Json
+  action String
+  actorReference String
+  reason String @default("")
+  createdAt DateTime @default(now())
+  @@unique([evaluationId,requestId])
+  @@unique([evaluationId,revision])
+  evaluationId String
+  evaluation JuryEvaluation @relation("JuryEvaluationRevision_evaluation", fields:[evaluationId], references:[id], onDelete:Cascade)
+}
+
+model JuryReopenRequest {
+  id String @id @default(uuid())
+requestedBy String
+  reason String
+  status String @default("PENDING")
+  resolvedBy String?
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+  projectId String
+  project JuryProject @relation("JuryReopenRequest_project", fields:[projectId], references:[id], onDelete:Cascade)
+  evaluationId String?
+  evaluation JuryEvaluation? @relation("JuryReopenRequest_evaluation", fields:[evaluationId], references:[id], onDelete:SetNull)
+}
+
+model JuryResultRun {
+  id String @id @default(uuid())
+version Int
+  method String
+  settings Json
+  checksum String
+  status String @default("PENDING_VALIDATION")
+  approvedByReference String?
+  approvedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([projectId,version])
+  projectId String
+  project JuryProject @relation("JuryResultRun_project", fields:[projectId], references:[id], onDelete:Cascade)
+  rubricVersionId String
+  rubric JuryRubricVersion @relation("JuryResultRun_rubric", fields:[rubricVersionId], references:[id], onDelete:Restrict)
+  juryCandidateResult_run JuryCandidateResult[] @relation("JuryCandidateResult_run")
+  juryStudentResult_run JuryStudentResult[] @relation("JuryStudentResult_run")
+  juryPublication_run JuryPublication[] @relation("JuryPublication_run")
+}
+
+model JuryCandidateResult {
+  id String @id @default(uuid())
+score Decimal? @db.Decimal(20,8)
+  maximum Decimal @db.Decimal(20,8)
+  percentage Decimal? @db.Decimal(20,8)
+  judgeCount Int
+  status String
+  statistics Json
+  criterionResults Json
+  flags Json
+  @@unique([runId,candidateId])
+  runId String
+  run JuryResultRun @relation("JuryCandidateResult_run", fields:[runId], references:[id], onDelete:Cascade)
+  candidateId String
+  candidate JuryCandidate @relation("JuryCandidateResult_candidate", fields:[candidateId], references:[id], onDelete:Restrict)
+}
+
+model JuryStudentResult {
+  id String @id @default(uuid())
+groupScore Decimal? @db.Decimal(20,8)
+  individualScore Decimal? @db.Decimal(20,8)
+  score Decimal? @db.Decimal(20,8)
+  maximum Decimal @db.Decimal(20,8)
+  percentage Decimal? @db.Decimal(20,8)
+  status String
+  rank Int?
+  feedback String @default("")
+  @@unique([runId,participantId])
+  runId String
+  run JuryResultRun @relation("JuryStudentResult_run", fields:[runId], references:[id], onDelete:Cascade)
+  participantId String
+  participant JuryParticipant @relation("JuryStudentResult_participant", fields:[participantId], references:[id], onDelete:Restrict)
+}
+
+model JuryPublicationPreview {
+  id String @id @default(uuid())
+actorReference String
+  courseReference String
+  teacherReference String
+  request Json
+  resultVersion Int
+  workspaceRevision Int
+  previewHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  projectId String
+  project JuryProject @relation("JuryPublicationPreview_project", fields:[projectId], references:[id], onDelete:Cascade)
+}
+
+model JuryGradebookLink {
+  id String @id @default(uuid())
+courseReference String
+  teacherReference String
+  academicYear String
+  term String
+  columnId String
+  latestPublicationId String?
+  createdAt DateTime @default(now())
+  @@unique([projectId,courseReference,academicYear,term])
+  projectId String
+  project JuryProject @relation("JuryGradebookLink_project", fields:[projectId], references:[id], onDelete:Cascade)
+  courseId String?
+  course Course? @relation("JuryGradebookLink_course", fields:[courseId], references:[id], onDelete:SetNull)
+}
+
+model JuryPublication {
+  id String @id @default(uuid())
+idempotencyKey String
+  requestHash String
+  courseReference String
+  teacherReference String
+  academicYear String
+  term String
+  columnId String
+  mode String
+  status String @default("VERIFIED")
+  workspaceRevisionBefore Int
+  workspaceRevisionAfter Int
+  actorReference String
+  receiptReference String @unique
+  verifiedAt DateTime
+  cancelledAt DateTime?
+  cancellationReason String?
+  createdAt DateTime @default(now())
+  @@unique([projectId,idempotencyKey])
+  @@unique([projectId,runId,courseReference,academicYear,term])
+  projectId String
+  project JuryProject @relation("JuryPublication_project", fields:[projectId], references:[id], onDelete:Cascade)
+  runId String
+  run JuryResultRun @relation("JuryPublication_run", fields:[runId], references:[id], onDelete:Restrict)
+  courseId String?
+  course Course? @relation("JuryPublication_course", fields:[courseId], references:[id], onDelete:SetNull)
+  juryPublicationItem_publication JuryPublicationItem[] @relation("JuryPublicationItem_publication")
+}
+
+model JuryPublicationItem {
+  id String @id @default(uuid())
+studentReference String
+  previousValue Json
+  points Decimal @db.Decimal(20,8)
+  maximum Decimal @db.Decimal(20,8)
+  verifiedHash String
+  @@unique([publicationId,studentReference])
+  publicationId String
+  publication JuryPublication @relation("JuryPublicationItem_publication", fields:[publicationId], references:[id], onDelete:Cascade)
+  participantId String
+  participant JuryParticipant @relation("JuryPublicationItem_participant", fields:[participantId], references:[id], onDelete:Restrict)
+}
+
+model JurySubmission {
+  id String @id @default(uuid())
+title String
+  description String @default("")
+  repositoryUrl String?
+  demonstrationUrl String?
+  links Json
+  revision Int @default(1)
+  submittedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  projectId String
+  project JuryProject @relation("JurySubmission_project", fields:[projectId], references:[id], onDelete:Cascade)
+  candidateId String
+  candidate JuryCandidate @relation("JurySubmission_candidate", fields:[candidateId], references:[id], onDelete:Restrict)
+  juryAttachment_submission JuryAttachment[] @relation("JuryAttachment_submission")
+}
+
+model JuryAttachment {
+  id String @id @default(uuid())
+originalName String
+  mimeType String
+  bytes Int
+  sha256 String
+  storageKey String @unique
+  purpose String
+  uploadedByReference String
+  createdAt DateTime @default(now())
+  removedAt DateTime?
+  projectId String
+  project JuryProject @relation("JuryAttachment_project", fields:[projectId], references:[id], onDelete:Cascade)
+  submissionId String?
+  submission JurySubmission? @relation("JuryAttachment_submission", fields:[submissionId], references:[id], onDelete:SetNull)
+}
+
+model JuryAward {
+  id String @id @default(uuid())
+title String
+  description String @default("")
+  rule Json
+  decisionReason String
+  grantedByReference String
+  grantedAt DateTime @default(now())
+  projectId String
+  project JuryProject @relation("JuryAward_project", fields:[projectId], references:[id], onDelete:Cascade)
+  candidateId String?
+  candidate JuryCandidate? @relation("JuryAward_candidate", fields:[candidateId], references:[id], onDelete:SetNull)
+  participantId String?
+  participant JuryParticipant? @relation("JuryAward_participant", fields:[participantId], references:[id], onDelete:SetNull)
+}
+
+model JuryCertificate {
+  id String @id @default(uuid())
+kind String
+  reference String @unique
+  verificationHash String @unique
+  documentHash String
+  issuedByReference String
+  language String @default("en")
+  settings Json
+  issuedAt DateTime @default(now())
+  revokedAt DateTime?
+  revocationReason String?
+  projectId String
+  project JuryProject @relation("JuryCertificate_project", fields:[projectId], references:[id], onDelete:Cascade)
+  participantId String?
+  participant JuryParticipant? @relation("JuryCertificate_participant", fields:[participantId], references:[id], onDelete:SetNull)
+  memberId String?
+  member JuryMember? @relation("JuryCertificate_member", fields:[memberId], references:[id], onDelete:SetNull)
+}
+
+model JuryAudit {
+  id String @id @default(uuid())
+actorReference String
+  action String
+  entityType String
+  entityId String
+  reason String @default("")
+  metadata Json
+  createdAt DateTime @default(now())
+  @@index([projectId,createdAt])
+  @@index([actorReference,createdAt])
+  projectId String?
+  project JuryProject? @relation("JuryAudit_project", fields:[projectId], references:[id], onDelete:SetNull)
+}
+
+model JuryOutbox {
+  id String @id @default(uuid())
+kind String
+  deduplicationKey String @unique
+  payload Json
+  status String @default("PENDING")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lockedAt DateTime?
+  deliveredAt DateTime?
+  lastErrorCode String?
+  createdAt DateTime @default(now())
+  @@index([status,nextAttemptAt])
+  projectId String?
+  project JuryProject? @relation("JuryOutbox_project", fields:[projectId], references:[id], onDelete:SetNull)
+}
+
+model JuryAppSession {
+  id String @id @default(uuid())
+tokenHash String @unique
+  csrfToken String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  @@index([userId,expiresAt])
+  userId String?
+  user User? @relation("JuryAppSession_user", fields:[userId], references:[id], onDelete:Cascade)
+  invitationId String?
+  invitation JuryInvitation? @relation("JuryAppSession_invitation", fields:[invitationId], references:[id], onDelete:Cascade)
+}
+
+model JuryLaunchTicket {
+  id String @id @default(uuid())
+tokenHash String @unique
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  userId String
+  user User @relation("JuryLaunchTicket_user", fields:[userId], references:[id], onDelete:Cascade)
+}
+
+model JuryDraftKey {
+  id String @id @default(uuid())
+deviceId String
+  wrappedKey String
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([userId,deviceId])
+  userId String?
+  user User? @relation("JuryDraftKey_user", fields:[userId], references:[id], onDelete:Cascade)
+  invitationId String?
+  invitation JuryInvitation? @relation("JuryDraftKey_invitation",fields:[invitationId],references:[id],onDelete:Cascade)
+  @@unique([invitationId,deviceId])
+}
+
+model JuryRoleGrant {
+  id String @id @default(uuid())
+role String
+  grantedByReference String
+  enabled Boolean @default(true)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId,role])
+  userId String
+  user User @relation("JuryRoleGrant_user", fields:[userId], references:[id], onDelete:Cascade)
 }

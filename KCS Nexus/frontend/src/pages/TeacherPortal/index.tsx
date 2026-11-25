@@ -1,3 +1,4 @@
+import AcademicHomeWelcome from '@/components/shared/AcademicHomeWelcome'
 import EarlyYearsWorkspace from '@/components/teacher/EarlyYearsWorkspace'
 import {useEarlyYearsContext} from '@/hooks/useEarlyYearsContext'
 import NexusPedagogy from '@/components/shared/NexusPedagogy'
@@ -35,6 +36,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import { printOfficialPdf } from '@/utils/officialPdf'
+import {exportTimetableDocument} from '@/utils/teachingDocuments'
 import { canonicalClassLabel, compareClassLabels, schoolClassOptions, splitClassLabel } from '@/utils/classLabels'
 import {
   aiSignals,
@@ -738,12 +740,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const now = new Date()
     const academicYearStart = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1
     const academicYearLabel = segment==='courses'?(coursePeriods.year==='all'?tr('Toutes les années','All years'):coursePeriods.year||'—'):`${academicYearStart}-${academicYearStart + 1}`
+    if(segment==='timetable'){
+      void exportTimetableDocument({entries:officialTimetable.map((item:any)=>({...item,teacher:item.teacherName,className:item.className||item.grade})),teacher:[profileDraft.lastName,profileDraft.middleName,profileDraft.firstName].filter(Boolean).join(' '),academicYear:coursePeriods.data?.activeAcademicYear||'',language},message=>runAction(message));return
+    }
     const exportData = (() => {
       if (segment === 'courses') return { columns: ['Subject', 'Class', 'Room', 'Credit hours', 'Enrolled'], rows: filteredCourses.map((course) => [course.name, course.gradeLevels.join(', '), course.room, course.creditHours, course.studentIds.length]), narrative: 'Official teaching-load and subject-enrolment register.' }
   if (segment === 'attendance') return { columns: ['Student', 'Date', 'Class', 'Status'], rows: attendanceEntries.map((record) => [findStudent(record.studentId)?.name ?? 'Student', record.date, record.className, record.status]), narrative: 'Homeroom daily attendance register, generated from the current teacher record.' }
       if (segment === 'assignments') return { columns: ['Assignment', 'Student', 'Subject', 'Due date', 'Status', 'Priority'], rows: assignmentList.map((item) => [item.title, findStudent(item.studentId)?.name ?? 'Student', item.subject, item.due, item.status, item.priority]), narrative: 'Assignment register and learner follow-up status.' }
       if (segment === 'reports' || segment === 'report-card') return { columns: ['Student', 'Cycle', 'Average', 'Conduct', 'Approval'], rows: reportList.map((item) => [item.student, item.term, `${item.average}%`, item.conduct, item.principalStatus]), narrative: 'Teacher report-card register for administrative review.' }
-      if (segment === 'timetable') return { columns: [language === 'fr' ? 'Jour' : 'Day', language === 'fr' ? 'Horaire' : 'Time', language === 'fr' ? 'Cours' : 'Course', language === 'fr' ? 'Classe' : 'Class', language === 'fr' ? 'Salle' : 'Room', language === 'fr' ? 'Élèves' : 'Learners'], rows: officialTimetable.map((item: any) => [item.day, `${item.startTime}–${item.endTime}`, `${item.courseName}${item.courseCode ? ` (${item.courseCode})` : ''}`, item.className || item.grade || '—', item.room || '—', item.studentCount ?? '—']), narrative: language === 'fr' ? 'Emploi du temps officiel synchronisé du professeur.' : 'Official synchronized teacher timetable.' }
       if (segment === 'discipline') return { columns: ['Reference', 'Student', 'Date', 'Category', 'Level', 'Status'], rows: disciplineList.map((item) => [item.id, item.student, item.date, item.category, item.level, item.status]), narrative: 'Confidential discipline-report register. Distribution is restricted to authorized staff.' }
       if (segment === 'messages') return { columns: ['From / To', 'Subject', 'Time', 'Response'], rows: inbox.map((item) => [item.from, item.subject, item.time, item.requiresResponse ? 'Required' : 'No']), narrative: 'Confidential teacher communication register.' }
       if (segment === 'settings') return { columns: ['Field', 'Recorded value'], rows: [['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim()], ['Email', profileDraft.email], ['Phone', profileDraft.phone]], narrative: 'Teacher profile record. This document does not include the profile photo.' }
@@ -2748,7 +2752,7 @@ const TeacherDashboardHome = () => {
     return () => window.removeEventListener('kcs:open-teacher-ai-insights', openInsights)
   }, [location.search])
 
-  return (<div data-teacher-home><DashboardPanels id="teacher-dashboard" value={dashboardTab} onChange={setDashboardTab} label={dashboardLanguage==='fr'?'Rubriques du tableau de bord':'Dashboard sections'} items={[
+  return (<div data-teacher-home data-academic-home="teacher"><AcademicHomeWelcome role="teacher"/><DashboardPanels id="teacher-dashboard" value={dashboardTab} onChange={setDashboardTab} label={dashboardLanguage==='fr'?'Rubriques du tableau de bord':'Dashboard sections'} items={[
 {key:'overview',label:dashboardLanguage==='fr'?'Vue d’ensemble':'Overview',content:<>      <div data-dashboard-stats className="teacher-home-metrics grid grid-cols-2 gap-4 lg:grid-cols-4">
         {metricCards.map((item, index) => {
           const Icon = item.icon

@@ -1,0 +1,19 @@
+ARG NODE_IMAGE=node:24-alpine
+ARG NGINX_IMAGE=nginx:stable-alpine
+FROM ${NODE_IMAGE} AS build
+WORKDIR /app
+COPY ["KCS Nexus Jury/frontend/package.json", "KCS Nexus Jury/frontend/package-lock.json", "./"]
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY ["KCS Nexus Jury/frontend", "./"]
+ARG VITE_BASE_PATH=/
+ENV VITE_BASE_PATH=${VITE_BASE_PATH}
+RUN npm run build
+FROM ${NGINX_IMAGE} AS runtime
+ARG VITE_BASE_PATH=/
+COPY ["ops/jury/web.nginx.conf", "/tmp/jury-nginx.template"]
+RUN printf '%s\n' "$VITE_BASE_PATH" | grep -Eq '^/([A-Za-z0-9_-]+/)*$' && sed "s|__JURY_SCOPE__|$VITE_BASE_PATH|g" /tmp/jury-nginx.template > /etc/nginx/nginx.conf && rm /tmp/jury-nginx.template
+COPY --from=build /app/dist /usr/share/nginx/html
+USER 101:101
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 CMD wget -q --spider http://127.0.0.1:8080/ || exit 1
+CMD ["nginx", "-g", "daemon off;"]

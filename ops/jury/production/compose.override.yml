@@ -1,0 +1,29 @@
+# REVIEW TEMPLATE ONLY. Do not apply until explicit production authorization.
+# Merge with ops/production/compose.yml; preserve every unrelated release variable.
+services:
+  nexus_api:
+    env_file:
+      - /etc/kcs-orbit/nexus-api.env
+      - /etc/kcs-orbit/jury.env
+    environment:
+      JURY_ENABLED: "true"
+      JURY_PUBLIC_URL: ${JURY_PUBLIC_URL:?set the reviewed HTTPS Jury URL}
+      JURY_NEXUS_URL: https://kinshasachristianschool.org
+      JURY_STORAGE_DIR: /jury-private
+    volumes:
+      - jury_private_files:/jury-private
+  jury_web:
+    image: ${JURY_WEB_IMAGE:?set the tested immutable Jury web image}
+    profiles: [jury]
+    restart: unless-stopped
+    networks: [kcs_edge]
+    read_only: true
+    user: "101:101"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 100
+    mem_limit: 128m
+    tmpfs: ["/tmp:size=32m,mode=1777", "/var/cache/nginx:size=16m,mode=1777"]
+    healthcheck: {test: [CMD, wget, -q, --spider, "http://127.0.0.1:8080/"], interval: 15s, timeout: 5s, retries: 5}
+volumes:
+  jury_private_files:

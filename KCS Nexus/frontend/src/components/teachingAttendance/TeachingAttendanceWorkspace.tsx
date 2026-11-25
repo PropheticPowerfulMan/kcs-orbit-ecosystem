@@ -8,7 +8,7 @@ import {CalendarDays,BarChart3,CheckCircle2,ChevronLeft,ChevronRight,Clock3,Clip
 import {teachingAttendanceAPI} from '@/services/api'
 import {useTeachingClock} from '@/hooks/useTeachingClock'
 import {useUIStore} from '@/store/uiStore'
-import {printOfficialPdf} from '@/utils/officialPdf'
+import {exportAttendanceDocument} from '@/utils/teachingDocuments'
 import TeachingDialog from './TeachingDialog'
 import SessionRosterDialog from './SessionRosterDialog'
 import {percentage,reviewLabels,sessionLabels,teachingError,timeLabel,type CourseChoice,type ReviewStatus,type TeachingBoard,type TeachingSession} from './model'
@@ -106,18 +106,10 @@ export default function TeachingAttendanceWorkspace({manager=false}:{manager?:bo
  const calendar=board?.calendars.find(row=>row.isCurrent)||board?.calendars.find(row=>clock.schoolDate>=row.startDate.slice(0,10)&&clock.schoolDate<=row.endDate.slice(0,10))
  const exportReport=()=>{
   if(!board)return
-  const stats=board.summary
-  const learner=tab==='learners'
-  printOfficialPdf({
-   title:learner?tr('Régularité des élèves par cours','Learner course regularity'):tr('Présence et ponctualité des enseignants','Teacher session attendance and punctuality'),
-   metadata:[[tr('Période','Period'),range.from+' – '+range.to],[tr('Fuseau officiel','Official timezone'),'Africa/Kinshasa'],[tr('Début du suivi','Tracking since'),board.trackingSince],[tr('Classe','Class'),className||tr('Toutes','All')],[tr('Recherche','Search'),search||'—']],
-   indicators:learner?[[tr('Statuts renseignés','Recorded learner statuses'),board.learnerSummary.recorded],[tr('Présence','Attendance'),percentage(board.learnerSummary.attendanceRate)],[tr('Retards','Late'),board.learnerSummary.late]]:[[tr('Présences enregistrées','Recorded sessions'),stats.recorded],[tr('Ponctualité','Punctuality'),percentage(stats.punctualityRate)],[tr('Retard moyen (min)','Mean delay (min)'),stats.meanLateMinutes??'—']],
-   columns:learner?[tr('Élève','Learner'),tr('Classe','Class'),tr('Cours','Course'),tr('Présents','Present'),tr('Retards','Late'),tr('Absents','Absent'),tr('Taux','Rate')]:[tr('Date','Date'),tr('Professeur','Teacher'),tr('Cours','Course'),tr('Horaire prévu','Scheduled'),tr('Entrée','Entry'),tr('Sortie','Exit'),tr('Retard (min)','Delay (min)'),tr('Statut','Status'),tr('Contrôle du Principal','Principal verification')],
-   rows:learner?learnerRows.map(row=>[row.name,row.className,row.courseName,row.present,row.late,row.absent,percentage(row.attendanceRate)]):filtered.map(row=>[row.schoolDate,row.teacherName,row.courseName,timeLabel(row.expectedStartAt,fr)+'–'+timeLabel(row.expectedEndAt,fr),timeLabel(row.checkInAt,fr),timeLabel(row.checkOutAt,fr),row.timing.lateMinutes,sessionLabels[row.timing.status][fr?0:1],(row.presenceProof?.entry?.status||tr('Entrée historique','Historical entry'))+' / '+(row.presenceProof?.exit?.status||tr('Sortie non vérifiée','Unverified exit'))]),
-   narrative:tr('Les heures réelles proviennent de l’horloge PostgreSQL. Les séances sans pointage sont identifiées séparément. La régularité des élèves n’altère ni leurs notes ni leur bulletin.','Actual timestamps come from the PostgreSQL clock. Sessions without a recorded check-in are identified separately. Learner course regularity does not change grades or report cards.')+' '+tr('Retard médian / P95 (min) : ','Median / P95 delay (min): ')+(stats.medianLateMinutes??'—')+' / '+(stats.p95LateMinutes??'—'),
-   orientation:'landscape',documentKind:'activity',
-  })
+  const teacher=manager?(teachers.find(row=>row.id===teacherId)?.name||tr('Enseignants sélectionnés','Selected teachers')):board.teachers[0]?.name||catalog[0]?.teacherName||''
+  void exportAttendanceDocument({board,learner:tab==='learners',className,search,teacher,language:fr?'fr':'en',sessions:filtered,learners:learnerRows},message=>setReceipt({ok:false,title:tr('Document indisponible','Document unavailable'),message}))
  }
+
  const summary=board?.summary
  return <div className="teaching-workspace space-y-4" data-teaching-attendance={manager?'principal':'teacher'}>
   <header className="ta-hero flex flex-wrap items-center justify-between gap-4">

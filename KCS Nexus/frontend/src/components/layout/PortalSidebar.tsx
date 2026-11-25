@@ -1,3 +1,4 @@
+import JuryWorkspaceLauncher from '@/components/shared/JuryWorkspaceLauncher'
 import './portalSidebar.css'
 import {useEarlyYearsContext} from '@/hooks/useEarlyYearsContext'
 import {isMediaAccount,canUseStaffWorkspace,canUsePrincipalWorkspace,canUseSeniorWorkspace,canUseDisciplineWorkspace,workspaceRole} from '@/utils/accountScope'
@@ -439,6 +440,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             <UserCheck size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{currentLanguage==='fr'?'Espace Staff':'Staff workspace'}</span>}
           </Link>
         )}
+        <JuryWorkspaceLauncher className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} compact={!isMobile&&sidebarCollapsed}/>
         {electionAudience&&(electionManualUrl?<a href={electionManualUrl} target="_blank" rel="noopener noreferrer" data-election-native-launch className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={electionLabel} onClick={()=>{setTimeout(()=>setElectionManualUrl(null),0)}}><Vote size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{language==='fr'?'Ouvrir l’application électorale':'Open the election app'}</span>}</a>:<button type="button" onClick={()=>void openElections()} disabled={electionOpening} aria-busy={electionOpening} data-kcs-no-processing="true" data-election-launch={electionAudience} className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={!isMobile&&sidebarCollapsed?electionLabel:undefined}>
           {electionOpening?<Loader2 size={18} className="animate-spin"/>:<Vote size={18}/>}
           {(isMobile||!sidebarCollapsed)&&<span>{electionOpening?(language==='fr'?'Ouverture sécurisée…':'Opening securely…'):electionLabel}</span>}

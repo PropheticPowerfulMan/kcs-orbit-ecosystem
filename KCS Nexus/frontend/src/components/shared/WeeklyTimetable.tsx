@@ -1,3 +1,4 @@
+import {TimetableStudio} from './TimetableStudio'
 import './TimetableSurfaces.css'
 import { useMemo, useState } from 'react'
 import { CalendarDays, Clock3, MapPin, UserRound, UsersRound } from 'lucide-react'
@@ -48,7 +49,7 @@ const tone = (index: number) => [
   'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/35 dark:text-amber-50',
 ][index % 4]
 
-export default function WeeklyTimetable({ entries, language = 'en', audience, compact = false, showSummary = true }: Props) {
+function LegacyWeeklyTimetable({ entries, language = 'en', audience, compact = false, showSummary = true }: Props) {
   const fr = language === 'fr'
   const normalized = useMemo(() => entries.map((entry, index) => ({
     ...entry,
@@ -109,3 +110,5 @@ export default function WeeklyTimetable({ entries, language = 'en', audience, co
     </div>}
   </section>
 }
+
+export default function WeeklyTimetable(props:Props){return props.audience==='teacher'||props.audience==='student'?<TimetableStudio {...props}/>:<LegacyWeeklyTimetable {...props}/>}

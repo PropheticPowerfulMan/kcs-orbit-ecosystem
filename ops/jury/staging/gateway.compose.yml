@@ -1,0 +1,27 @@
+name: kcs-orbit-staging
+services:
+  gateway:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    volumes:
+      - staging_caddy_data:/data
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      staging_edge:
+        aliases: [staging_gateway]
+      staging_internal: {}
+      jury_preview: {}
+networks:
+  staging_edge:
+    external: true
+    name: kcs-orbit-production_kcs_staging
+  staging_internal:
+    external: true
+    name: kcs-orbit-staging_staging_internal
+  jury_preview:
+    external: true
+    name: kcs-jury-staging-20261125
+volumes:
+  staging_caddy_data:
+    external: true
+    name: kcs-orbit-staging_staging_caddy_data
