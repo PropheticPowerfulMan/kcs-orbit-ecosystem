@@ -2,6 +2,7 @@ import {juryErrorMessage} from './errors'
 export type Session = {
     reference: string;
     name: string;
+    avatar?: string | null;
     userId: string | null;
     memberId: string | null;
     studentId: string | null;

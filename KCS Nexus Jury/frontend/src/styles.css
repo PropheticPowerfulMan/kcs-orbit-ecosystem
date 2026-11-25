@@ -10,3 +10,7 @@
 
 /* Keep the official circular emblem undistorted in institutional identity areas. */
 .institution-emblem{flex-shrink:0;object-fit:contain;border-radius:50%;background:#f1f6f3;padding:2px}
+
+/* Reuse the personal Nexus dashboard photo without changing the official school portrait. */
+.profile-chip .avatar{overflow:hidden;flex-shrink:0}
+.profile-chip .avatar img{display:block;width:100%;height:100%;object-fit:cover}
