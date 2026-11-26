@@ -1054,11 +1054,12 @@ academicRecordsRouter.patch('/report-cards/:id/approve',requireRoles('admin'),as
 
 academicRecordsRouter.patch('/report-cards/:id/publish',requireRoles('admin','staff'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const id=getRouteParam(req.params.id)
+ const actorId=await databaseActorId(req.user!.sub)
  const card=await prisma.$transaction(async tx=>{
   const current=await tx.reportCard.findUnique({where:{id}});if(!current)throw new ApiError(404,'Report card not found')
   if(current.publicationStatus!=='APPROVED')throw new ApiError(409,'Only an approved report card may be published')
   const updated=await tx.reportCard.update({where:{id},data:{publicationStatus:'POSTED_TO_PORTAL',portalPostedAt:new Date()}})
-  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'REPORT_CARD_PUBLISHED',targetType:'ReportCard',targetId:id,metadata:{term:current.term,studentId:current.studentId}}})
+  await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_PUBLISHED',targetType:'ReportCard',targetId:id,metadata:{term:current.term,studentId:current.studentId}}})
   return updated
  })
  return success(res,card,'Approved report card published to the portal')

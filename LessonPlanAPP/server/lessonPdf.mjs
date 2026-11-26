@@ -106,9 +106,11 @@ export async function createLessonPdf(lesson,options={},appUrl='https://kinshasa
  [tr('Reference / status','Référence / statut'),[content.lessonNumber,content.status].filter(Boolean).join(' / ')],
  [tr('Unit / duration','Unité / durée'),[content.chapter,content.duration].filter(Boolean).join(' / ')],
  [tr('Department / term','Département / période'),[content.department,content.term].filter(Boolean).join(' / ')],
- [tr('Tags','Étiquettes'),content.tags.join(', ')]
+ [tr('Subtopic','Sous-thème'),content.subtopic],
+ [tr('Classroom','Salle'),content.classroom],
+ [tr('Number of learners','Nombre d’élèves'),content.numberOfStudents]
  ];
- const metadata=meta.filter(([label,value])=>value||![tr('Tags','Étiquettes'),tr('Department / term','Département / période')].includes(label));
+ const metadata=meta.filter(([label,value])=>value||![tr('Subtopic','Sous-thème'),tr('Classroom','Salle'),tr('Number of learners','Nombre d’élèves'),tr('Department / term','Département / période')].includes(label));
  const cardGap=10,metaColumns=settings.orientation==='landscape'?3:2,cardWidth=(width()-cardGap*(metaColumns-1))/metaColumns,metaFont=Math.min(f,11);
  for(let index=0;index<metadata.length;index+=metaColumns){
   const pair=metadata.slice(index,index+metaColumns);font(false,metaFont);
@@ -133,25 +135,8 @@ export async function createLessonPdf(lesson,options={},appUrl='https://kinshasa
    paragraph(labels[key],value,day.activityDurations?.[key]);
   }
  }
- const extraLabels={learningObjectives:['Learning objectives','Objectifs d’apprentissage'],learningOutcomes:['Learning outcomes','Résultats attendus'],successCriteria:['Success criteria','Critères de réussite'],materialsResources:['Materials and resources','Matériel et ressources'],vocabulary:['Vocabulary','Vocabulaire'],safetyConsiderations:['Safety','Sécurité'],referenceBook:['Reference book','Livre de référence'],subtopic:['Subtopic','Sous-thème'],learningArea:['Learning area','Domaine d’apprentissage'],biblicalIntegration:['Biblical integration','Intégration biblique'],crossCurricularConnections:['Cross-curricular links','Liens interdisciplinaires'],classroom:['Classroom','Salle'],numberOfStudents:['Number of learners','Nombre d’élèves']};
- for(const[key,label]of Object.entries(extraLabels)){
-  const value=Array.isArray(content[key])?content[key].filter(Boolean).join('\n'):String(content[key]||'');if(!value.trim())continue;
-  const labelWidth=Math.min(155,width()*.28);font();const valueHeight=doc.heightOfString(value,{width:width()-labelWidth-16,lineGap:2});
-  if(valueHeight+22>bottom()-92){paragraph(tr(...label),value);continue}
-  ensure(valueHeight+22);const y=doc.y;
-  doc.save().roundedRect(left,y,width(),valueHeight+16,4).fillAndStroke(palette.soft,palette.line).restore();
-  font(true,Math.min(f,10)).fillColor(palette.accent).text(tr(...label),left+8,y+8,{width:labelWidth-12});
-  font().text(value,left+labelWidth,y+8,{width:width()-labelWidth-8,lineGap:2});doc.x=left;doc.y=y+valueHeight+22;
- }
- const groups={blooms:['Bloom questions','Questions de Bloom'],differentiation:['Differentiation','Différenciation'],assessment:['Assessment notes','Notes d’évaluation'],reflection:['Reflection','Réflexion']};
- for(const[key,label]of Object.entries(groups)){
-  const fields=Object.entries(content[key]||{}).filter(([,value])=>Array.isArray(value)?value.some(Boolean):Boolean(value));
-  if(fields.length)paragraph(tr(...label),fields.map(([name,value])=>name.replace(/([A-Z])/g,' $1')+': '+(Array.isArray(value)?value.join('; '):value)).join('\n\n'));
- }
- for(const stage of content.stages){
-  const parts=[stage.teacherActivities,stage.studentActivities,stage.resources,stage.notes,...stage.attachments,...stage.images].filter(Boolean);
-  if(parts.length)paragraph(stage.name||tr('Additional stage','Étape complémentaire'),parts.join('\n'));
- }
+ // The official export follows the teacher's visible work plan. Hidden automatic
+ // support notes and legacy annexes remain saved but are not appended to the PDF.
  const range=doc.bufferedPageRange();
  for(let index=range.start;index<range.start+range.count;index++){
   doc.switchToPage(index);const page=doc.page,margin=page.margins.bottom;page.margins.bottom=0;const w=page.width,h=page.height;
