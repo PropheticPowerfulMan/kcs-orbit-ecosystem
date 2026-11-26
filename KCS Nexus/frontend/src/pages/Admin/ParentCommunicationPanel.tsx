@@ -1,3 +1,4 @@
+import EmailReceiptTracking from '@/components/admin/EmailReceiptTracking'
 import '@/components/admin/adminOverview.css'
 import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import React, { useRef, useEffect, useMemo, useState } from 'react'
@@ -96,6 +97,7 @@ const mergeMessages = (current: any[], incoming: any[]) => {
 
 export default function ParentCommunicationPanel() {
   const { i18n } = useTranslation()
+  const isSuperAdmin=useAuthStore(state=>state.user?.id==='configured-superadmin')
   const authenticatedUserId = useAuthStore((state) => state.user?.id || state.user?.email || 'anonymous')
   const communicationCacheKey = `${communicationCachePrefix}:${authenticatedUserId}`
   const cachedCommunication = useMemo(() => readCommunicationCache(communicationCacheKey), [communicationCacheKey])
@@ -122,6 +124,8 @@ export default function ParentCommunicationPanel() {
   const [usingCachedData, setUsingCachedData] = useState(() => Boolean(cachedCommunication))
   const [historyQuery, setHistoryQuery] = useState('')
   const [workspaceStep,setWorkspaceStep]=useState('communication-recipients')
+  const [receiptCount,setReceiptCount]=useState<number|null>(null)
+  useEffect(()=>{if(!isSuperAdmin&&workspaceStep==='communication-receipts')setWorkspaceStep('communication-recipients')},[isSuperAdmin,workspaceStep])
   const [historyFrom, setHistoryFrom] = useState('')
   const [historyTo, setHistoryTo] = useState('')
   const [remoteHistory, setRemoteHistory] = useState<any[] | null>(null)
@@ -365,7 +369,8 @@ export default function ParentCommunicationPanel() {
   return (
     <div className="space-y-6" data-communications-workspace>
       <header className="nexus-workspace-heading"><Mail size={34}/><div><span className="nexus-workspace-kicker">KCS ORBIT · {language==='fr'?'Communication institutionnelle':'Institutional communications'}</span><h2>{language==='fr'?'Un message précis, les bons destinataires':'A precise message, the right recipients'}</h2><p className="mt-2 max-w-3xl text-sm">{language==='fr'?'Ciblez les familles et les entités, préparez votre message et consultez l’historique des échanges et de leur livraison.':'Target families and identities, prepare your message and review correspondence and delivery history.'}</p></div></header>
-      <nav className="communications-workspace-tabs" role="tablist" aria-label={language==='fr'?'Espaces de communication':'Communication workspaces'}>{[['communication-recipients',language==='fr'?'Destinataires':'Recipients',selectedParents.length],['communication-compose',language==='fr'?'Rédiger et envoyer':'Compose and send',attachment?1:0],['communication-history',language==='fr'?'Messages et historique':'Messages and history',historyTotal]].map(([key,label,count])=><button key={key} type="button" role="tab" id={String(key)+'-tab'} aria-controls={String(key)} aria-selected={workspaceStep===key} tabIndex={workspaceStep===key?0:-1} onClick={()=>setWorkspaceStep(String(key))} onKeyDown={event=>{const tabs=Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]')),i=tabs.indexOf(event.currentTarget),next=event.key==='ArrowRight'?(i+1)%3:event.key==='ArrowLeft'?(i+2)%3:event.key==='Home'?0:event.key==='End'?2:-1;if(next>=0){event.preventDefault();tabs[next].click();tabs[next].focus()}}}><span>{label}</span><b>{count}</b></button>)}</nav>
+      <nav className={"communications-workspace-tabs"+(isSuperAdmin?" has-receipts":"")} role="tablist" aria-label={language==='fr'?'Espaces de communication':'Communication workspaces'}>{[['communication-recipients',language==='fr'?'Destinataires':'Recipients',selectedParents.length],['communication-compose',language==='fr'?'Rédiger et envoyer':'Compose and send',attachment?1:0],['communication-history',language==='fr'?'Messages et historique':'Messages and history',historyTotal],...(isSuperAdmin?[['communication-receipts',language==='fr'?'Accusés de réception':'Receipt tracking',receiptCount??'…']]:[])].map(([key,label,count])=><button key={key} type="button" role="tab" id={String(key)+'-tab'} aria-controls={String(key)} aria-selected={workspaceStep===key} tabIndex={workspaceStep===key?0:-1} onClick={()=>setWorkspaceStep(String(key))} onKeyDown={event=>{const tabs=Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]')),i=tabs.indexOf(event.currentTarget),next=event.key==='ArrowRight'?(i+1)%tabs.length:event.key==='ArrowLeft'?(i+tabs.length-1)%tabs.length:event.key==='Home'?0:event.key==='End'?tabs.length-1:-1;if(next>=0){event.preventDefault();tabs[next].click();tabs[next].focus()}}}><span>{label}</span><b>{count}</b></button>)}</nav>
+      {isSuperAdmin&&workspaceStep==='communication-receipts'&&<section id="communication-receipts" role="tabpanel" aria-labelledby="communication-receipts-tab"><EmailReceiptTracking language={language} onCount={setReceiptCount}/></section>}
       {notice ? <div className="rounded-2xl border border-kcs-blue-200 bg-kcs-blue-50 p-4 text-sm font-semibold text-kcs-blue-800 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60 dark:text-kcs-blue-100">{notice}</div> : null}
       {usingCachedData ? <div className="flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
         <span className="flex items-center gap-2"><AlertTriangle size={18} />{c.cachedData}</span>

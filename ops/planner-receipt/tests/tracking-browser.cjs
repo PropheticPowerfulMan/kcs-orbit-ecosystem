@@ -1,0 +1,32 @@
+const{chromium}=require('/runtime/node_modules/playwright'),fs=require('fs'),assert=require('node:assert/strict');
+const fixture=JSON.parse(fs.readFileSync('/evidence/fixture.private.json'));
+(async()=>{const browser=await chromium.launch({args:['--ignore-certificate-errors']}),checks=[];
+for(const [language,theme,width] of [['en','dark',1440],['fr','light',390],['fr','dark',768],['en','light',1440]]){
+ const c=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width,height:1000}}),p=await c.newPage(),errors=[];
+ p.on('pageerror',e=>errors.push(e.message));
+ await c.addInitScript(({user,token,language,theme})=>{sessionStorage.setItem('kcs-auth',JSON.stringify({state:{user,token,refreshToken:'synthetic'},version:0}));localStorage.setItem('kcs-ui',JSON.stringify({state:{theme,language,sidebarCollapsed:true},version:0}));localStorage.setItem('i18nextLng',language)}, {user:fixture.user,token:fixture.rootJwt,language,theme});
+ await c.route('**/api/**',async route=>{const path=new URL(route.request().url()).pathname;if(path.startsWith('/api/message-receipts'))return route.continue();if(path==='/api/auth/me')return route.fulfill({json:{success:true,data:fixture.user}});if(route.request().method()==='GET')return route.fulfill({json:{success:true,data:[]}});return route.continue()});
+ await p.goto('https://receipt-qa/admin/communications');await p.locator('#communication-receipts-tab').click();const area=p.locator('[data-email-receipts]');await area.waitFor();
+ const search=area.getByRole('textbox');await search.fill(fixture.subject);
+ await p.waitForResponse(res=>res.url().includes('/api/message-receipts?')&&res.url().includes(encodeURIComponent(fixture.subject))&&res.status()===200);
+ await area.locator('tbody tr').first().waitFor();await p.waitForFunction(()=>document.querySelector('[data-state=CONFIRMED] strong')?.textContent==='12');
+ assert.equal(await area.locator('tbody tr').count(),15);assert.equal(await area.locator('[data-state=QUEUED] strong').textContent(),'1');
+ assert.equal(await area.locator('[data-state=FAILED] strong').textContent(),'1');assert.equal(await area.locator('[data-state=NOT_REQUESTED] strong').textContent(),'1');
+ await search.fill(fixture.pagingSubject);await p.waitForFunction(()=>document.querySelector('[data-state=AWAITING_CONFIRMATION] strong')?.textContent==='1'&&document.querySelectorAll('.email-receipt-list tbody tr').length===30);
+ const first=await area.locator('tbody tr').first().innerText();await area.locator('.email-receipt-pages button').last().click();await p.waitForFunction(()=>document.querySelectorAll('.email-receipt-list tbody tr').length===6);assert.notEqual(await area.locator('tbody tr').first().innerText(),first);
+ await area.locator('.email-receipt-filters select').first().selectOption('AWAITING_CONFIRMATION');await p.waitForFunction(()=>document.querySelectorAll('.email-receipt-list tbody tr').length===1);assert.equal(await area.locator('tbody tr').count(),1);
+ await area.locator('.email-receipt-filters select').first().selectOption('ALL');await search.fill(fixture.subject);await p.waitForFunction(()=>document.querySelectorAll('.email-receipt-list tbody tr').length===15);
+ await area.locator('.email-receipt-filters select').first().selectOption('CONFIRMED');await p.waitForFunction(()=>document.querySelectorAll('.email-receipt-list tbody tr').length===12);
+ await area.locator('.email-receipt-filters select').nth(1).selectOption('report-card');await p.waitForFunction(()=>document.querySelectorAll('.email-receipt-list tbody tr').length===4);
+ await area.locator('tbody tr').first().getByRole('button').click();const modal=p.getByRole('dialog',{name:new RegExp(fixture.subject)});await modal.waitFor();
+ assert.ok((await modal.innerText()).includes('SHA-256'));const box=await modal.boundingBox();assert.ok(Math.abs(box.x+box.width/2-width/2)<3);assert.ok(Math.abs(box.y+box.height/2-500)<3);
+ await p.screenshot({path:`/evidence/tracking-${language}-${theme}-${width}.png`});await modal.getByRole('button',{name:language==='fr'?'Fermer':'Close',exact:true}).last().click();
+ const overflow=await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2);assert.equal(overflow,false,'No page-wide overflow');
+ assert.deepEqual(errors,[]);checks.push({language,theme,width,realInventory:true,filteredCounts:true,paginationThirty:true,awaitingAcknowledgementFilter:true,centeredEvidence:true,noOverflow:true});await c.close();
+}
+const c=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:1000}}),p=await c.newPage();let privateCalls=0;const user={...fixture.user,id:'jury-qa-teacher-user',role:'teacher',accessRoles:['teacher']};
+await c.addInitScript(({user})=>{sessionStorage.setItem('kcs-auth',JSON.stringify({state:{user,token:'synthetic',refreshToken:'synthetic'},version:0}));localStorage.setItem('kcs-ui',JSON.stringify({state:{theme:'dark',language:'en'},version:0}))},{user});
+await c.route('**/api/**',route=>{const path=new URL(route.request().url()).pathname;if(path.startsWith('/api/message-receipts'))privateCalls++;return route.fulfill({json:{success:true,data:path==='/api/auth/me'?user:[]}})});
+await p.goto('https://receipt-qa/portal/teacher/messages');await p.locator('[data-communications-workspace]').waitFor();assert.equal(await p.locator('#communication-receipts-tab').count(),0);assert.equal(privateCalls,0);await c.close();
+await browser.close();fs.writeFileSync('/evidence/tracking-results.json',JSON.stringify({passed:true,checks,teachersDoNotSeePrivateTracking:true},null,2));console.log(JSON.stringify({passed:true,variants:checks.length,teachersDoNotSeePrivateTracking:true}));
+})().catch(e=>{console.error(e);process.exit(1)});

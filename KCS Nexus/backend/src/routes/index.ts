@@ -1,3 +1,4 @@
+import {messageReceiptsRouter} from './message-receipts.routes.js'
 import {disciplineDirectorRouter} from './discipline-director.routes.js'
 import {earlyYearsRouter} from './early-years.routes.js'
 import {electionsRouter} from './elections.routes.js'
@@ -51,6 +52,7 @@ import { studentGovernmentRouter } from './student-government.routes.js'
 import { sentinelNotificationsRouter } from './sentinel-notifications.routes.js'
 
 export const router = Router()
+router.use('/message-receipts',messageReceiptsRouter)
 router.use('/report-card-receipts', reportCardReceiptsRouter)
 router.use('/transcript-receipts',transcriptReceiptsRouter)
 router.use(academicVisibilityResponseGuard)

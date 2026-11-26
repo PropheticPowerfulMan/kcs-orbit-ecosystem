@@ -1,3 +1,4 @@
+import PDFDocument from 'pdfkit';
 import test from 'node:test';import assert from 'node:assert/strict';import {lessonHash,resolveLessonDocument} from './lessonDocuments.mjs';import{lessonDocumentContent,migrateAssessmentDay,documentSettings}from './lessonDocument.mjs';import{createLessonPdf}from './lessonPdf.mjs';
 const lesson={id:'lesson-one',ownerId:'teacher-one',subject:'French',teachers:'Synthetic Teacher',schoolYear:'2026-2027',gradeClass:'Grade 9',status:'draft',planType:'weekly',lessonNumber:'LP-TEST-01',topic:'Accents et compréhension',weeklyPlan:[{day:'Monday',lesson:'Exact saved lesson',presentation:'Café, élève, réussite.',assessment:'Explain the reading.',homework:'Read chapter 3.',assessmentTypes:['quiz'],activityDurations:{presentation:15}}]};
 const row={id:lesson.id,owner_id:lesson.ownerId,status:'draft',payload:lesson},deps={readPlan:async()=>row};
@@ -9,3 +10,17 @@ test('missing, deleted or unauthorized plans cannot generate documents',async()=
 test('verification explicitly distinguishes an exact revision from changed content',async()=>{const old={...lesson,topic:'Old exact title'},revision={...lesson,versions:[{snapshot:old}]};const data={...row,payload:revision};const result=await resolveLessonDocument({lessonId:lesson.id,hash:lessonHash(old)},{readPlan:async()=>data},true);assert.equal(result.matched,true);assert.equal(result.historical,true);assert.equal(result.lesson.topic,old.topic);assert.equal((await resolveLessonDocument({lessonId:lesson.id,hash:'f'.repeat(64)},deps,true)).matched,false)});
 test('page settings accept only supported orientations, layouts and readable font sizes',()=>{for(const value of[{fontSize:2},{fontSize:19},{orientation:'unknown'},{layout:'unknown'}])assert.throws(()=>documentSettings(value),{status:400});assert.deepEqual(documentSettings({orientation:'portrait',fontSize:14,layout:'details',language:'fr'}),{orientation:'portrait',fontSize:14,layout:'details',language:'fr'})});
 test('actual PDFs have a real saved-version QR reference and support multiple pages',async()=>{for(const orientation of['portrait','landscape']){const pdf=await createLessonPdf({...lesson,weeklyPlan:Array.from({length:5},(_,index)=>({...lesson.weeklyPlan[0],day:['Monday','Tuesday','Wednesday','Thursday','Friday'][index],presentation:'Long exact teaching content. '.repeat(120)}))},{orientation,fontSize:14},'https://school.example/lesson-plan/');assert.ok(pdf.bytes.subarray(0,5).toString()==='%PDF-');assert.ok(pdf.pageCount>1);assert.equal((pdf.bytes.toString('latin1').match(/\/Type \/Page\b/g)||[]).length,pdf.pageCount);assert.ok(pdf.verificationUrl.includes('#/verify/lesson-one?hash='+pdf.hash));assert.ok(pdf.bytes.length>15000)}});
+
+test('PDF prints the teacher work plan and setup without hidden automatic annexes',async()=>{
+ const texts=[],original=PDFDocument.prototype.text
+ PDFDocument.prototype.text=function(value,...args){texts.push(String(value));return original.call(this,value,...args)}
+ const plan={...lesson,classroom:'ROOM_TYPED_BY_TEACHER',numberOfStudents:'18',subtopic:'SUBTOPIC_TYPED_BY_TEACHER',learningObjectives:[{value:'AUTOMATIC_SUPPORT_NOT_IN_WORK_PLAN'}],differentiation:{inclusiveStrategies:'AUTOMATIC_DIFFERENTIATION_NOT_IN_WORK_PLAN'},reflection:{teacherNotes:'AUTOMATIC_REFLECTION_NOT_IN_WORK_PLAN'},stages:[{name:'Hidden legacy stage',teacherActivities:'LEGACY_ANNEX_NOT_IN_WORK_PLAN'}]}
+ const snapshot=JSON.stringify(plan)
+ try{
+  for(const layout of ['grid','details'])await createLessonPdf(plan,{orientation:'landscape',layout})
+  const output=texts.join('\n')
+  assert.ok(output.includes('Exact saved lesson'));assert.ok(output.includes('ROOM_TYPED_BY_TEACHER'));assert.ok(output.includes('SUBTOPIC_TYPED_BY_TEACHER'));assert.ok(output.includes('18'))
+  for(const unwanted of ['AUTOMATIC_SUPPORT_NOT_IN_WORK_PLAN','AUTOMATIC_DIFFERENTIATION_NOT_IN_WORK_PLAN','AUTOMATIC_REFLECTION_NOT_IN_WORK_PLAN','LEGACY_ANNEX_NOT_IN_WORK_PLAN'])assert.ok(!output.includes(unwanted))
+  assert.equal(JSON.stringify(plan),snapshot,'Export must never alter the saved teacher record')
+ }finally{PDFDocument.prototype.text=original}
+})
