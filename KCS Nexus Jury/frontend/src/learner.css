@@ -4,3 +4,5 @@
 @media(prefers-reduced-motion:reduce){.learner-quick>a{transition:none;transform:none}}
 
 .learner-pagination{border-top:1px solid var(--line);padding-top:18px}.learner-pagination .actions{flex-wrap:wrap}.learner-pagination span{font-size:11px;color:var(--muted)}
+
+.learner-search input{min-height:43px;padding:9px 0;color:var(--ink)}.learner-search:focus-within{outline:2px solid var(--primary);outline-offset:2px}.learner-filters>select{min-height:43px;padding:10px 13px;border:1px solid var(--line);border-radius:12px;background:var(--raised);color:var(--ink);font:inherit}.learner-filters>select:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
