@@ -1,4 +1,7 @@
 const fr: Record<string, string> = {
+  "Complete the browser installation to open Eduplanner in its own app window.":"Terminez l’installation proposée par le navigateur pour ouvrir Eduplanner dans sa propre fenêtre.",
+  "In Chrome or Edge, use Install app in the browser menu. If already installed, open Eduplanner from its icon and enable opening supported links.":"Dans Chrome ou Edge, utilisez Installer l’application dans le menu. Si elle est déjà installée, ouvrez Eduplanner par son icône et autorisez l’ouverture de ses liens.",
+
   "Senior Teacher · ST":"Responsable pédagogique · ST","Senior Teacher · ST Dashboard":"Tableau de bord pédagogique · ST",
   "Dashboard":"Tableau de bord","Curriculum":"Programme scolaire","Search":"Rechercher","Install App":"Installer l'application","New Lesson Plan":"Nouveau plan de leçon",
   "Toggle language":"Changer de langue","Toggle theme":"Changer de thème","Switch to French":"Passer en français","Switch to light theme":"Passer au thème clair","Switch to dark theme":"Passer au thème sombre",

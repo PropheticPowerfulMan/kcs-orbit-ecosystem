@@ -1,3 +1,4 @@
+import ParentChildPicker from '@/components/parent/ParentChildPicker'
 import ParentFamilyOverview from '@/components/parent/ParentFamilyOverview'
 import PortalWorkspaceHeading from '@/components/shared/PortalWorkspaceHeading'
 import PublishedCalendarStrip from '@/components/shared/PublishedCalendarStrip'
@@ -117,6 +118,7 @@ export default function ParentPortal() {
   const [messages, setMessages] = useState<InternalMessage[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
+  const [childError,setChildError]=useState(''),[childAttempt,setChildAttempt]=useState(0)
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState('')
   const [recipientId, setRecipientId] = useState('')
@@ -155,10 +157,10 @@ export default function ParentPortal() {
 
   useEffect(() => {
     let active = true
-    Promise.allSettled([studentsAPI.getMyChildren(), eventsAPI.getAll(), notificationsAPI.getAll(), messagesAPI.getHistory({ box: 'all' }), messagesAPI.getContacts()])
-      .then((results) => {
-        if (!active) return
-        const childPayload = results[0].status === 'fulfilled' ? results[0].value.data?.data : []
+    setLoading(true);setChildError('');setChildren([]);setSelectedId('')
+    studentsAPI.getMyChildren().then(response=>{
+      if(!active)return
+      const childPayload=response.data?.data
         const loaded = (Array.isArray(childPayload) ? childPayload : []).map((profile: any): ParentChild => ({
           id: String(profile.id), localProfileId: profile.localProfileId ? String(profile.localProfileId) : null,
           studentNumber: String(profile.studentNumber ?? ''),
@@ -166,23 +168,30 @@ export default function ParentPortal() {
           grade: [profile.grade, profile.section].filter(Boolean).join(' '), avatar: profile.user?.avatar ?? null,
           gpa: profile.academicVisibility?.grades ? profile.gpa ?? null : null, attendance: profile.attendanceRate ?? null, academicSummary: profile.academicSummary, academicAccess: profile.academicAccess, academicVisibility:profile.academicVisibility,
         }))
-        setChildren(loaded)
-        setSelectedId((current) => current || loaded[0]?.id || '')
-        if (results[1].status === 'fulfilled') setEvents(Array.isArray(results[1].value.data?.data) ? results[1].value.data.data : [])
-        if (results[2].status === 'fulfilled') setNotices(Array.isArray(results[2].value.data?.data) ? results[2].value.data.data : [])
-        if (results[3].status === 'fulfilled') setMessages(Array.isArray(results[3].value.data?.data) ? results[3].value.data.data : [])
-        if (results[4].status === 'fulfilled') {
-          const values = Array.isArray(results[4].value.data?.data) ? results[4].value.data.data : []
-          setContacts(values)
-          const officialContact = values.find((contact: Contact) => contact.role === 'ADMIN') ?? values[0]
-          setRecipientId(officialContact?.id ?? '')
-          setRecipientRole(officialContact?.role ?? '')
-        }
-        if (results[0].status === 'rejected') setError(results[0].reason?.response?.data?.message ?? 'Unable to load the children linked to this family.')
-      })
-      .finally(() => active && setLoading(false))
-    return () => { active = false }
-  }, [])
+      setChildren(loaded)
+      setSelectedId(current=>loaded.some(child=>child.id===current)?current:loaded[0]?.id||'')
+    }).catch(reason=>{
+      if(!active)return
+      setChildren([]);setSelectedId('')
+      setChildError(reason?.response?.data?.message??tr('Impossible de charger les enfants de cette famille. Réessayez.','Unable to load this family’s children. Please retry.'))
+    }).finally(()=>{if(active)setLoading(false)})
+    return()=>{active=false}
+  }, [user?.id,childAttempt])
+
+  useEffect(()=>{
+    let active=true
+    const list=(response:any)=>Array.isArray(response.data?.data)?response.data.data:[]
+    void eventsAPI.getAll().then(response=>{if(active)setEvents(list(response))}).catch(()=>{})
+    void notificationsAPI.getAll().then(response=>{if(active)setNotices(list(response))}).catch(()=>{})
+    void messagesAPI.getHistory({box:'all'}).then(response=>{if(active)setMessages(list(response))}).catch(()=>{})
+    void messagesAPI.getContacts().then(response=>{
+      if(!active)return
+      const values=list(response);setContacts(values)
+      const officialContact=values.find((contact:Contact)=>contact.role==='ADMIN')??values[0]
+      setRecipientId(officialContact?.id??'');setRecipientRole(officialContact?.role??'')
+    }).catch(()=>{})
+    return()=>{active=false}
+  },[user?.id])
 
   useEffect(() => {
     if (segment !== 'messages') return
@@ -275,5 +284,5 @@ export default function ParentPortal() {
 
   const overviewDescription = language === 'fr' ? 'Une vue familiale sécurisée des résultats, présences, finances et communications scolaires.' : 'A secure family view of academics, attendance, finance, and school communications.'
 
-  return <div className="portal-shell parent-portal-shell flex min-h-screen bg-sky-50 dark:bg-kcs-blue-950"><PortalSidebar badges={{ '/portal/parent/messages': unreadMessages }}/><main data-portal-workspace={`parent-${segment}`} className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"><div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0"><h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}{user?.firstName ? `, ${user.firstName}` : ''}</h1><p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} - {overviewDescription}</p></div>{children.length > 0 && <label className="min-w-64 text-xs font-bold uppercase text-kcs-blue-700 dark:text-kcs-blue-200">{language === 'fr' ? 'Élève actif' : 'Active child'}<select className={`${field} mt-1 normal-case`} value={selectedChild?.id ?? ''} onChange={(event) => setSelectedId(event.target.value)}>{children.map((child) => <option key={child.id} value={child.id}>{child.name} - {child.grade}</option>)}</select></label>}</div></div><div className="w-full max-w-none p-4 sm:p-6 lg:p-8"><PublishedCalendarStrip/>{segment !== 'dashboard' && <PortalWorkspaceHeading title={title} audience="parent"/>}{error && <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}{!loading && academicAccess?.exempt && <p className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200">Accès académique autorisé selon la politique institutionnelle.</p>}{!loading && academicLocked && segment === 'dashboard' ? <div className="mb-6">{financialLockCard}</div> : null}{loading ? <div className={card}><div className="flex items-center gap-3 text-gray-500"><Clock className="animate-spin" size={20}/>Loading the secure family workspace…</div></div> : children.length === 0 ? <div className={card}><UserRound className="text-kcs-blue-500"/><h2 className="mt-3 text-xl font-bold dark:text-white">No child is linked to this parent account</h2><p className="mt-2 text-sm text-gray-500">Please contact the school registry. The portal does not infer or expose unverified family links.</p></div> : content}<div className="mt-8"><SuggestionBox/></div></div></main></div>
+  return <div className="portal-shell parent-portal-shell flex min-h-screen bg-sky-50 dark:bg-kcs-blue-950"><PortalSidebar badges={{ '/portal/parent/messages': unreadMessages }}/><main data-portal-workspace={`parent-${segment}`} className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"><div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0"><h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}{user?.firstName ? `, ${user.firstName}` : ''}</h1><p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} - {overviewDescription}</p></div>{children.length > 0 && <ParentChildPicker children={children} selectedId={selectedChild?.id||''} onChange={setSelectedId} language={language}/>}</div></div><div className="w-full max-w-none p-4 sm:p-6 lg:p-8"><PublishedCalendarStrip/>{segment !== 'dashboard' && <PortalWorkspaceHeading title={title} audience="parent"/>}{error && <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}{!loading && academicAccess?.exempt && <p className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200">Accès académique autorisé selon la politique institutionnelle.</p>}{!loading && academicLocked && segment === 'dashboard' ? <div className="mb-6">{financialLockCard}</div> : null}{loading ? <div className={card}><div className="flex items-center gap-3 text-gray-500"><Clock className="animate-spin" size={20}/>{tr('Chargement de votre espace familial sécurisé…','Loading the secure family workspace…')}</div></div> : childError ? <div className={card} role="alert"><h2 className="text-xl font-bold dark:text-white">{tr('Chargement interrompu','Loading interrupted')}</h2><p className="mt-2 text-sm text-gray-500">{childError}</p><button className="mt-4 rounded-xl bg-kcs-blue-700 px-4 py-2 font-semibold text-white" onClick={()=>setChildAttempt(v=>v+1)}>{tr('Réessayer','Retry')}</button></div> : children.length === 0 ? <div className={card}><UserRound className="text-kcs-blue-500"/><h2 className="mt-3 text-xl font-bold dark:text-white">{tr('Aucun enfant n’est lié à ce compte parent','No child is linked to this parent account')}</h2><p className="mt-2 text-sm text-gray-500">{tr('Veuillez contacter le secrétariat. Les liens familiaux non vérifiés ne sont jamais déduits ni affichés.','Please contact the school registry. The portal does not infer or expose unverified family links.')}</p></div> : content}<div className="mt-8"><SuggestionBox/></div></div></main></div>
 }

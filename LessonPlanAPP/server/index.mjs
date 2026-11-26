@@ -293,7 +293,7 @@ const server = http.createServer(async (request, response) => {
    response.writeHead(200,{'Content-Type':'application/pdf','Content-Length':document.bytes.length,'Content-Disposition':"inline; filename*=UTF-8''"+encodeURIComponent(document.filename),'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','Content-Security-Policy':"frame-ancestors 'self'"});return response.end(document.bytes);
   }
   if (request.method === "OPTIONS") return sendJson(response, 204, {}, corsOrigin);
-  if(request.method==='POST'&&['/api/auth/session-profile','/api/documents/pdf','/api/documents/verify'].includes(pathname)){
+  if(request.method==='POST'&&['/api/auth/session-profile','/api/documents/pdf','/api/documents/preview','/api/documents/verify'].includes(pathname)){
    if(origin&&!allowedOrigins.has(origin))return sendJson(response,403,{error:'Origin not allowed'},appUrl);
    try{
     const body=await readJson(request);
@@ -304,6 +304,7 @@ const server = http.createServer(async (request, response) => {
     if(verification)return sendJson(response,200,document,corsOrigin);
     const pdf=await createLessonPdf(document.lesson,document.settings,appUrl);
     const viewToken=pdfViews.put(pdf);
+    if(pathname.endsWith('/preview'))return sendJson(response,200,{viewToken,filename:pdf.filename,hash:pdf.hash,generatedAt:new Date().toISOString()},corsOrigin);
     response.writeHead(200,{'X-Document-View':viewToken,'Content-Type':'application/pdf','Content-Disposition':"inline; filename*=UTF-8''"+encodeURIComponent(pdf.filename),'X-Document-Filename':encodeURIComponent(pdf.filename),'X-Document-Hash':pdf.hash,'Access-Control-Allow-Origin':corsOrigin,'Access-Control-Expose-Headers':'X-Document-Filename, X-Document-Hash, X-Document-View','Vary':'Origin, Authorization','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});
     return response.end(pdf.bytes);
    }catch(error){const status=[400,401,403,404,409,413].includes(error?.status)?error.status:503;console.error('Eduplanner document/session request failed',pathname,status);return sendJson(response,status,{error:status<500?error.message:'The saved document or institutional role could not be verified. Your local draft remains available.'},corsOrigin)}

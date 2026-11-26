@@ -1,10 +1,10 @@
-export type LinkedWorkspace='academy'|'elections'
-const origins:Record<LinkedWorkspace,string>={academy:'https://academy.kinshasachristianschool.org',elections:'https://kcsparentelection.kinshasachristianschool.org'}
+export type LinkedWorkspace='academy'|'elections'|'eduplanner'
+const origins:Record<LinkedWorkspace,string>={academy:'https://academy.kinshasachristianschool.org',elections:'https://kcsparentelection.kinshasachristianschool.org',eduplanner:'https://kinshasachristianschool.org'}
 export class WorkspaceLaunchError extends Error {}
 export function workspaceUrl(app:LinkedWorkspace,value:string){
  const url=new URL(value,window.location.origin)
  if(url.origin!==origins[app]||url.username||url.password)throw new WorkspaceLaunchError('INVALID_DESTINATION')
- const path=app==='academy'?/^\/(?:api\/auth\/callback\/?|login\/?)$/:/^\/(?:admin\/|student-government\/)?(?:sso|login)\/$/
+ const path=app==='academy'?/^\/(?:api\/auth\/callback\/?|login\/?)$/:app==='eduplanner'?/^\/lesson-plan\/$/:/^\/(?:admin\/|student-government\/)?(?:sso|login)\/$/
  if(!path.test(url.pathname))throw new WorkspaceLaunchError('INVALID_DESTINATION')
  return url.href
 }
@@ -23,7 +23,7 @@ export async function launchNexusWorkspace(app:LinkedWorkspace,request:()=>Promi
  return
 }
 
-export function linkedWorkspaceLogin(app:LinkedWorkspace,scope:{audience?:'PARENT'|'STUDENT'|'ADMIN';workspace?:string;returnPath:string;language:string;theme:string}){
+export function linkedWorkspaceLogin(app:Exclude<LinkedWorkspace,'eduplanner'>,scope:{audience?:'PARENT'|'STUDENT'|'ADMIN';workspace?:string;returnPath:string;language:string;theme:string}){
  const path=app==='academy'?'/login':scope.audience==='STUDENT'?'/student-government/login/':scope.audience==='ADMIN'?'/admin/login/':'/login/';
  const url=new URL(path,origins[app]);url.searchParams.set('nexusReturn',scope.returnPath);url.searchParams.set('lang',scope.language);url.searchParams.set('theme',scope.theme);if(app==='academy'&&scope.workspace)url.searchParams.set('workspace',scope.workspace);return workspaceUrl(app,url.href);
 }

@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import {useApp} from "../contexts/AppContext";
 import {cloudAuthService} from "../services/cloudAuthService";
-import {officialLessonPdf} from "../services/lessonDocumentService";
+import {prepareLessonPreview,lessonPreviewKey,type PreparedLessonPdf} from "../services/lessonDocumentService";
+import {createPreparedPreviewCache} from "../../server/preparedPreview.mjs";
 import {assessmentTypes,assessmentLabels,migrateAssessmentDay} from "../../server/lessonDocument.mjs";
 import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
@@ -77,7 +78,8 @@ export const Editor = () => {
   const [panel,setPanel]=useState<'setup'|'weekly'|'review'>('setup');
   const [selectedDay,setSelectedDay]=useState(0);
   const [saveState,setSaveState]=useState({status:'saved',error:'',code:''});
-  const [pdfDocument,setPdfDocument]=useState<{url:string;viewUrl:string;filename:string}|null>(null);
+  const [pdfDocument,setPdfDocument]=useState<{url:string;viewUrl:string;filename:string;generatedAt?:string}|null>(null);
+  const prewarm=useRef({busy:false,last:0}),preparedPreview=useRef(createPreparedPreviewCache<PreparedLessonPdf>()),pdfLock=useRef(false),pdfEpoch=useRef(0);
   const [pdfError,setPdfError]=useState('');
   const [pdfBusy,setPdfBusy]=useState(false);
   const lastSaved=useRef('');
@@ -415,22 +417,33 @@ export const Editor = () => {
   },[id]);
   useEffect(()=>()=>{if(pdfDocument)URL.revokeObjectURL(pdfDocument.url)},[pdfDocument]);
   const printTitle=printableLesson.topic||printableLesson.chapter||'Lesson Plan';
-  const pdf=async(mode:'preview'|'download'|'print'='preview')=>{
-    if(pdfBusy||lessonLoading||lessonError)return;
-    // Reserve a native PDF viewer during the click gesture (mobile popup policies).
+  useEffect(()=>{preparedPreview.current.clear();pdfEpoch.current++;setPdfDocument(null)},[id,currentUser?.id,currentUser?.role]);
+  const preparePreview=(next:LessonPlan,force=false)=>preparedPreview.current.get(lessonPreviewKey(next,language)+':'+currentUser?.role,async()=>{
+    await lessonRepository.flush(next.id);
+    return prepareLessonPreview(next,language);
+  },force);
+  useDebouncedEffect(()=>{
+    if(!lessonLoading&&!lessonError&&id&&currentUser?.id&&cloudAuthService.enabled&&saveState.status==='saved'&&editEpoch.current<=savedEpoch.current&&navigator.onLine&&document.visibilityState!=='hidden'&&!pdfLock.current&&!prewarm.current.busy&&Date.now()-prewarm.current.last>=4000){
+      prewarm.current={busy:true,last:Date.now()};
+      void preparePreview(form.getValues()).catch(()=>{}).finally(()=>{prewarm.current.busy=false});
+    }
+  },[id,currentUser?.id,currentUser?.role,values,saveState.status,lessonLoading,lessonError,language],1200);
+  const pdf=async(mode:'preview'|'download'|'print'='preview',force=false)=>{
+    if(pdfLock.current||lessonLoading||lessonError)return;
+    pdfLock.current=true;
+    const epoch=pdfEpoch.current,owner=cloudAuthService.getSessionUserId();
     const viewer=mode==='print'?window.open('about:blank','_blank'):null;
     if(viewer){viewer.opener=null;viewer.document.title='KCS · Preparing PDF';viewer.document.body.textContent=tr('Preparing your saved lesson plan…','Préparation du plan de leçon enregistré…')}
     setPdfBusy(true);setPdfError('');setPreview(true);
     try{
       const next=canEditCurrent?save(false):form.getValues();if(!next)throw new Error(tr('The draft could not be saved.','Le brouillon n’a pas pu être enregistré.'));
-      await lessonRepository.flush(next.id);
-      const result=await officialLessonPdf(next,language),document={url:URL.createObjectURL(result.blob),viewUrl:result.viewUrl,filename:decodeURIComponent(result.filename)};
-      if(currentId.current!==next.id){URL.revokeObjectURL(document.url);viewer?.close();return}
+      const result=await preparePreview(next,force),document={url:result.viewUrl,viewUrl:result.viewUrl,filename:decodeURIComponent(result.filename),generatedAt:result.generatedAt};
+      if(currentId.current!==next.id||pdfEpoch.current!==epoch||cloudAuthService.getSessionUserId()!==owner){viewer?.close();return}
       setPdfDocument(document);
       if(mode==='download'){const a=window.document.createElement('a');a.href=document.url;a.download=document.filename;a.click()}
-      if(viewer)viewer.location.replace(document.url);
-    }catch(error){viewer?.close();setPdfError(error instanceof Error?error.message:tr('PDF unavailable. Your draft is preserved.','PDF indisponible. Votre brouillon est conservé.'))}
-    finally{setPdfBusy(false)}
+      if(viewer)viewer.location.replace(document.viewUrl);
+    }catch(error){viewer?.close();if(pdfEpoch.current===epoch)setPdfError(error instanceof Error?error.message:tr('PDF unavailable. Your draft is preserved.','PDF indisponible. Votre brouillon est conservé.'))}
+    finally{pdfLock.current=false;setPdfBusy(false)}
   };
   const print=()=>{void pdf('print')};
   useKeyboardShortcuts({save:()=>{void saveConfirmed()},print});
@@ -1062,8 +1075,8 @@ export const Editor = () => {
 
       <Dialog open={preview} title={tr('Official lesson plan · PDF','Plan de leçon officiel · PDF')} onClose={()=>setPreview(false)} size="preview">
         <div className="ep-pdf-preview flex h-full min-h-0 flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">{pdfDocument&&!pdfBusy&&<><a className="ep-document-link" href={pdfDocument.url} download={pdfDocument.filename}><Download size={16}/>{tr('Download PDF','Télécharger le PDF')}</a><a className="ep-document-link" href={pdfDocument.url} target="_blank" rel="noopener noreferrer"><Printer size={16}/>{tr('Open / Print PDF','Ouvrir / Imprimer le PDF')}</a></>}<Button variant="outline" disabled={pdfBusy} onClick={()=>void pdf()}>{tr('Refresh from my current fields','Actualiser avec ma saisie')}</Button></div>
-          {pdfBusy?<div className="grid flex-1 place-items-center p-8" role="status"><span className="flex gap-3 items-center"><Loader2 className="animate-spin"/>{tr('Saving, verifying and preparing your PDF…','Enregistrement, vérification et préparation du PDF…')}</span></div>:pdfError?<div role="alert" className="ep-save-warning p-5">{pdfError}<p className="mt-2">{tr('Your typed content is still in the editor. Synchronize your draft and try again.','Votre saisie est conservée dans l’éditeur. Synchronisez le brouillon et réessayez.')}</p></div>:pdfDocument?<><p className="text-xs text-muted-foreground">{tr('If your device cannot show embedded PDFs, use Open / Print PDF or Download PDF above.','Si votre appareil n’affiche pas le PDF intégré, utilisez Ouvrir / Imprimer ou Télécharger ci-dessus.')}</p><iframe src={pdfDocument.viewUrl} title={tr('Saved lesson plan PDF','PDF du plan enregistré')} referrerPolicy="no-referrer" className="w-full flex-1 min-h-[55dvh] rounded-lg bg-white"/></>:null}
+          <div className="flex flex-wrap items-center gap-2">{pdfDocument&&!pdfBusy&&<><a className="ep-document-link" href={pdfDocument.url} download={pdfDocument.filename}><Download size={16}/>{tr('Download PDF','Télécharger le PDF')}</a><a className="ep-document-link" href={pdfDocument.url} target="_blank" rel="noopener noreferrer"><Printer size={16}/>{tr('Open / Print PDF','Ouvrir / Imprimer le PDF')}</a></>}<Button variant="outline" disabled={pdfBusy} onClick={()=>void pdf('preview',true)}>{tr('Refresh from my current fields','Actualiser avec ma saisie')}</Button></div>
+          {pdfBusy?<div className="grid flex-1 place-items-center p-8" role="status"><span className="flex gap-3 items-center"><Loader2 className="animate-spin"/>{tr('Preparing your verified PDF…','Préparation de votre PDF vérifié…')}</span></div>:pdfError?<div role="alert" className="ep-save-warning p-5">{pdfError}<p className="mt-2">{tr('Your typed content is still in the editor. Synchronize your draft and try again.','Votre saisie est conservée dans l’éditeur. Synchronisez le brouillon et réessayez.')}</p></div>:pdfDocument?<><p className="text-xs text-muted-foreground">{tr('If your device cannot show embedded PDFs, use Open / Print PDF or Download PDF above.','Si votre appareil n’affiche pas le PDF intégré, utilisez Ouvrir / Imprimer ou Télécharger ci-dessus.')}</p><iframe src={pdfDocument.viewUrl} title={tr('Saved lesson plan PDF','PDF du plan enregistré')} referrerPolicy="no-referrer" className="w-full flex-1 min-h-[55dvh] rounded-lg bg-white"/></>:null}
         </div>
       </Dialog>
     </div>
