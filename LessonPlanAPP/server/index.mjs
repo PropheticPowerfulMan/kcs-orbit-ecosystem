@@ -248,7 +248,8 @@ const ecosystemSso = async (body) => {
 // Verified session reconciliation also applies to direct logins and restored sessions.
 const sessionProfile = async (authorization,requestedWorkspace) => {
  const token=String(authorization||'').replace(/^Bearer /,'');
- const admin=requireSupabaseAdmin(),verified=await verifiedSessionAccess(token,admin);
+ let verifiedIdentity;
+ const admin=requireSupabaseAdmin(),verified=await verifiedSessionAccess(token,admin,user=>{verifiedIdentity=user});
  if(verified.status!==200||!verified.body.allowed)throw Object.assign(new Error('Your Eduplanner session is not authorized.'),{status:verified.status});
  const id=verified.body.profileId;
  const read=await admin.from('profiles').select('*').eq('id',id).single();
@@ -268,7 +269,8 @@ const sessionProfile = async (authorization,requestedWorkspace) => {
    if(!existing){const update=await admin.auth.admin.updateUserById(id,{app_metadata:{...user.app_metadata,kcs_nexus_identity:{id:payload.data.userId}}});if(update.error)throw update.error}
   }
   const scope=await synchronizeAcademicProfile(payload.data,profile,{
-   readBinding:async id=>{const r=await admin.auth.admin.getUserById(id);if(r.error)throw r.error;return r.data.user},
+   // Reuse the identity freshly read above, never cached credentials or browser metadata.
+   readBinding:async id=>{if(verifiedIdentity?.id===id&&verifiedIdentity.app_metadata?.kcs_nexus_identity?.id===payload.data.userId)return verifiedIdentity;const r=await admin.auth.admin.getUserById(id);if(r.error)throw r.error;return r.data.user},
    updateRole:async(id,role)=>{const r=await admin.from('profiles').update({role,updated_at:new Date().toISOString()}).eq('id',id).select('id,role').single();if(r.error||r.data?.role!==role)throw r.error||new Error('Role persistence could not be confirmed')}
   });
   profile={...profile,role:scope.role};workspace=scope.workspace;

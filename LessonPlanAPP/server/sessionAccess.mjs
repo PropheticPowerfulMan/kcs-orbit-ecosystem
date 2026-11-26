@@ -1,4 +1,4 @@
-export async function verifiedSessionAccess(bearer,admin) {
+export async function verifiedSessionAccess(bearer,admin,onVerifiedIdentity) {
  if(!bearer)return {status:401,body:{allowed:false}};
  const {data,error}=await admin.auth.getUser(bearer);
  if(error||!data.user)return {status:401,body:{allowed:false}};
@@ -7,5 +7,6 @@ export async function verifiedSessionAccess(bearer,admin) {
  const user=identity.user;
  const blocked=Boolean(user.app_metadata?.kcs_orbit_access?.blocked)||Boolean(user.banned_until&&Date.parse(user.banned_until)>Date.now());
  const linked=user.app_metadata?.kcs_nexus_identity?.id;
+ if(!blocked)onVerifiedIdentity?.(user);
  return {status:blocked?403:200,body:{allowed:!blocked,...(!blocked&&user.email_confirmed_at&&typeof user.email==='string'?{verifiedEmail:user.email.trim().toLowerCase()}:{}),...(!blocked?{profileId:user.id}:{}),...(!blocked&&typeof linked==='string'&&/^[A-Za-z0-9-]{1,128}$/.test(linked)?{nexusUserId:linked}:{})}};
 }

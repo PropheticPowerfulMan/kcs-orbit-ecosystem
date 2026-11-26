@@ -14,9 +14,9 @@ import {
   Shield, Home, UserCheck, UserPlus, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Ban, Archive, Moon, Sun, Globe, BookOpenCheck, GripHorizontal, SlidersHorizontal, Vote, Loader2, ShieldAlert, HeartHandshake, ListChecks
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { academyAPI, authAPI, lessonPlanAPI, electionsAPI } from '@/services/api'
+import { authAPI, lessonPlanAPI } from '@/services/api'
 import { useUIStore } from '@/store/uiStore'
-import {launchNexusWorkspace,WorkspaceLaunchError} from '@/utils/launchNexusWorkspace'
+import {linkedWorkspaceLogin,launchNexusWorkspace,WorkspaceLaunchError} from '@/utils/launchNexusWorkspace'
 import {alertPortalMessage} from '@/utils/portalActionDialogs'
 import type { UserRole } from '@/types'
 import { getAssetUrl } from '@/utils/assets'
@@ -273,14 +273,14 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const openElections=async()=>{
    if(!electionAudience||electionLock.current)return
    electionLock.current=true;setElectionOpening(true);setElectionManualUrl(null)
-   try{const owner=user.id;const result=await launchNexusWorkspace('elections',async()=>{const response=await electionsAPI.launch(electionAudience);return response.data.data.url},{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner});if(result?.manualUrl&&useAuthStore.getState().user?.id===owner)setElectionManualUrl(result.manualUrl)}
+   try{const owner=user.id;const result=await launchNexusWorkspace('elections',async()=>linkedWorkspaceLogin('elections',{audience:electionAudience,returnPath:location.pathname,language,theme:useUIStore.getState().theme}),{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner});if(result?.manualUrl&&useAuthStore.getState().user?.id===owner)setElectionManualUrl(result.manualUrl)}
    catch(error){await alertPortalMessage(error instanceof WorkspaceLaunchError&&error.message==='POPUP_BLOCKED'?(language==='fr'?'Autorisez l’ouverture d’un nouvel onglet pour accéder aux élections.':'Allow a new tab to open the election workspace.'):language==='fr'?'L’accès électoral n’a pas pu être ouvert. Vérifiez votre connexion et vos droits, puis réessayez.':'The election workspace could not be opened. Check your connection and access rights, then retry.')}
    finally{electionLock.current=false;setElectionOpening(false)}
   }
   const openAcademy=async()=>{
    if(academyLock.current)return
    academyLock.current=true;setAcademyOpening(true);setAcademyManualUrl(null)
-   try{const owner=user.id;const result=await launchNexusWorkspace('academy',async()=>{const response=await academyAPI.launch();return response.data.data.url},{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner});if(result?.manualUrl&&useAuthStore.getState().user?.id===owner){setAcademyManualUrl(result.manualUrl);setTimeout(()=>setAcademyManualUrl(null),30000)}}
+   try{const owner=user.id;const result=await launchNexusWorkspace('academy',async()=>linkedWorkspaceLogin('academy',{workspace:user.id==='configured-superadmin'?'superadmin':principalWorkspace&&location.pathname.startsWith('/admin')?'principal':seniorWorkspace?'senior':activeRole==='student'?'student':'teacher',returnPath:location.pathname,language,theme:useUIStore.getState().theme}),{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner});if(result?.manualUrl&&useAuthStore.getState().user?.id===owner){setAcademyManualUrl(result.manualUrl);setTimeout(()=>setAcademyManualUrl(null),30000)}}
    catch(error){await alertPortalMessage(error instanceof WorkspaceLaunchError&&error.message==='POPUP_BLOCKED'?(language==='fr'?'Autorisez l’ouverture d’un nouvel onglet pour accéder à Academy.':'Allow a new tab to open Academy.'):language==='fr'?'Academy n’a pas pu être ouverte. Vérifiez votre connexion et réessayez.':'Academy could not be opened. Check your connection and retry.')}
    finally{academyLock.current=false;setAcademyOpening(false)}
   }

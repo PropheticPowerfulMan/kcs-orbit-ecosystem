@@ -23,7 +23,8 @@ export default function AdminWorkspaceTheme(){
    if(hero){delete hero.dataset.adminHero;hero=null}
    const page=pathname.replace(/\/+$/,'')
    // These workspaces contain independent panels, not one giant heading.
-   if(['/admin','/admin/dashboard','/admin/handbook'].includes(page)||/\/(students|parents|employees|teachers)$/.test(page))return
+   // Electives already owns its hero; its catalogue and empty states are ordinary cards.
+   if(['/admin','/admin/dashboard','/admin/handbook','/admin/electives'].includes(page)||/\/(students|parents|employees|teachers)$/.test(page))return
    const candidate=Array.from(main.querySelectorAll<HTMLElement>('section,[data-admin-card]')).find(box=>
     !box.closest(excluded)&&!box.closest('[hidden]')&&!box.matches('[data-admin-overview],[data-admin-analysis],[data-site-manager]')&&box.querySelector('h2')&&!box.querySelector('table,canvas,article,[role=tablist],form')&&box.getBoundingClientRect().height<600)
    if(candidate){candidate.dataset.adminHero='true';hero=candidate}

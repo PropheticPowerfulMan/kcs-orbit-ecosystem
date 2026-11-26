@@ -140,6 +140,7 @@ export const Editor = () => {
   const planType = values.planType || "weekly";
   const weeklyPlan = normalizeEditableWeeklyPlan(values.weeklyPlan, values.subject, values.gradeClass, currentChapter);
   const displayedPlan = planType === "daily" ? weeklyPlan.slice(0, 1) : weeklyPlan;
+  const teachingDayLabel=(day:WeeklyPlanDay,index:number)=>planType==='daily'&&/^\d{4}-\d{2}-\d{2}$/.test(values.date||'')?new Intl.DateTimeFormat(language==='fr'?'fr-FR':'en-GB',{weekday:'long',day:'numeric',month:'short'}).format(new Date(values.date+'T12:00:00')):language==='fr'?['Lundi','Mardi','Mercredi','Jeudi','Vendredi'][index]:day.day;
   const lessonSignature = weeklyPlan.map((day) => day.lesson).join("|");
   const printableLesson = {...values,weeklyPlan};
   const teacherFeedback = useMemo(() => getTeacherFeedback(values), [values]);
@@ -421,7 +422,7 @@ export const Editor = () => {
     if(viewer){viewer.opener=null;viewer.document.title='KCS · Preparing PDF';viewer.document.body.textContent=tr('Preparing your saved lesson plan…','Préparation du plan de leçon enregistré…')}
     setPdfBusy(true);setPdfError('');setPreview(true);
     try{
-      const next=canEditCurrent?save(true):form.getValues();if(!next)throw new Error(tr('The draft could not be saved.','Le brouillon n’a pas pu être enregistré.'));
+      const next=canEditCurrent?save(false):form.getValues();if(!next)throw new Error(tr('The draft could not be saved.','Le brouillon n’a pas pu être enregistré.'));
       await lessonRepository.flush(next.id);
       const result=await officialLessonPdf(next,language),document={url:URL.createObjectURL(result.blob),viewUrl:result.viewUrl,filename:decodeURIComponent(result.filename)};
       if(currentId.current!==next.id){URL.revokeObjectURL(document.url);viewer?.close();return}
@@ -795,7 +796,7 @@ export const Editor = () => {
       )}
 
       <div className="ep-editor-toolbar" role="tablist" aria-label={tr('Lesson plan sections','Sections du plan de leçon')}>
-        {(['setup','weekly','review'] as const).map((key,index)=><Button key={key} role="tab" aria-selected={panel===key} variant={panel===key?'primary':'outline'} onClick={()=>setPanel(key)}>{index+1}. {key==='setup'?tr('Essential setup','Informations essentielles'):key==='weekly'?tr('Weekly grid','Grille hebdomadaire'):tr('Review & PDF','Révision et PDF')}</Button>)}
+        {(['setup','weekly','review'] as const).map((key,index)=><Button key={key} role="tab" aria-selected={panel===key} variant={panel===key?'primary':'outline'} onClick={()=>setPanel(key)}>{index+1}. {key==='setup'?tr('Essential setup','Informations essentielles'):key==='weekly'?planType==='daily'?tr('Daily lesson','Leçon du jour'):tr('Weekly grid','Grille hebdomadaire'):tr('Review & PDF','Révision et PDF')}</Button>)}
         <span className={'ep-save-status '+saveState.status} role="status">{saveState.status==='editing'?tr('Unsaved changes','Modifications non enregistrées'):saveState.status==='unverified'?tr('Verifying synchronization…','Vérification de la synchronisation…'):saveState.status==='saving'?tr('Saving to server…','Enregistrement sur le serveur…'):saveState.status==='saved'?tr('Server synchronized','Synchronisé avec le serveur'):saveState.status==='conflict'?tr('Version conflict · draft preserved','Conflit de versions · brouillon conservé'):tr('Local draft · synchronization pending','Brouillon local · synchronisation en attente')}</span>
       </div>
       {saveState.error&&<Card className="ep-save-warning p-3"><p>{saveState.code==='conflict'?tr('Another saved version exists. Your edits are safe on this device.','Une autre version enregistrée existe. Vos modifications sont conservées sur cet appareil.'):tr('Server confirmation is pending. Keep this device’s draft until synchronization succeeds.','La confirmation du serveur est en attente. Conservez ce brouillon jusqu’à la synchronisation.')} {saveState.error}</p><div className="flex flex-wrap gap-2 mt-2"><Button onClick={()=>void saveConfirmed()}>{tr('Retry save','Réessayer')}</Button><Button variant="outline" onClick={duplicate}>{tr('Keep my draft as a copy','Conserver mon brouillon dans une copie')}</Button><Button variant="outline" onClick={async()=>{if(!confirm(tr('Load the saved server version? Save a copy first to keep your local changes.','Charger la version du serveur ? Conservez d’abord une copie de vos modifications locales.')))return;lessonRepository.discardPending(values.id);await lessonRepository.syncFromCloud();const latest=lessonRepository.get(values.id);if(latest){form.reset(latest);setLesson(latest);lastSaved.current=''}}}>{tr('Load server version','Charger la version du serveur')}</Button></div></Card>}
@@ -816,10 +817,10 @@ export const Editor = () => {
               </div>
             </div>
             <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <Field label="Plan Type">
+              <Field label={tr('Plan type','Type de préparation')}>
                 <Select value={planType} onChange={(event) => updateSetupField("planType", event.target.value)}>
-                  <option value="weekly">Weekly Lesson Plan</option>
-                  <option value="daily">Daily Lesson Plan</option>
+                  <option value="weekly">{tr('Weekly lesson plan','Plan de leçon hebdomadaire')}</option>
+                  <option value="daily">{tr('Daily lesson plan','Plan de leçon journalier')}</option>
                 </Select>
               </Field>
               <Field label="Lesson Plan Title"><Input readOnly value={printableLesson.topic} className="bg-white/[0.03]" /></Field>
@@ -917,8 +918,8 @@ export const Editor = () => {
           <Card className="w-full max-w-full overflow-hidden p-3 sm:p-4">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-black text-white">2. {planType === "daily" ? "Daily lesson" : "Weekly grid"}</h2>
-                <p className="text-sm text-muted-foreground">{planType === "daily" ? "Edit the single lesson for the selected date." : "Use Generate week first, then edit only the parts that need teacher judgement."}</p>
+                <h2 className="text-lg font-black text-white">2. {planType === 'daily' ? tr('Daily lesson','Leçon du jour') : tr('Weekly grid','Grille hebdomadaire')}</h2>
+                <p className="text-sm text-muted-foreground">{planType === 'daily' ? tr('Edit the single lesson for the selected date.','Préparez la leçon pour la date choisie.') : tr('Use Generate week first, then edit only the parts that need teacher judgement.','Générez la semaine, puis adaptez les activités à vos élèves.')}</p>
               </div>
               {planType === "weekly" && canEditCurrent && (
                 <div className="flex flex-wrap gap-2">
@@ -928,7 +929,7 @@ export const Editor = () => {
                 </div>
               )}
             </div>
-            <div className="ep-day-tabs" role="tablist" aria-label={tr('Teaching days','Jours de cours')}>{displayedPlan.map((day,index)=><Button type="button" role="tab" aria-selected={selectedDay===index} key={day.day} variant={selectedDay===index?'primary':'outline'} onClick={()=>setSelectedDay(index)}>{language==='fr'?['Lundi','Mardi','Mercredi','Jeudi','Vendredi'][index]:day.day}</Button>)}</div>
+            <div className="ep-day-tabs" role="tablist" aria-label={tr('Teaching days','Jours de cours')}>{displayedPlan.map((day,index)=><Button type="button" role="tab" aria-selected={selectedDay===index} key={day.day} variant={selectedDay===index?'primary':'outline'} onClick={()=>setSelectedDay(index)}>{teachingDayLabel(day,index)}</Button>)}</div>
             <div className="min-w-0 mt-4">
               {displayedPlan.map((day, index) => {
                 const durations = getActivityDurations(day, index);
@@ -937,7 +938,7 @@ export const Editor = () => {
                 return (
                 <div hidden={selectedDay!==index&&planType!=="daily"} key={day.day} className="ep-day-card min-w-0 rounded-xl border p-3 sm:p-5">
                   <div className="mb-3 rounded-md border border-cyan-300/20 bg-cyan-500/10 px-3 py-2 text-center">
-                    <h3 className="text-sm font-black text-cyan-100">{planType === "daily" ? "Daily Lesson" : day.day}</h3>
+                    <h3 className="text-sm font-black text-cyan-100">{teachingDayLabel(day,index)}</h3>
                     <div className="mx-auto mt-2 flex max-w-[11rem] items-center justify-center gap-2">
                       <Input
                         type="number"
@@ -1047,7 +1048,7 @@ export const Editor = () => {
             <div className="grid gap-4 sm:grid-cols-3">
              <Field label={tr('Page orientation','Orientation')}><Select value={values.printSettings?.orientation||'landscape'} onChange={event=>form.setValue('printSettings',{fontSize:11,layout:'grid',...values.printSettings,orientation:event.target.value as 'landscape'|'portrait'},{shouldDirty:true})}><option value="landscape">{tr('Landscape','Paysage')}</option><option value="portrait">{tr('Portrait','Portrait')}</option></Select></Field>
              <Field label={tr('Font size (pt)','Taille de police (pt)')}><Input type="number" min="9" max="18" value={values.printSettings?.fontSize||11} onChange={event=>form.setValue('printSettings',{orientation:'landscape',layout:'grid',...values.printSettings,fontSize:Math.min(18,Math.max(9,Number(event.target.value)||11))},{shouldDirty:true})}/></Field>
-             <Field label={tr('Document layout','Présentation')}><Select value={values.printSettings?.layout||'grid'} onChange={event=>form.setValue('printSettings',{orientation:'landscape',fontSize:11,...values.printSettings,layout:event.target.value as 'grid'|'details'},{shouldDirty:true})}><option value="grid">{tr('Weekly grid','Grille hebdomadaire')}</option><option value="details">{tr('Detailed teaching days','Journées détaillées')}</option></Select></Field>
+             <Field label={tr('Document layout','Présentation')}><Select value={values.printSettings?.layout||'grid'} onChange={event=>form.setValue('printSettings',{orientation:'landscape',fontSize:11,...values.printSettings,layout:event.target.value as 'grid'|'details'},{shouldDirty:true})}><option value="grid">{planType==='daily'?tr('Daily lesson','Leçon du jour'):tr('Weekly grid','Grille hebdomadaire')}</option><option value="details">{tr('Detailed teaching days','Journées détaillées')}</option></Select></Field>
             </div>
             <p className="mt-3 text-sm text-muted-foreground">{tr('Pages are added automatically. No content is squeezed onto a single page.','Les pages sont ajoutées automatiquement, sans comprimer le contenu sur une seule page.')}</p>
             <div className="mt-4 flex flex-wrap gap-2"><Button disabled={pdfBusy} onClick={()=>void pdf()}><Printer size={17}/>{tr('Preview saved PDF','Aperçu du PDF enregistré')}</Button><Button disabled={pdfBusy} variant="outline" onClick={print}>{tr('Print','Imprimer')}</Button><Button disabled={pdfBusy} variant="outline" onClick={()=>void pdf('download')}><Download size={17}/>{tr('Download PDF','Télécharger le PDF')}</Button></div>
