@@ -10,6 +10,7 @@ import {
 import { ApiError, asyncHandler, success } from "../utils/api.js";
 import { normalizeClassParts } from "../utils/className.js";
 import { isSequentialAcademicYear } from "../utils/academicCycle.js";
+import {databaseActorId}from'../utils/databaseActor.js';
 import { allocateElectives } from "../utils/electiveAllocation.js";
 
 export const electivesRouter = Router();
@@ -60,7 +61,7 @@ const offeringSchema = z.object({
 const studentGrade = (student: { grade: string; section?: string | null }) =>
   normalizeClassParts(student.grade, student.section).grade;
 const canManage = (req: AuthenticatedRequest) =>
-  req.user?.role === "admin" && req.user.sub !== "configured-superadmin";
+  req.user?.role === "admin";
 const requireAdministrator =
   () => (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
     if (!canManage(req))
@@ -296,7 +297,7 @@ electivesRouter.post(
           ...data,
           opensAt: data.opensAt ? new Date(data.opensAt) : null,
           closesAt: data.closesAt ? new Date(data.closesAt) : null,
-          createdById: req.user!.sub,
+          createdById: await databaseActorId(req.user!.sub),
         },
       });
       return success(res, cycle, "Elective cycle created", 201);
@@ -440,7 +441,7 @@ electivesRouter.post(
               ...data,
               cycleId: cycle.id,
               teacherUserId,
-              proposedById: req.user!.sub,
+              proposedById: await databaseActorId(req.user!.sub),
               status: manager ? "APPROVED" : "PROPOSED",
             },
           });

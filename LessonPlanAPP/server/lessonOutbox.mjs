@@ -7,15 +7,21 @@ export function createLessonOutbox({storage,actor,remote,emit=()=>{}}){
  const revisions=id=>'powerful-lesson-planner:revisions:v1:'+id;
  const read=k=>JSON.parse(storage.getItem(k)||'{}');
  const write=(k,v)=>storage.setItem(k,JSON.stringify(v));
+ const readRevisions=owner=>{
+  const records=read(revisions(owner));let changed=false;
+  for(const row of Object.values(records)){if(row?.payload&&Object.keys(row.payload).some(key=>key!=='saveRevisionId')){row.payload={...(row.payload.saveRevisionId?{saveRevisionId:row.payload.saveRevisionId}:{})};changed=true}}
+  if(changed)write(revisions(owner),records);
+  return records;
+ };
  const state=(id,status,error)=>{const value={id,status,error:error?.message||'',code:error?.code||''};states.set(id,value);emit(value);return value};
- const remember=(id,row)=>{const owner=actor();if(!owner)return;write(revisions(owner),{...read(revisions(owner)),[id]:{revision:row.updated_at,payload:row.payload}});if(!read(key(owner))[id])state(id,'saved')};
+ const remember=(id,row)=>{const owner=actor();if(!owner)return;write(revisions(owner),{...readRevisions(owner),[id]:{revision:row.updated_at,payload:{...(row.payload?.saveRevisionId?{saveRevisionId:row.payload.saveRevisionId}:{})}}});if(!read(key(owner))[id])state(id,'saved')};
  const pending=(id)=>{const owner=actor();return owner?read(key(owner))[id]:undefined};
  async function run(id,owner){
   while(actor()===owner){
    const operation=read(key(owner))[id];if(!operation)return state(id,'saved');
    state(id,'saving');
    try{
-    let known=read(revisions(owner))[id];
+    let known=readRevisions(owner)[id];
     if(!known){
      const existing=await remote.read(id);
      if(existing){
@@ -50,7 +56,7 @@ export function createLessonOutbox({storage,actor,remote,emit=()=>{}}){
   },
   flush,pending,remember,
   generation:()=>generation,changedSince:(id,epoch)=>(acknowledged.get(id)||0)>epoch,
-  status:id=>states.get(id)||{id,status:pending(id)?'pending':actor()&&read(revisions(actor()))[id]?'saved':'unverified',error:'',code:''},
+  status:id=>states.get(id)||{id,status:pending(id)?'pending':actor()&&readRevisions(actor())[id]?'saved':'unverified',error:'',code:''},
   async retry(){const owner=actor();if(!owner)return;await Promise.allSettled(Object.keys(read(key(owner))).map(flush))},
   discard(id){const owner=actor();if(!owner)return;const queue=read(key(owner));delete queue[id];write(key(owner),queue);state(id,'saved')}
  };

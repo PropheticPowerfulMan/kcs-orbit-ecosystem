@@ -107,6 +107,11 @@ api.interceptors.request.use(
       const workspace = /^\/admin(?:\/|$)/.test(path) ? 'admin' : /^\/portal\/staff(?:\/|$)/.test(path) ? 'staff' : /^\/portal\/teacher(?:\/|$)/.test(path) ? 'teacher' : ''
       if (workspace) config.headers.set('X-Nexus-Workspace', workspace)
     }
+    if (/^\/(?:lesson-plan|academy)\/launch$/.test(config.url||'') && !config.headers.has('X-Nexus-Academic-Workspace')) {
+      const path=window.location.pathname,user=useAuthStore.getState().user
+      const scope=/^\/admin(?:\/|$)/.test(path)?(user?.id==='configured-superadmin'?'superadmin':'principal'):/^\/portal\/senior(?:\/|$)/.test(path)?'senior':user?.role==='student'?'student':'teacher'
+      config.headers.set('X-Nexus-Academic-Workspace',scope)
+    }
     let { token } = useAuthStore.getState()
     const requestPath = config.url ?? ''
     if (token && !requestPath.includes('/auth/refresh') && !requestPath.includes('/auth/login') && accessTokenNeedsRefresh(token)) {

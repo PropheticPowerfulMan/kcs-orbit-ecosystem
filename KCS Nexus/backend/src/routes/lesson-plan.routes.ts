@@ -1,4 +1,4 @@
-import {academicWorkspaceFor} from '../utils/academicApplicationAccess.js'
+import {academicWorkspaceFor,selectedAcademicWorkspace} from '../utils/academicApplicationAccess.js'
 import {readLessonPlanDashboardPhoto} from '../services/lessonPlanDashboardPhoto.js'
 import {assertAccountAccess} from '../services/accountAccess.service.js'
 import {plannerTickets} from '../services/lessonPlanTickets.js'
@@ -17,24 +17,25 @@ lessonPlanRouter.post('/launch', authenticate, requireRoles('teacher', 'staff', 
   if (!user || (!isTeacher && user.role !== 'ADMIN')) throw new ApiError(403, 'EduPlanner access is not enabled for this identity')
   if (!user.email) throw new ApiError(409, 'This institutional identity does not have an email address')
   await assertAccountAccess(user.id)
-  const ticket=plannerTickets.issue({userId:user.id,email:user.email,firstName:user.firstName,middleName:user.middleName,lastName:user.lastName,role:user.role,accessRoles,workspace:academicWorkspaceFor(user,req.user!.sub==='configured-superadmin')||undefined})
+  const selected=selectedAcademicWorkspace(user,req.user!.sub==='configured-superadmin',req.header('X-Nexus-Academic-Workspace'));if(!selected||selected==='student')throw new ApiError(403,'This academic workspace is not authorized. / Cet espace académique n’est pas autorisé.')
+  const ticket=plannerTickets.issue({userId:user.id,email:user.email,firstName:user.firstName,middleName:user.middleName,lastName:user.lastName,role:user.role,accessRoles,workspace:selected})
   return success(res, { url: `/lesson-plan/#/sso?ticket=${encodeURIComponent(ticket)}` })
 }))
 lessonPlanRouter.post('/exchange', asyncHandler(async (req, res) => {
   const identity=plannerTickets.consume(req.body?.ticket)
   await assertAccountAccess(identity.userId)
   const user=await prisma.user.findUnique({where:{id:identity.userId},include:{teacherProfile:true}})
-  const workspace=academicWorkspaceFor(user,Boolean(user&&process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase()))
+  const root=Boolean(user&&process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase());const workspace=selectedAcademicWorkspace(user,root,identity.workspace)
   if(!user||!workspace||workspace==='student')throw new ApiError(403,'Eduplanner access is not enabled for this identity')
-  return success(res,{...identity,role:user.role,workspace})
+  return success(res,{...identity,role:user.role,workspace,grantedWorkspace:academicWorkspaceFor(user,root)})
 }))
 lessonPlanRouter.post('/academy-exchange',asyncHandler(async(req,res)=>{
  const identity=plannerTickets.consume(req.body?.ticket,'academy-read')
   await assertAccountAccess(identity.userId)
   const user=await prisma.user.findUnique({where:{id:identity.userId},include:{teacherProfile:true}})
-  const workspace=academicWorkspaceFor(user,Boolean(user&&process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase()))
+  const root=Boolean(user&&process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase());const workspace=selectedAcademicWorkspace(user,root,identity.workspace)
   if(!user||!workspace||workspace==='student')throw new ApiError(403,'Eduplanner access is not enabled for this identity')
-  return success(res,{...identity,role:user.role,workspace})
+  return success(res,{...identity,role:user.role,workspace,grantedWorkspace:academicWorkspaceFor(user,root)})
 }))
 
 // Eduplanner supplies its own session; only its server-verified link chooses the Nexus account.
@@ -71,8 +72,8 @@ lessonPlanRouter.post('/session-identity', asyncHandler(async (req, res) => {
  const id=linkedId||user.id
  await assertAccountAccess(id)
  const superadmin=Boolean(user&&process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase())
- const workspace=academicWorkspaceFor(user,superadmin)
+ const workspace=selectedAcademicWorkspace(user,superadmin,req.body?.workspace)
  if(!user||!workspace||workspace==='student')throw new ApiError(403,'Eduplanner access is not enabled for this identity')
  res.set('Cache-Control','private, no-store').vary('Authorization')
- return success(res,{id,userId:id,role:user.role,workspace})
+ return success(res,{id,userId:id,role:user.role,workspace,grantedWorkspace:academicWorkspaceFor(user,superadmin)})
 }))

@@ -16,6 +16,7 @@ export async function synchronizeAcademicProfile(identity,profile,{readBinding,u
  if(!scope||!identity.userId||!profile?.id||profile.status!=='active')throw denied('An active, linked institutional profile is required.');
  const user=await readBinding(profile.id);
  if(!user||user.app_metadata?.kcs_nexus_identity?.id!==identity.userId||user.app_metadata?.kcs_orbit_access?.blocked||user.banned_until&&Date.parse(user.banned_until)>Date.now())throw denied('The Eduplanner profile is not linked to this active institutional identity.');
- if(profile.role!==scope.role)await updateRole(profile.id,scope.role);
+ const capability=academicProfileScope({...identity,workspace:identity.grantedWorkspace||identity.workspace})||scope;
+ if(profile.role!==capability.role)await updateRole(profile.id,capability.role);
  return scope;
 }

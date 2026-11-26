@@ -92,7 +92,7 @@ const allowed = (key) => {
   return recent.length <= 5;
 };
 
-const profileRoleFor = identity => academicProfileScope(identity)?.role || null;
+const profileRoleFor = identity => academicProfileScope({...identity,workspace:identity.grantedWorkspace||identity.workspace})?.role || null;
 
 const profileNameFor = (nexusUser) => [nexusUser.lastName, nexusUser.middleName, nexusUser.firstName]
   .filter(Boolean)
@@ -246,7 +246,7 @@ const ecosystemSso = async (body) => {
 };
 
 // Verified session reconciliation also applies to direct logins and restored sessions.
-const sessionProfile = async authorization => {
+const sessionProfile = async (authorization,requestedWorkspace) => {
  const token=String(authorization||'').replace(/^Bearer /,'');
  const admin=requireSupabaseAdmin(),verified=await verifiedSessionAccess(token,admin);
  if(verified.status!==200||!verified.body.allowed)throw Object.assign(new Error('Your Eduplanner session is not authorized.'),{status:verified.status});
@@ -257,7 +257,7 @@ const sessionProfile = async authorization => {
  if(!profile||profile.status!=='active')throw Object.assign(new Error('This Eduplanner account is inactive.'),{status:403});
  let workspace;
  if(verified.body.nexusUserId||verified.body.verifiedEmail){
-  const response=await fetch(new URL('/api/lesson-plan/session-identity',nexusApiUrl),{method:'POST',headers:{authorization:'Bearer '+token},signal:AbortSignal.timeout(12000)});
+  const response=await fetch(new URL('/api/lesson-plan/session-identity',nexusApiUrl),{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({workspace:requestedWorkspace}),signal:AbortSignal.timeout(12000)});
   const payload=await response.json().catch(()=>null);
   if(response.status===404&&!verified.body.nexusUserId)return {profile,workspace,token};
   if(!response.ok||!payload?.data)throw Object.assign(new Error('The current institutional role could not be verified. Please try again.'),{status:[401,403].includes(response.status)?response.status:503});
@@ -294,9 +294,10 @@ const server = http.createServer(async (request, response) => {
   if(request.method==='POST'&&['/api/auth/session-profile','/api/documents/pdf','/api/documents/verify'].includes(pathname)){
    if(origin&&!allowedOrigins.has(origin))return sendJson(response,403,{error:'Origin not allowed'},appUrl);
    try{
-    const session=await sessionProfile(request.headers.authorization);
+    const body=await readJson(request);
+    const session=await sessionProfile(request.headers.authorization,body.workspace);
     if(pathname==='/api/auth/session-profile')return sendJson(response,200,{profile:session.profile,workspace:session.workspace},corsOrigin);
-    const body=await readJson(request),verification=pathname.endsWith('/verify');
+    const verification=pathname.endsWith('/verify');
     const document=await resolveLessonDocument(body,documentDependencies(session.token),verification);
     if(verification)return sendJson(response,200,document,corsOrigin);
     const pdf=await createLessonPdf(document.lesson,document.settings,appUrl);

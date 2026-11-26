@@ -1,5 +1,5 @@
 import {academyNexusSessions,readNexusAcademySession} from '../services/academyNexusSessions.js';
-import {academicWorkspaceFor,academyRoleFor,academicNexusHome} from '../utils/academicApplicationAccess.js';
+import {academicWorkspaceFor,selectedAcademicWorkspace,academyRoleFor,academicNexusHome} from '../utils/academicApplicationAccess.js';
 import { timingSafeEqual } from "node:crypto";
 import { Router } from "express";
 import { env } from "../config/env.js";
@@ -51,7 +51,7 @@ academyRouter.post(
             where: { id: req.user!.sub },
             include: { teacherProfile: true, studentProfile: true },
           });
-    const applicationWorkspace = academicWorkspaceFor(user, req.user!.sub === "configured-superadmin");
+    const applicationWorkspace = selectedAcademicWorkspace(user, req.user!.sub === "configured-superadmin", req.header("X-Nexus-Academic-Workspace"));
     const isTeacher =
       user?.role === "TEACHER" ||
       (user?.role === "STAFF" && Boolean(user.teacherProfile));
@@ -59,117 +59,9 @@ academyRouter.post(
       throw new ApiError(403, "Academy access is not enabled for this role");
 
     await assertAccountAccess(user.id);
-    if (!user.orbitUserId && applicationWorkspace === 'superadmin') {
-      const url=new URL('api/auth/callback',env.ACADEMY_PUBLIC_URL.endsWith('/')?env.ACADEMY_PUBLIC_URL:env.ACADEMY_PUBLIC_URL+'/');
-      url.searchParams.set('ticket',academyNexusSessions.issue(user.id));url.searchParams.set('issuer','nexus');url.searchParams.set('nexusReturn','/admin');
-      return success(res,{url:url.toString()});
-    }
-    if (!user.orbitUserId) {
-      if (!env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID)
-        throw new ApiError(
-          503,
-          "Orbit identity synchronization is not configured",
-        );
-      const entityType = isTeacher
-        ? "teacher"
-        : user.role === "STUDENT"
-          ? "student"
-          : null;
-      if (!entityType)
-        throw new ApiError(
-          409,
-          "This administrator account is not linked to a verified Orbit identity",
-        );
-      const body =
-        entityType === "teacher"
-          ? {
-              organizationId: env.KCS_ORBIT_ORGANIZATION_ID,
-              firstName: user.firstName,
-              middleName: user.middleName || undefined,
-              lastName: user.lastName,
-              email: user.email,
-              phone: user.phone || undefined,
-              accessCode: user.accessCode || undefined,
-              subject: user.teacherProfile?.department || undefined,
-            }
-          : {
-              organizationId: env.KCS_ORBIT_ORGANIZATION_ID,
-              firstName: user.firstName,
-              middleName: user.middleName || undefined,
-              lastName: user.lastName,
-              email: user.email,
-              phone: user.phone || undefined,
-              accessCode: user.accessCode || undefined,
-              studentNumber: user.studentProfile?.studentNumber || undefined,
-              gender: "UNSPECIFIED",
-              className:
-                [user.studentProfile?.grade, user.studentProfile?.section]
-                  .filter(Boolean)
-                  .join(" ") || undefined,
-            };
-      const synced = await fetch(
-        env.KCS_ORBIT_API_URL.replace(/\/$/, "") +
-          "/api/integration/registry/" +
-          entityType,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-api-key": env.KCS_ORBIT_API_KEY,
-            "x-app-slug": "KCS_NEXUS",
-          },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(10_000),
-        },
-      );
-      const syncPayload = (await synced.json().catch(() => ({}))) as {
-        orbitId?: string;
-        message?: string;
-      };
-      if (![201, 409].includes(synced.status) || !syncPayload.orbitId)
-        throw new ApiError(
-          synced.status,
-          syncPayload.message || "Orbit identity synchronization failed",
-        );
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          orbitUserId: syncPayload.orbitId,
-          orbitOrganizationId: env.KCS_ORBIT_ORGANIZATION_ID,
-        },
-        include: { teacherProfile: true, studentProfile: true },
-      });
-    }
-
-    const response = await fetch(
-      env.KCS_ORBIT_API_URL.replace(/\/$/, "") +
-        "/api/academy/sso/service-tickets",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": env.ACADEMY_INTEGRATION_KEY,
-        },
-        body: JSON.stringify({ userId: user.orbitUserId }),
-        signal: AbortSignal.timeout(10_000),
-      },
-    );
-    const payload = (await response.json().catch(() => ({}))) as {
-      ticket?: string;
-      message?: string;
-    };
-    if (!response.ok || !payload.ticket)
-      throw new ApiError(
-        response.status,
-        payload.message || "Academy launch failed",
-      );
-    const academyBaseUrl = env.ACADEMY_PUBLIC_URL.endsWith("/")
-      ? env.ACADEMY_PUBLIC_URL
-      : env.ACADEMY_PUBLIC_URL + "/";
-    const url = new URL("api/auth/callback", academyBaseUrl);
-    url.searchParams.set("ticket", payload.ticket);
-    url.searchParams.set("nexusReturn", academicNexusHome(applicationWorkspace));
-    return success(res, { url: url.toString() });
+    const url=new URL('api/auth/callback',env.ACADEMY_PUBLIC_URL.endsWith('/')?env.ACADEMY_PUBLIC_URL:env.ACADEMY_PUBLIC_URL+'/');
+    url.searchParams.set('ticket',academyNexusSessions.issue(user.id,applicationWorkspace));url.searchParams.set('issuer','nexus');url.searchParams.set('nexusReturn',academicNexusHome(applicationWorkspace));
+    return success(res,{url:url.toString()});
   }),
 );
 
@@ -202,7 +94,7 @@ academyRouter.post('/access',asyncHandler(async(req,res)=>{
  if(!user)throw new ApiError(403,'Academy identity mismatch');
  await assertAccountAccess(user.id);
  const configured=Boolean(process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase());
- const workspace=academicWorkspaceFor(user,configured);
+ const workspace=selectedAcademicWorkspace(user,configured);
  if(!workspace)throw new ApiError(403,'Academy access is not enabled for this identity');
  return success(res,{role:academyRoleFor(workspace),workspace,nexusReturnPath:academicNexusHome(workspace)});
 }));
@@ -233,9 +125,8 @@ academyRouter.post(
     await assertAccountAccess(user.id);
     const applicationWorkspace = academicWorkspaceFor(user,Boolean(process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase()));
     const leader = applicationWorkspace && ["superadmin","principal","senior"].includes(applicationWorkspace);
-    if(req.body?.nexusUserId && applicationWorkspace!=="superadmin")throw new ApiError(403,"Academy identity mismatch");
     const teacher =
-      Boolean(user.teacherProfile) && ["TEACHER", "STAFF"].includes(user.role);
+      (Boolean(user.teacherProfile) || user.role === "TEACHER") && ["TEACHER", "STAFF", "ADMIN"].includes(user.role);
     if (
       !(
         (role === "TEACHER" && teacher) ||
@@ -587,7 +478,7 @@ academyRouter.post(
         middleName: user.middleName,
         lastName: user.lastName,
         role: user.role,
-        workspace: academicWorkspaceFor(user,Boolean(process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase())) || undefined,
+        workspace: selectedAcademicWorkspace(user,Boolean(process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase()),native?.nexusWorkspace) || undefined,
         accessRoles: [
           user.role.toLowerCase(),
           ...(user.teacherProfile ? ["teacher"] : []),

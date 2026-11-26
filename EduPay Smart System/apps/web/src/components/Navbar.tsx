@@ -1,5 +1,6 @@
 import { uiText } from "../uiText";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {createPortal}from"react-dom";
+import { KeyRound, ShieldCheck, Eye, EyeOff, X, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { FontSwitch } from "./FontSwitch";
 import { schoolBranding } from "../config/branding";
@@ -7,7 +8,7 @@ import { useI18n } from "../i18n";
 import { api } from "../services/api";
 import { useAuthStore } from "../store/auth";
 import { useUiStore } from "../store/ui";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 function imageFileToAvatar(file: File, lang: "fr" | "en"): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -51,6 +52,15 @@ function ChangePasswordModal({ onClose, onChanged, temporaryPassword = false }: 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const titleId=useId(),panel=useRef<HTMLFormElement>(null),[visible,setVisible]=useState<Record<string,boolean>>({});
+  const closeRef=useRef(onClose),savingRef=useRef(saving);closeRef.current=onClose;savingRef.current=saving;
+  useEffect(()=>{
+    const previous=document.activeElement as HTMLElement|null,overflow=document.body.style.overflow;document.body.style.overflow='hidden';panel.current?.querySelector<HTMLInputElement>('input')?.focus();
+    const key=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!savingRef.current){event.preventDefault();closeRef.current()}if(event.key==='Tab'){const items=Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)')||[]).filter(el=>el.getClientRects().length);const first=items[0],last=items.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}}};document.addEventListener('keydown',key);
+    return()=>{document.body.style.overflow=overflow;document.removeEventListener('keydown',key);previous?.focus()};
+  },[]);
+  const passwordField=(name:string,label:string,value:string,change:(next:string)=>void,autocomplete:string)=><label className="edupay-password-field"><span>{label}</span><div><KeyRound size={17} aria-hidden="true"/><input required name={name} type={visible[name]?'text':'password'} autoComplete={autocomplete} value={value} disabled={saving} onChange={event=>change(event.target.value)}/><button type="button" disabled={saving} aria-label={visible[name]?L('Masquer le mot de passe','Hide password'):L('Afficher le mot de passe','Show password')} aria-pressed={Boolean(visible[name])} onClick={()=>setVisible(all=>({...all,[name]:!all[name]}))}>{visible[name]?<EyeOff size={18}/>:<Eye size={18}/>}</button></div></label>;
+
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -82,47 +92,20 @@ function ChangePasswordModal({ onClose, onChanged, temporaryPassword = false }: 
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <form onSubmit={submit} className="edupay-dialog-panel-sm glass relative w-full rounded-2xl p-8 space-y-5 animate-fadeInUp sm:p-9" onClick={(e) => e.stopPropagation()}>
-        <div>
-          <h3 className="font-display text-xl font-bold text-white">{t("changePasswordTitle")}</h3>
-          <p className="mt-1 text-sm text-ink-dim">{temporaryPassword ? L("Ce compte utilise encore un mot de passe temporaire. Vous pouvez le changer maintenant ou revenir plus tard depuis le menu du profil.", "This account is still using a temporary password. You can change it now or return later from the profile menu.") : t("changePasswordSubtitle")}</p>
+  return createPortal(
+    <div className="edupay-password-overlay" onClick={()=>{if(!saving)onClose()}}>
+      <form ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit} className="edupay-password-panel" onClick={event=>event.stopPropagation()}>
+        <header><span className="edupay-password-icon"><ShieldCheck size={27}/></span><div><p>KCS EDUPAY · {L('ACCÈS PERSONNEL','PERSONAL ACCESS')}</p><h3 id={titleId}>{t('changePasswordTitle')}</h3></div><button type="button" disabled={saving} className="edupay-password-close" onClick={onClose} aria-label={t('close')}><X size={20}/></button></header>
+        <div className="edupay-password-body"><p className="edupay-password-intro">{temporaryPassword?L('Remplacez votre mot de passe temporaire pour sécuriser votre accès personnel.','Replace your temporary password to secure your personal access.'):L('Définissez un nouveau mot de passe pour votre compte EduPay. Les autres applications conservent leurs propres accès.','Set a new password for your EduPay account. Other applications keep their own credentials.')}</p>
+          {passwordField('currentPassword',t('currentPassword'),currentPassword,setCurrentPassword,'current-password')}
+          {passwordField('newPassword',t('newPasswordField'),newPassword,setNewPassword,'new-password')}
+          {passwordField('confirmPassword',t('confirmNewPassword'),confirmPassword,setConfirmPassword,'new-password')}
+          <small className="edupay-password-hint">{L('Utilisez un mot de passe personnel et difficile à deviner. Le serveur vérifie les règles de sécurité avant confirmation.','Use a personal password that is difficult to guess. The server checks security requirements before confirming the change.')}</small>
+          {error&&<p role="alert" className="edupay-password-error">{uiText(error)}</p>}{message&&<p role="status" className="edupay-password-success">{message}</p>}
         </div>
-        <input
-          type="password"
-          value={currentPassword}
-          onChange={(event) => setCurrentPassword(event.target.value)}
-          placeholder={t("currentPassword")}
-          className="w-full"
-        />
-        <input
-          type="password"
-          value={newPassword}
-          onChange={(event) => setNewPassword(event.target.value)}
-          placeholder={t("newPasswordField")}
-          className="w-full"
-        />
-        <input
-          type="password"
-          value={confirmPassword}
-          onChange={(event) => setConfirmPassword(event.target.value)}
-          placeholder={t("confirmNewPassword")}
-          className="w-full"
-        />
-        {error && <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{uiText(error)}</p>}
-        {message && <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{message}</p>}
-        <div className="flex gap-3">
-          <button disabled={saving} className="flex-1 btn-primary py-3 text-sm font-bold disabled:opacity-60">
-            {saving ? t("pmSaving") : t("pmSave")}
-          </button>
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">
-            {t("close")}
-          </button>
-        </div>
+        <footer><button type="button" disabled={saving} onClick={onClose}>{t('close')}</button><button disabled={saving} className="btn-primary">{saving?t('pmSaving'):t('pmSave')}</button></footer>
       </form>
-    </div>
+    </div>,document.body
   );
 }
 

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createBlankLesson } from "../data/defaults";
+import {useToast}from"../components/Toast";
+import {useApp}from"../contexts/AppContext";
 import { useAuth } from "../contexts/AuthContext";
 import { applyLessonVisibility, prepareNewLessonForUser } from "../services/permissions";
 import { lessonRepository } from "../services/lessonRepository";
@@ -7,6 +9,7 @@ import { LessonPlan } from "../types/lesson";
 
 export const useLessons = () => {
   const { currentUser } = useAuth();
+  const{notify}=useToast(),{language}=useApp();
   const activeVisibleLessons = useCallback(
     (source: LessonPlan[]) => applyLessonVisibility(currentUser, source.filter((lesson) => !lesson.deletedAt)),
     [currentUser]
@@ -37,10 +40,12 @@ export const useLessons = () => {
   const createLesson = useCallback(() => {
     if (!currentUser) throw new Error("A signed-in user is required to create a lesson plan");
     const lesson = prepareNewLessonForUser(createBlankLesson(nextLessonNumber), currentUser);
-    lessonRepository.save(lesson, currentUser, "Lesson plan created");
-    refresh();
-    return lesson;
-  }, [currentUser, nextLessonNumber, refresh]);
+    try{lessonRepository.save(lesson, currentUser, "Lesson plan created");refresh();return lesson}
+    catch(error){
+      if(lessonRepository.get(lesson.id)){refresh();notify(language==='fr'?'Brouillon ouvert. La synchronisation doit encore être confirmée.':'Draft opened. Server synchronization still needs confirmation.');return lesson}
+      notify(language==='fr'?'Impossible de créer le brouillon sur cet appareil. Vérifiez son stockage et réessayez.':'This device could not create the draft. Check its storage and retry.');return null
+    }
+  }, [currentUser, nextLessonNumber, refresh,notify,language]);
 
   const saveLesson = useCallback(
     (lesson: LessonPlan) => {
