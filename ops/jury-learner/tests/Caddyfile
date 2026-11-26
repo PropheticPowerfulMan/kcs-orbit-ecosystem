@@ -1,0 +1,15 @@
+https://staging.kinshasachristianschool.org {
+ tls internal
+ handle /jury-nexus/* {
+  uri strip_prefix /jury-nexus
+  reverse_proxy jury_api:5000
+ }
+ handle /jury/api/* {
+  uri replace /jury/api/ /api/jury/
+  reverse_proxy jury_api:5000
+ }
+ handle {
+  uri strip_prefix /jury
+  reverse_proxy learner_jury_web:8080
+ }
+}
