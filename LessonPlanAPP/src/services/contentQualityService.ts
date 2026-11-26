@@ -88,7 +88,7 @@ type TextWeeklyKey = keyof Omit<WeeklyPlanDay, "day" | "activityDurations" | "lo
 
 const checkRepeated = (plan: WeeklyPlanDay[], key: TextWeeklyKey, warnings: QualityWarning[]) => {
   const normalized = plan
-    .map((day) => normalizeText(day[key]))
+    .map((day) => normalizeText(typeof day[key]==="string"?day[key] as string:""))
     .filter((value) => value.length > 24 && !["the selected unit", "the subject", "the class"].some((marker) => value.includes(marker)));
   if (normalized.length > 2 && new Set(normalized).size < normalized.length) {
     warnings.push(createWarning(`${key}-repeated`, label(key), `Some ${label(key)} entries repeat across days.`, "Regenerate the row or edit repeated cells so each day shows real progression."));

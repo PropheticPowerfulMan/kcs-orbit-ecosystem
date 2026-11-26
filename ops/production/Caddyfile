@@ -50,6 +50,14 @@
     reverse_proxy sentinel_web:80
   }
   redir /lesson-plan /lesson-plan/ 308
+  # Only expiring, authenticated-generated PDFs may be embedded by the school origin.
+  handle /lesson-plan/api/documents/view/* {
+    header >X-Frame-Options SAMEORIGIN
+    header >Content-Security-Policy "default-src 'none'; frame-ancestors 'self'"
+    header >Referrer-Policy no-referrer
+    uri strip_prefix /lesson-plan
+    reverse_proxy lessonplan_api:3001
+  }
   handle /lesson-plan/api/* {
     uri strip_prefix /lesson-plan
     reverse_proxy lessonplan_api:3001

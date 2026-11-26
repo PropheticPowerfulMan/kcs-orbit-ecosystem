@@ -148,9 +148,14 @@ const fromProfile = (profile: UserProfile) => ({
 });
 
 const fetchCurrentProfile = async (userId: string, accessToken: string) => {
-  const rows = await request<Record<string, unknown>[]>(restUrl(`profiles?id=eq.${userId}&select=*`), {
-    headers: baseHeaders(accessToken)
-  });
+  if(configuredFederatedAuthUrl){
+    const response=await fetch(configuredFederatedAuthUrl.replace(/ecosystem-login$/, 'session-profile'),{method:'POST',headers:{Authorization:'Bearer '+accessToken},cache:'no-store',signal:AbortSignal.timeout(20000)});
+    const payload=await response.json().catch(()=>null);
+    if(!response.ok||!payload?.profile||payload.profile.id!==userId)throw Object.assign(new Error(payload?.error||'Your institutional role could not be verified.'),{status:response.status});
+    const session=readSession();if(session?.userId===userId)localStorage.setItem(sessionKey,JSON.stringify({...session,workspace:payload.workspace}));
+    return toProfile(payload.profile);
+  }
+  const rows = await request<Record<string, unknown>[]>(restUrl(`profiles?id=eq.${userId}&select=*`), {headers: baseHeaders(accessToken)});
   return rows[0] ? toProfile(rows[0]) : null;
 };
 
@@ -160,10 +165,12 @@ const getPublicAppLoginUrl = (temporaryPassword?: string) => {
   return `${normalizedProductionUrl}${temporaryQuery}#/login`;
 };
 
+let refreshing:Promise<string>|null=null;
 export const cloudAuthService = {
   enabled,
   required: false,
   configurationError: "",
+  getSessionUserId() { return readSession()?.userId || ""; },
   getAccessToken() {
     const session = readSession();
     return session?.accessToken || supabaseAnonKey || "";
@@ -177,6 +184,13 @@ export const cloudAuthService = {
     const payload=await response.json();const photo=payload?.data?.avatar;
     if(photo!==null&&(typeof photo!=="string"||!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/s.test(photo)))throw new Error("Invalid dashboard photo.");
     return {linked:true,photoUrl:photo||""};
+  },
+  async ensureAccessToken(){
+    const session=readSession();if(!session)throw new Error('Sign in to synchronize your lesson plans.');
+    let expires=0;try{expires=Number(JSON.parse(atob(session.accessToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).exp||0)*1000}catch{}
+    if(expires&&expires>Date.now()+60000)return session.accessToken;
+    if(!refreshing)refreshing=request<SupabaseSession>(authUrl('token?grant_type=refresh_token'),{method:'POST',body:JSON.stringify({refresh_token:session.refreshToken})}).then(next=>{if(readSession()?.userId!==session.userId)throw new Error('The active account changed.');writeSession(next);return next.access_token}).finally(()=>{refreshing=null});
+    return refreshing;
   },
   restUrl,
   baseHeaders,
@@ -216,7 +230,7 @@ export const cloudAuthService = {
     const session = readSession();
     if (!session) return null;
     try {
-      return await fetchCurrentProfile(session.userId, session.accessToken);
+      return await fetchCurrentProfile(session.userId, await this.ensureAccessToken());
     } catch {
       localStorage.removeItem(sessionKey);
       return null;

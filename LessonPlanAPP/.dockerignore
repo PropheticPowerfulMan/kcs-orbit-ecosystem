@@ -6,5 +6,9 @@ dist
 .gh-pages-deploy
 deployment
 Installable_Distribution
-server
+server/**
+!server/lessonDocument.mjs
+!server/lessonDocument.d.mts
+!server/lessonOutbox.mjs
+!server/lessonOutbox.d.mts
 *.tsbuildinfo

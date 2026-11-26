@@ -1,5 +1,5 @@
 const BASE_PATH = new URL(self.registration.scope).pathname.replace(/\/?$/, "/");
-const CACHE_NAME = "kcs-eduplanner-v3-access";
+const CACHE_NAME = "kcs-eduplanner-v4-reliable-documents";
 const APP_SHELL = [
   BASE_PATH,
   BASE_PATH + "index.html",
@@ -30,13 +30,20 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin || !url.pathname.startsWith(BASE_PATH)) return;
+  // Private API replies, authenticated data and PDF capabilities must never enter Cache Storage.
+  if(request.headers.has('Authorization')||/\/(?:api|auth|rest)(?:\/|$)/.test(url.pathname)||/\.pdf$/i.test(url.pathname))return;
+  const relative=url.pathname.slice(BASE_PATH.length);
+  const staticAsset=APP_SHELL.includes(url.pathname)||/^assets\/[^?]+\.(?:js|css|png|jpe?g|webp|svg|woff2?|ttf)$/i.test(relative);
+  if(request.mode!=='navigate'&&!staticAsset)return;
+
 
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(BASE_PATH, copy));
+          if(response.ok&&(response.headers.get('Content-Type')||'').includes('text/html')){
+            const copy=response.clone();caches.open(CACHE_NAME).then(cache=>cache.put(BASE_PATH,copy));
+          }
           return response;
         })
         .catch(() => caches.match(BASE_PATH).then((response) => response || caches.match(BASE_PATH + "index.html")))

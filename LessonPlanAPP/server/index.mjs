@@ -1,4 +1,7 @@
-import {synchronizeAcademicProfile} from './academicProfileRole.mjs';
+import {createPdfViews} from './pdfViews.mjs';
+import {resolveLessonDocument} from './lessonDocuments.mjs';
+import {createLessonPdf} from './lessonPdf.mjs';
+import {academicProfileScope,synchronizeAcademicProfile} from './academicProfileRole.mjs';
 import {readAcademyPlans} from './academyPlans.mjs';
 import {verifiedSessionAccess} from './sessionAccess.mjs';
 import {institutionalLogin} from './institutionalLogin.mjs';
@@ -47,6 +50,7 @@ const transporter = nodemailer.createTransport({
   auth: { user: process.env.LWS_SMTP_USER, pass: process.env.LWS_SMTP_PASSWORD }
 });
 const attempts = new Map();
+const pdfViews=createPdfViews();
 
 const requireSupabaseAdmin = () => {
   if (supabase) return supabase;
@@ -88,13 +92,7 @@ const allowed = (key) => {
   return recent.length <= 5;
 };
 
-const profileRoleFor = (nexusUser) => {
-  const role = String(nexusUser.role || "").toLowerCase();
-  const accessRoles = Array.isArray(nexusUser.accessRoles) ? nexusUser.accessRoles.map((value) => String(value).toLowerCase()) : [];
-  if (role === "admin") return nexusUser.id === "configured-superadmin" ? "administrator" : "principal";
-  if (role === "teacher" || accessRoles.includes("teacher")) return "teacher";
-  return null;
-};
+const profileRoleFor = identity => academicProfileScope(identity)?.role || null;
 
 const profileNameFor = (nexusUser) => [nexusUser.lastName, nexusUser.middleName, nexusUser.firstName]
   .filter(Boolean)
@@ -142,6 +140,9 @@ const ensureSupabaseProfile = async (nexusUser) => {
     authUser = data.user;
   }
 
+  const previousLink=authUser.app_metadata?.kcs_nexus_identity?.id;
+  if(previousLink && previousLink!==nexusUser.id)throw Object.assign(new Error('This Eduplanner profile is linked to a different institutional account. No credentials were changed.'),{status:409});
+  if(authUser.app_metadata?.kcs_orbit_access?.blocked || authUser.banned_until&&Date.parse(authUser.banned_until)>Date.now())throw Object.assign(new Error('This Eduplanner account is blocked.'),{status:403});
   if (!profile) {
     const { data, error } = await admin.from("profiles").upsert({
       id: authUser.id,
@@ -165,7 +166,7 @@ const ensureSupabaseProfile = async (nexusUser) => {
     if (error) throw error;
     profile = data;
   }
-  if(authUser.app_metadata?.kcs_nexus_identity?.id!==nexusUser.id){const {error}=await admin.auth.admin.updateUserById(authUser.id,{app_metadata:{...authUser.app_metadata,kcs_nexus_identity:{id:nexusUser.id,accessCode:nexusUser.accessCode}}});if(error)throw error}
+  if(!previousLink){const {error}=await admin.auth.admin.updateUserById(authUser.id,{app_metadata:{...authUser.app_metadata,kcs_nexus_identity:{id:nexusUser.id,accessCode:nexusUser.accessCode}}});if(error)throw error}
   return { email, profile };
 };
 
@@ -244,11 +245,67 @@ const ecosystemSso = async (body) => {
   return {...await createSupabaseSession(email),institutional_workspace:scope.workspace};
 };
 
+// Verified session reconciliation also applies to direct logins and restored sessions.
+const sessionProfile = async authorization => {
+ const token=String(authorization||'').replace(/^Bearer /,'');
+ const admin=requireSupabaseAdmin(),verified=await verifiedSessionAccess(token,admin);
+ if(verified.status!==200||!verified.body.allowed)throw Object.assign(new Error('Your Eduplanner session is not authorized.'),{status:verified.status});
+ const id=verified.body.profileId;
+ const read=await admin.from('profiles').select('*').eq('id',id).single();
+ if(read.error)throw read.error;
+ let profile=read.data;
+ if(!profile||profile.status!=='active')throw Object.assign(new Error('This Eduplanner account is inactive.'),{status:403});
+ let workspace;
+ if(verified.body.nexusUserId||verified.body.verifiedEmail){
+  const response=await fetch(new URL('/api/lesson-plan/session-identity',nexusApiUrl),{method:'POST',headers:{authorization:'Bearer '+token},signal:AbortSignal.timeout(12000)});
+  const payload=await response.json().catch(()=>null);
+  if(response.status===404&&!verified.body.nexusUserId)return {profile,workspace,token};
+  if(!response.ok||!payload?.data)throw Object.assign(new Error('The current institutional role could not be verified. Please try again.'),{status:[401,403].includes(response.status)?response.status:503});
+  if(!verified.body.nexusUserId){
+   const lookup=await admin.auth.admin.getUserById(id);if(lookup.error||!lookup.data.user)throw lookup.error||new Error('Profile identity unavailable');
+   const user=lookup.data.user,existing=user.app_metadata?.kcs_nexus_identity?.id;
+   if(existing&&existing!==payload.data.userId)throw Object.assign(new Error('The institutional link changed. Sign in again.'),{status:409});
+   if(!existing){const update=await admin.auth.admin.updateUserById(id,{app_metadata:{...user.app_metadata,kcs_nexus_identity:{id:payload.data.userId}}});if(update.error)throw update.error}
+  }
+  const scope=await synchronizeAcademicProfile(payload.data,profile,{
+   readBinding:async id=>{const r=await admin.auth.admin.getUserById(id);if(r.error)throw r.error;return r.data.user},
+   updateRole:async(id,role)=>{const r=await admin.from('profiles').update({role,updated_at:new Date().toISOString()}).eq('id',id).select('id,role').single();if(r.error||r.data?.role!==role)throw r.error||new Error('Role persistence could not be confirmed')}
+  });
+  profile={...profile,role:scope.role};workspace=scope.workspace;
+ }
+ return {profile,workspace,token};
+};
+const documentDependencies = token => ({readPlan:async id=>{
+ const scoped=createClient(supabaseUrl,process.env.SUPABASE_ANON_KEY,{global:{headers:{Authorization:'Bearer '+token}},auth:{autoRefreshToken:false,persistSession:false}});
+ const {data,error}=await scoped.from('lesson_plans').select('id,owner_id,status,payload,deleted_at,updated_at').eq('id',id).is('deleted_at',null).maybeSingle();
+ if(error)throw Object.assign(new Error('The saved lesson could not be read.'),{status:503});return data;
+}});
+
 const server = http.createServer(async (request, response) => {
   const origin = request.headers.origin || "";
   const corsOrigin = allowedOrigins.has(origin) ? origin : appUrl;
   const pathname = new URL(request.url || "/", "http://lesson-plan.local").pathname;
+  if(request.method==='GET'&&/^\/api\/documents\/view\/[a-f0-9]{64}\.pdf$/.test(pathname)){
+   const document=pdfViews.get(pathname.split('/').pop().replace(/\.pdf$/,''));
+   if(!document)return sendJson(response,404,{error:'This private preview has expired. Generate it again from Eduplanner.'},corsOrigin);
+   response.writeHead(200,{'Content-Type':'application/pdf','Content-Length':document.bytes.length,'Content-Disposition':"inline; filename*=UTF-8''"+encodeURIComponent(document.filename),'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','Content-Security-Policy':"frame-ancestors 'self'"});return response.end(document.bytes);
+  }
   if (request.method === "OPTIONS") return sendJson(response, 204, {}, corsOrigin);
+  if(request.method==='POST'&&['/api/auth/session-profile','/api/documents/pdf','/api/documents/verify'].includes(pathname)){
+   if(origin&&!allowedOrigins.has(origin))return sendJson(response,403,{error:'Origin not allowed'},appUrl);
+   try{
+    const session=await sessionProfile(request.headers.authorization);
+    if(pathname==='/api/auth/session-profile')return sendJson(response,200,{profile:session.profile,workspace:session.workspace},corsOrigin);
+    const body=await readJson(request),verification=pathname.endsWith('/verify');
+    const document=await resolveLessonDocument(body,documentDependencies(session.token),verification);
+    if(verification)return sendJson(response,200,document,corsOrigin);
+    const pdf=await createLessonPdf(document.lesson,document.settings,appUrl);
+    const viewToken=pdfViews.put(pdf);
+    response.writeHead(200,{'X-Document-View':viewToken,'Content-Type':'application/pdf','Content-Disposition':"inline; filename*=UTF-8''"+encodeURIComponent(pdf.filename),'X-Document-Filename':encodeURIComponent(pdf.filename),'X-Document-Hash':pdf.hash,'Access-Control-Allow-Origin':corsOrigin,'Access-Control-Expose-Headers':'X-Document-Filename, X-Document-Hash, X-Document-View','Vary':'Origin, Authorization','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});
+    return response.end(pdf.bytes);
+   }catch(error){const status=[400,401,403,404,409,413].includes(error?.status)?error.status:503;console.error('Eduplanner document/session request failed',pathname,status);return sendJson(response,status,{error:status<500?error.message:'The saved document or institutional role could not be verified. Your local draft remains available.'},corsOrigin)}
+  }
+
   if(request.method==='POST'&&pathname==='/api/academy/plans'){
     try{
       const admin=requireSupabaseAdmin(),body=await readJson(request);

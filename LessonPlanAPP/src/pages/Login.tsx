@@ -1,6 +1,6 @@
 import {useApp} from "../contexts/AppContext";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { FileText, Download, Eye, EyeOff, LockKeyhole, Mail, RotateCcw, ShieldCheck, UserPlus, UserRoundCheck } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -33,7 +33,9 @@ const emptySignup: SignUpProfileInput = {
 export const Login = () => {
   const {language}=useApp();const tr=(en:string,fr:string)=>language==="fr"?fr:en;
   const { currentUser, users, authMode, loading, signIn, signUp, resetPassword } = useAuth();
-  const navigate = useNavigate();
+  const navigate = useNavigate();const [params]=useSearchParams();
+  const requestedReturn=params.get('returnTo')||'';
+  const returnTo=/^\/verify\/[A-Za-z0-9_-]+\?hash=[a-f0-9]{64}$/.test(requestedReturn)?requestedReturn:'/';
   const { showInstall, install } = usePwaInstall();
   const activeUsers = useMemo(() => users.filter((user) => user.status === "active"), [users]);
   const pendingUsers = useMemo(() => users.filter((user) => user.status === "inactive"), [users]);
@@ -76,7 +78,7 @@ export const Login = () => {
     setBusy(true);
     try {
       await signIn(email, password);
-      navigate("/", { replace: true });
+      navigate(returnTo, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Incorrect email or password.");
     } finally {
@@ -166,7 +168,7 @@ export const Login = () => {
 
   const patchSignup = <K extends keyof SignUpProfileInput>(key: K, value: SignUpProfileInput[K]) => setSignup((current) => ({ ...current, [key]: value }));
 
-  if (currentUser) return <Navigate to="/" replace />;
+  if (currentUser) return <Navigate to={returnTo} replace />;
 
   return (
     <main className="ep-login login-edupay theme-dark-panel grid min-h-screen place-items-center overflow-hidden bg-[#030d14] px-4 py-8 text-[#e7faff]">

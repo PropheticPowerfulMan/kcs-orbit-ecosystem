@@ -2,9 +2,12 @@ const denied=message=>Object.assign(new Error(message),{status:403});
 export function academicProfileScope(identity){
  const role=String(identity.role||'').toUpperCase(),permissions=Array.isArray(identity.permissions)?identity.permissions:[];
  if(permissions.includes('nexus:media-only')||!['ADMIN','STAFF','TEACHER'].includes(role))return null;
- if(identity.workspace==='superadmin'||identity.id==='configured-superadmin'&&role==='ADMIN')return{workspace:'superadmin',role:'administrator'};
- if(identity.workspace==='principal'||role==='ADMIN'||permissions.includes('nexus:principal-workspace'))return{workspace:'principal',role:'principal'};
- if(identity.workspace==='senior'||permissions.includes('nexus:senior-teacher-workspace'))return{workspace:'senior',role:'vice-principal'};
+ const verified={superadmin:'administrator',principal:'principal',senior:'vice-principal',teacher:'teacher'};
+ if(identity.workspace&&Object.hasOwn(verified,identity.workspace))return{workspace:identity.workspace,role:verified[identity.workspace]};
+ if(identity.id==='configured-superadmin'&&role==='ADMIN')return{workspace:'superadmin',role:'administrator'};
+ if(permissions.includes('nexus:principal-workspace'))return{workspace:'principal',role:'principal'};
+ if(permissions.includes('nexus:senior-teacher-workspace'))return{workspace:'senior',role:'vice-principal'};
+ if(role==='ADMIN')return{workspace:'principal',role:'principal'};
  return role==='TEACHER'||identity.accessRoles?.includes('teacher')?{workspace:'teacher',role:'teacher'}:null;
 }
 /** Only the role column of an already provisioned, verified app profile can change. */

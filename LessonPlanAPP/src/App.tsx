@@ -1,3 +1,4 @@
+import {VerifyLesson} from './pages/VerifyLesson';
 import {rememberNexusReturn} from "./utils/nexusReturn";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { createHashRouter, Navigate, RouterProvider, useNavigate, useSearchParams } from "react-router-dom";
@@ -54,6 +55,7 @@ const InstitutionalSso = () => {
 };
 
 const router = createHashRouter([
+  { path: "/verify/:id", element: <VerifyLesson />, errorElement: <RouteFallback /> },
   { path: "/login", element: <Login />, errorElement: <RouteFallback /> },
   { path: "/sso", element: <InstitutionalSso />, errorElement: <RouteFallback /> },
   {

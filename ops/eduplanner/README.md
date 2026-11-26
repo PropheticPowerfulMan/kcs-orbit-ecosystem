@@ -1,0 +1,17 @@
+# Eduplanner: reliable lesson editing and official documents
+
+The editor uses three full-width sections: Essential setup, Weekly grid, and Review & PDF. Teaching days have direct navigation; longer teaching fields can be collapsed. Day content remains in the form when sections change. Historical text without edit flags is preserved; generating or restoring suggestions remains explicit.
+
+Save and Ctrl+S persist a local, account-bound draft and wait for a conditional cloud write plus read-back. Autosave handles all controlled editor fields. Backgrounding or leaving the editor preserves the current draft locally. The interface distinguishes unsaved changes, saving, server confirmation, local pending work and a version conflict. Retry never silently replaces another device’s work; the teacher can keep a draft copy or explicitly reload the saved version. A small per-write marker recovers a previously successful write whose response was lost, including after a page reload.
+
+Preview first confirms the current fields on the server. The server reads the saved lesson under the caller’s Supabase row access and checks its content hash; browser-supplied teaching content is not trusted as an official document. A4 orientation, 9–18 pt text and grid/detailed layouts are selectable. Pagination is automatic; 120 pages is a resource guard and oversized content is rejected without deleting the saved plan. The professional PDF contains the KCS emblem, watermark, repeated footer, page numbers and a vector QR linking to the full saved plan or a matching retained revision. School access is required. An unavailable old revision is explicitly identified, never replaced with invented content.
+
+Native PDF previews use a bounded, five-minute read-only capability. Their dedicated proxy path permits framing by the school origin only. Download/Open/Print remain available when a device has limited embedded-PDF support. The PWA caches public assets only; authorization, API/REST replies and private documents bypass its cache. Startup never resets existing teaching data.
+
+Eduplanner reconciles roles from the canonical Nexus identity at SSO, direct sign-in and session restoration. Verified workspace grants take precedence over a generic administrative label. Legacy accounts can be linked only through a server-confirmed email and a unique matching Nexus identity. Passwords, other application accounts and official portraits are not modified.
+
+Deployment scope: LessonPlan API/Web, Nexus API/Web, Jury Web, Kitchen Web, and one PDF-only Caddy header rule. No database schema migration is required. Nexus adds an Attendance Save button below the roster using the existing handler and guards. Jury receives a softer light palette and an accessible statistical-chart selector.
+
+Jury course selection combines keyword search, exact class/teacher filters and visible selected courses. Individual, group and hybrid projects remain distinct. Organizers can prepare many groups with different sizes, reassign selected registered learners and download an authenticated composition register. Writes are revision-checked, read back, and retain saved group identities. Duplicate group names/identities or membership are rejected; a portfolio-bearing group cannot be deleted through composition editing. No scoring formula changes.
+
+Kitchen only places the existing installation/language controls inside the login frame with mobile safe-area spacing. Sign-in roles and passwords are untouched.

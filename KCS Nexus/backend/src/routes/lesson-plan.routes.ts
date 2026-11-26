@@ -55,3 +55,24 @@ lessonPlanRouter.get('/dashboard-avatar', asyncHandler(async (req, res) => {
   res.set('Cache-Control','private, no-store').vary('Authorization')
   return success(res,result)
 }))
+
+// Refresh access from the canonical Nexus identity, never from a browser-supplied role.
+lessonPlanRouter.post('/session-identity', asyncHandler(async (req, res) => {
+ const authorization=req.header('authorization')||''
+ if(!authorization.startsWith('Bearer '))throw new ApiError(401,'An Eduplanner session is required')
+ const verified=await fetch(new URL('/api/ecosystem/session-check',process.env.LESSON_PLAN_INTERNAL_URL||'http://lessonplan_api:3001'),{method:'POST',headers:{authorization},signal:AbortSignal.timeout(8000)})
+ const session=await verified.json().catch(()=>null) as {allowed?:boolean;nexusUserId?:string;verifiedEmail?:string}|null
+ if(!verified.ok||!session?.allowed)throw new ApiError([401,403].includes(verified.status)?verified.status:503,'The Eduplanner session could not be verified')
+ const linkedId=session.nexusUserId
+ const email=typeof session.verifiedEmail==='string'?session.verifiedEmail.trim().toLowerCase():''
+ if(!linkedId&&!email)throw new ApiError(404,'This Eduplanner account has no verified institutional link')
+ const user=await prisma.user.findUnique({where:linkedId?(linkedId==='configured-superadmin'?{email:(process.env.SUPERADMIN_EMAIL||'').trim().toLowerCase()}:{id:linkedId}):{email},include:{teacherProfile:true}})
+ if(!user)throw new ApiError(404,'This Eduplanner account has no matching institutional identity')
+ const id=linkedId||user.id
+ await assertAccountAccess(id)
+ const superadmin=Boolean(user&&process.env.SUPERADMIN_EMAIL&&user.email.toLowerCase()===process.env.SUPERADMIN_EMAIL.trim().toLowerCase())
+ const workspace=academicWorkspaceFor(user,superadmin)
+ if(!user||!workspace||workspace==='student')throw new ApiError(403,'Eduplanner access is not enabled for this identity')
+ res.set('Cache-Control','private, no-store').vary('Authorization')
+ return success(res,{id,userId:id,role:user.role,workspace})
+}))
