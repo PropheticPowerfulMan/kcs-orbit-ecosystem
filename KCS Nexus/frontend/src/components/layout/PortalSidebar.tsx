@@ -142,20 +142,15 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const desktopNavigationRef = useRef<HTMLElement>(null)
   const mobileSidebarButtonRef = useRef<HTMLButtonElement>(null)
   const [menuQuery,setMenuQuery]=useState('')
-  const [electionOpening,setElectionOpening]=useState(false)
-  const [electionManualUrl,setElectionManualUrl]=useState<string|null>(null)
   const [academyOpening,setAcademyOpening]=useState(false)
   const [academyManualUrl,setAcademyManualUrl]=useState<string|null>(null)
   const academyLock=useRef(false)
-  const electionLock=useRef(false)
   const [avatarLoadVersion, setAvatarLoadVersion] = useState(0)
   const [desktopActionHeight, setDesktopActionHeight] = useState(() => {
     const saved = Number(localStorage.getItem('kcs-nexus-sidebar-action-height'))
     return Number.isFinite(saved) && saved >= 170 ? saved : 300
   })
   const { user, logout, updateUser } = useAuthStore()
-  useEffect(()=>setElectionManualUrl(null),[user?.id])
-  useEffect(()=>{if(!electionManualUrl)return;const timer=setTimeout(()=>setElectionManualUrl(null),30000);return()=>clearTimeout(timer)},[electionManualUrl])
   const {
     sidebarCollapsed,
     sidebarOpen,
@@ -270,13 +265,6 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const electionViewer=user.id!=='configured-superadmin'&&(principalWorkspace||canUseSeniorWorkspace(user))
   const electionAudience=!mediaAccount?(user.id==='configured-superadmin'||electionViewer?'ADMIN':activeRole==='parent'?'PARENT':activeRole==='student'?'STUDENT':user.permissions?.some(p=>['nexus:elections-manage','nexus:elections-observe'].includes(p))?'ADMIN':null):null
   const electionLabel=electionAudience==='ADMIN'?(electionViewer?(language==='fr'?'Élections · consultation':'Elections · view only'):(language==='fr'?'Administration des scrutins':'Election administration')):electionAudience==='PARENT'?(language==='fr'?'Élections des parents':'Parent elections'):(language==='fr'?'Élections des élèves':'Student elections')
-  const openElections=async()=>{
-   if(!electionAudience||electionLock.current)return
-   electionLock.current=true;setElectionOpening(true);setElectionManualUrl(null)
-   try{const owner=user.id;const result=await launchNexusWorkspace('elections',async()=>linkedWorkspaceLogin('elections',{audience:electionAudience,returnPath:location.pathname,language,theme:useUIStore.getState().theme}),{language,theme:useUIStore.getState().theme,isCurrent:()=>useAuthStore.getState().user?.id===owner});if(result?.manualUrl&&useAuthStore.getState().user?.id===owner)setElectionManualUrl(result.manualUrl)}
-   catch(error){await alertPortalMessage(error instanceof WorkspaceLaunchError&&error.message==='POPUP_BLOCKED'?(language==='fr'?'Autorisez l’ouverture d’un nouvel onglet pour accéder aux élections.':'Allow a new tab to open the election workspace.'):language==='fr'?'L’accès électoral n’a pas pu être ouvert. Vérifiez votre connexion et vos droits, puis réessayez.':'The election workspace could not be opened. Check your connection and access rights, then retry.')}
-   finally{electionLock.current=false;setElectionOpening(false)}
-  }
   const openAcademy=async()=>{
    if(academyLock.current)return
    academyLock.current=true;setAcademyOpening(true);setAcademyManualUrl(null)
@@ -442,10 +430,9 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           </Link>
         )}
         <JuryWorkspaceLauncher className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} compact={!isMobile&&sidebarCollapsed}/>
-        {electionAudience&&(electionManualUrl?<a href={electionManualUrl} target="_blank" rel="noopener noreferrer" data-election-native-launch className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={electionLabel} onClick={()=>{setTimeout(()=>setElectionManualUrl(null),0)}}><Vote size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{language==='fr'?'Ouvrir l’application électorale':'Open the election app'}</span>}</a>:<button type="button" onClick={()=>void openElections()} disabled={electionOpening} aria-busy={electionOpening} data-kcs-no-processing="true" data-election-launch={electionAudience} className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={!isMobile&&sidebarCollapsed?electionLabel:undefined}>
-          {electionOpening?<Loader2 size={18} className="animate-spin"/>:<Vote size={18}/>}
-          {(isMobile||!sidebarCollapsed)&&<span>{electionOpening?(language==='fr'?'Ouverture sécurisée…':'Opening securely…'):electionLabel}</span>}
-        </button>)}
+        {electionAudience&&<a href={linkedWorkspaceLogin('elections',{audience:electionAudience,returnPath:location.pathname,language,theme})} target="_blank" rel="noopener noreferrer" data-election-launch={electionAudience} data-election-native-launch className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title={!isMobile&&sidebarCollapsed?electionLabel:undefined}>
+          <Vote size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{electionLabel}</span>}
+        </a>}
         {(accessRoles.includes('teacher') || user.role === 'admin') && (
           academyManualUrl?<a href={academyManualUrl} target="_blank" rel="noopener noreferrer" data-academy-native-launch onClick={()=>{setTimeout(()=>setAcademyManualUrl(null),0)}} className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))} title="KCS Nexus Academy"><GraduationCap size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{language==='fr'?'Ouvrir l’application Academy':'Open the Academy app'}</span>}</a>:<button type="button" onClick={()=>void openAcademy()} disabled={academyOpening} aria-busy={academyOpening} data-kcs-no-processing="true" data-academy-launch
             className={isMobile ? "nexus-mobile-action" : `sidebar-link w-full ${!sidebarCollapsed ? "" : "justify-center px-0"}`}
