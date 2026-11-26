@@ -144,6 +144,9 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const [menuQuery,setMenuQuery]=useState('')
   const [academyOpening,setAcademyOpening]=useState(false)
   const [academyManualUrl,setAcademyManualUrl]=useState<string|null>(null)
+  const [plannerOpening,setPlannerOpening]=useState(false)
+  const [plannerManualUrl,setPlannerManualUrl]=useState<string|null>(null)
+  const plannerLock=useRef(false)
   const academyLock=useRef(false)
   const [avatarLoadVersion, setAvatarLoadVersion] = useState(0)
   const [desktopActionHeight, setDesktopActionHeight] = useState(() => {
@@ -151,6 +154,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     return Number.isFinite(saved) && saved >= 170 ? saved : 300
   })
   const { user, logout, updateUser } = useAuthStore()
+  useEffect(()=>{setPlannerManualUrl(null)},[user?.id])
+  useEffect(()=>{if(!plannerManualUrl)return;const timer=setTimeout(()=>setPlannerManualUrl(null),30000);return()=>clearTimeout(timer)},[plannerManualUrl])
   const {
     sidebarCollapsed,
     sidebarOpen,
@@ -265,6 +270,13 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const electionViewer=user.id!=='configured-superadmin'&&(principalWorkspace||canUseSeniorWorkspace(user))
   const electionAudience=!mediaAccount?(user.id==='configured-superadmin'||electionViewer?'ADMIN':activeRole==='parent'?'PARENT':activeRole==='student'?'STUDENT':user.permissions?.some(p=>['nexus:elections-manage','nexus:elections-observe'].includes(p))?'ADMIN':null):null
   const electionLabel=electionAudience==='ADMIN'?(electionViewer?(language==='fr'?'Élections · consultation':'Elections · view only'):(language==='fr'?'Administration des scrutins':'Election administration')):electionAudience==='PARENT'?(language==='fr'?'Élections des parents':'Parent elections'):(language==='fr'?'Élections des élèves':'Student elections')
+  const openPlanner=async()=>{
+   if(plannerLock.current)return
+   plannerLock.current=true;setPlannerOpening(true);setPlannerManualUrl(null)
+   try{const owner=user.id;const result=await launchNexusWorkspace('eduplanner',async()=>{const response=await lessonPlanAPI.launch();return response.data.data.url},{language,theme,isCurrent:()=>useAuthStore.getState().user?.id===owner});if(result?.manualUrl&&useAuthStore.getState().user?.id===owner)setPlannerManualUrl(result.manualUrl)}
+   catch{await alertPortalMessage(language==='fr'?'Eduplanner n’a pas pu être ouvert. Vérifiez votre connexion et réessayez.':'Eduplanner could not be opened. Check your connection and retry.')}
+   finally{plannerLock.current=false;setPlannerOpening(false)}
+  }
   const openAcademy=async()=>{
    if(academyLock.current)return
    academyLock.current=true;setAcademyOpening(true);setAcademyManualUrl(null)
@@ -442,11 +454,11 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           </button>
         )}
         {(accessRoles.includes('teacher') || user.role === 'admin') && (
-          <button type="button" onClick={async () => { const response = await lessonPlanAPI.launch(); window.location.assign(response.data.data.url) }}
-            className={isMobile ? "nexus-mobile-action" : `sidebar-link w-full ${!sidebarCollapsed ? "" : "justify-center px-0"}`}
+          plannerManualUrl?<a href={plannerManualUrl} target="_blank" rel="noopener noreferrer" data-eduplanner-native-launch onClick={()=>setTimeout(()=>setPlannerManualUrl(null),0)} className={isMobile?'nexus-mobile-action':('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))}><BookOpenCheck size={18}/>{(isMobile||!sidebarCollapsed)&&<span>{language==='fr'?'Ouvrir l’application Eduplanner':'Open the Eduplanner app'}</span>}</a>:<button type="button" onClick={()=>void openPlanner()} disabled={plannerOpening} aria-busy={plannerOpening} data-kcs-no-processing="true" data-eduplanner-launch
+            className={isMobile ? "nexus-mobile-action" : ('sidebar-link w-full '+(sidebarCollapsed?'justify-center px-0':''))}
             title={!isMobile && sidebarCollapsed ? "KCS EduPlanner" : undefined}>
-            <BookOpenCheck size={18} />
-            {(isMobile || !sidebarCollapsed) && <span>KCS EduPlanner</span>}
+            <BookOpenCheck size={18} className={plannerOpening?'animate-pulse':undefined}/>
+            {(isMobile || !sidebarCollapsed) && <span>{plannerOpening?(language==='fr'?'Ouverture…':'Opening…'):'KCS EduPlanner'}</span>}
           </button>
         )}
 

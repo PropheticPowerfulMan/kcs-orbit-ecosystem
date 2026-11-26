@@ -12,6 +12,9 @@ const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 manifest.id = basePath;
 manifest.start_url = basePath;
 manifest.scope = basePath;
+manifest.launch_handler = { client_mode: "navigate-existing" };
+manifest.related_applications = [{ platform: "webapp", url: basePath + "manifest.webmanifest", ...(process.env.VITE_PUBLIC_APP_URL ? { id: new URL(basePath, process.env.VITE_PUBLIC_APP_URL).href } : {}) }];
+manifest.prefer_related_applications = false;
 manifest.icons = manifest.icons.map((icon) => ({
   ...icon,
   src: basePath + icon.src.split("/").pop()

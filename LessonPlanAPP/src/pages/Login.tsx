@@ -195,11 +195,11 @@ export const Login = () => {
             <Button
               type="button"
               variant="outline"
-              className="mt-3 hidden w-full border-cyan-300/25 bg-white/[0.05] text-cyan-50 md:inline-flex"
+              className="mt-3 inline-flex w-full border-cyan-300/25 bg-white/[0.05] text-cyan-50"
               onClick={() => install().then((accepted) => {
                 setMessage(accepted
-                  ? "KCS EduPlanner is now installed."
-                  : "Use the installation icon in your browser address bar if the prompt is not available yet.");
+                  ? "Complete the browser installation to open Eduplanner in its own app window."
+                  : "In Chrome or Edge, use Install app in the browser menu. If already installed, open Eduplanner from its icon and enable opening supported links.");
               })}
             >
               <Download size={17} /> Install App
