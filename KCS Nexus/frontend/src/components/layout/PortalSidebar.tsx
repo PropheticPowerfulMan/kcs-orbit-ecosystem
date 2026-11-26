@@ -124,6 +124,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/portal/student/forum', label: t('portalNav.studentForum'), icon: MessageSquare },
         { to: '/admin/analytics', label: t('portalNav.aiAnalytics'), icon: Brain },
         { to: '/admin/academic-calendar', label: language === 'fr' ? 'Calendrier académique' : 'Academic Calendar', icon: Calendar },
+        { to: '/admin/electives', label: t('portalNav.electives'), icon: BookOpenCheck },
         { to: '/admin/data-migration', label: 'Imports Excel / CSV', icon: FileSpreadsheet },
         { to: '/admin/settings', label: t('portalNav.settings'), icon: Settings },
       ]

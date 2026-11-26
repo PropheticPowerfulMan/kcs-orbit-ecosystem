@@ -12,3 +12,5 @@ test('direct institutional authority grants map consistently with signed handoff
 
 test('an explicit teacher workspace cannot inherit an old administrative role',()=>assert.deepEqual(academicProfileScope({...identity,role:'ADMIN',workspace:'teacher'}),{role:'teacher',workspace:'teacher'}));
 test('a senior grant takes precedence over a generic ADMIN role',()=>assert.equal(academicProfileScope({...identity,role:'ADMIN',permissions:['nexus:senior-teacher-workspace']}).role,'vice-principal'));
+
+test('the selected teaching view does not downgrade shared granted leadership capability for another session',async()=>{const updates=[];const scope=await synchronizeAcademicProfile({...identity,workspace:'teacher',grantedWorkspace:'principal'},{...profile,role:'principal'},{readBinding:async()=>linked,updateRole:async(id,role)=>updates.push(role)});assert.equal(scope.role,'teacher');assert.deepEqual(updates,[])});

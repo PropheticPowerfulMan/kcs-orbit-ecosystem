@@ -90,7 +90,7 @@ export const Dashboard = () => {
     <div className="ep-dashboard space-y-6">
       <section className="ep-hero">
         <div><span className="ep-eyebrow">{tr("KCS · TEACHING WORKSPACE","KCS · ESPACE PÉDAGOGIQUE")}</span><p className="ep-greeting">{timeGreeting(new Date())}, {currentUser.name}</p><h1>{tr("A little planning.","Un peu de préparation.")}<br/><em>{tr("A lasting impact.","Un impact durable.")}</em></h1><p className="ep-hero-description">{tr("Your lessons, your curriculum and your next teaching moment — clearly connected.","Vos leçons, votre programme et vos prochaines séances, clairement réunis.")}</p><div className="ep-hero-tags"><span><ShieldCheck size={14}/>{roleTitle}</span><span><CheckCircle2 size={14}/>{stats.readiness}% {tr("inspection ready","prêt pour inspection")}</span><span><Clock3 size={14}/>{stats.submitted} {tr("awaiting review","en attente de révision")}</span></div></div>
-        <div className="ep-hero-aside"><div className="ep-lesson-art" aria-hidden="true"><div/><div/><div><BookOpen size={40}/><span>KCS<br/>LESSON NOTES</span><i/></div></div><Button aria-label={tr("New lesson plan","Nouvelle préparation")} onClick={()=>{const lesson=createLesson();navigate("/editor/"+lesson.id)}}><Plus size={18}/><span>{tr("New lesson plan","Nouvelle préparation")}</span></Button></div>
+        <div className="ep-hero-aside"><div className="ep-lesson-art" aria-hidden="true"><div/><div/><div><BookOpen size={40}/><span>KCS<br/>LESSON NOTES</span><i/></div></div><Button aria-label={tr("New lesson plan","Nouvelle préparation")} onClick={()=>{const lesson=createLesson();if(lesson)navigate("/editor/"+lesson.id)}}><Plus size={18}/><span>{tr("New lesson plan","Nouvelle préparation")}</span></Button></div>
       </section>
 
       {currentUser.role === "teacher" && <TeacherDashboard context={context} />}
@@ -120,7 +120,7 @@ const TeacherDashboard = ({ context }: { context: DashboardContext }) => {
         <Panel title="Quick Actions" icon={Sparkles}>
           <ActionGrid
             actions={[
-              { label: "New Lesson Plan", icon: Plus, onClick: () => navigate(`/editor/${createLesson().id}`) },
+              { label: "New Lesson Plan", icon: Plus, onClick: () => {const lesson=createLesson();if(lesson)navigate(`/editor/${lesson.id}`)} },
               { label: "View Drafts", icon: FileText, onClick: () => navigate("/plans?status=draft") },
               { label: "Submitted Plans", icon: ClipboardCheck, onClick: () => navigate("/plans?status=submitted") },
               { label: "Curriculum", icon: BookOpen, onClick: () => navigate("/curriculum") }

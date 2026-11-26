@@ -36,6 +36,7 @@ interface StoredSession {
   refreshToken: string;
   userId: string;
   workspace?: string;
+  workspaceVersion?: number;
 }
 
 const hasUsableCloudConfig = Boolean(
@@ -84,21 +85,21 @@ const request = async <T>(url: string, options: RequestInit = {}) => {
 
 const readSession = (): StoredSession | null => {
   try {
-    return JSON.parse(localStorage.getItem(sessionKey) || "null") as StoredSession | null;
+    const stored=JSON.parse(localStorage.getItem(sessionKey)||"null") as StoredSession|null;
+    if(!stored)return null;
+    const scope=JSON.parse(sessionStorage.getItem(sessionKey+":workspace")||"null");
+    return {...stored,workspace:scope?.userId===stored.userId?scope.workspace:undefined,workspaceVersion:scope?.userId===stored.userId?1:undefined};
   } catch {
     return null;
   }
 };
 
-const clearSession = () => localStorage.removeItem(sessionKey);
+const clearSession = () => {localStorage.removeItem(sessionKey);sessionStorage.removeItem(sessionKey+":workspace")};
 
-const writeSession = (session: SupabaseSession) => {
-  localStorage.setItem(sessionKey, JSON.stringify({
-    accessToken: session.access_token,
-    refreshToken: session.refresh_token,
-    userId: session.user.id,
-    workspace: session.institutional_workspace || (readSession()?.userId===session.user.id?readSession()?.workspace:undefined)
-  }));
+const writeSession = (session: SupabaseSession,preserveWorkspace=false) => {
+  const previous=readSession(),workspace=session.institutional_workspace||(preserveWorkspace&&previous?.userId===session.user.id?previous.workspace:undefined);
+  localStorage.setItem(sessionKey,JSON.stringify({accessToken:session.access_token,refreshToken:session.refresh_token,userId:session.user.id}));
+  if(workspace)sessionStorage.setItem(sessionKey+":workspace",JSON.stringify({userId:session.user.id,workspace}));else sessionStorage.removeItem(sessionKey+":workspace");
 };
 
 const parseList = (value: string[]) => value.map((item) => item.trim()).filter(Boolean);
@@ -149,10 +150,10 @@ const fromProfile = (profile: UserProfile) => ({
 
 const fetchCurrentProfile = async (userId: string, accessToken: string) => {
   if(configuredFederatedAuthUrl){
-    const response=await fetch(configuredFederatedAuthUrl.replace(/ecosystem-login$/, 'session-profile'),{method:'POST',headers:{Authorization:'Bearer '+accessToken},cache:'no-store',signal:AbortSignal.timeout(20000)});
+    const response=await fetch(configuredFederatedAuthUrl.replace(/ecosystem-login$/, 'session-profile'),{method:'POST',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({workspace:readSession()?.workspaceVersion===1?readSession()?.workspace:undefined}),cache:'no-store',signal:AbortSignal.timeout(20000)});
     const payload=await response.json().catch(()=>null);
     if(!response.ok||!payload?.profile||payload.profile.id!==userId)throw Object.assign(new Error(payload?.error||'Your institutional role could not be verified.'),{status:response.status});
-    const session=readSession();if(session?.userId===userId)localStorage.setItem(sessionKey,JSON.stringify({...session,workspace:payload.workspace}));
+    const session=readSession();if(session?.userId===userId)sessionStorage.setItem(sessionKey+":workspace",JSON.stringify({userId,workspace:payload.workspace}));
     return toProfile(payload.profile);
   }
   const rows = await request<Record<string, unknown>[]>(restUrl(`profiles?id=eq.${userId}&select=*`), {headers: baseHeaders(accessToken)});
@@ -189,7 +190,7 @@ export const cloudAuthService = {
     const session=readSession();if(!session)throw new Error('Sign in to synchronize your lesson plans.');
     let expires=0;try{expires=Number(JSON.parse(atob(session.accessToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).exp||0)*1000}catch{}
     if(expires&&expires>Date.now()+60000)return session.accessToken;
-    if(!refreshing)refreshing=request<SupabaseSession>(authUrl('token?grant_type=refresh_token'),{method:'POST',body:JSON.stringify({refresh_token:session.refreshToken})}).then(next=>{if(readSession()?.userId!==session.userId)throw new Error('The active account changed.');writeSession(next);return next.access_token}).finally(()=>{refreshing=null});
+    if(!refreshing)refreshing=request<SupabaseSession>(authUrl('token?grant_type=refresh_token'),{method:'POST',body:JSON.stringify({refresh_token:session.refreshToken})}).then(next=>{if(readSession()?.userId!==session.userId)throw new Error('The active account changed.');writeSession(next,true);return next.access_token}).finally(()=>{refreshing=null});
     return refreshing;
   },
   restUrl,
@@ -231,8 +232,8 @@ export const cloudAuthService = {
     if (!session) return null;
     try {
       return await fetchCurrentProfile(session.userId, await this.ensureAccessToken());
-    } catch {
-      localStorage.removeItem(sessionKey);
+    } catch (error) {
+      if([401,403].includes(Number((error as {status?:number})?.status)))clearSession();
       return null;
     }
   },

@@ -3,7 +3,7 @@ import {workspaceRole} from '@/utils/accountScope'
 import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import "./electives.css";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   BookOpenCheck,
   CheckCircle2,
@@ -51,7 +51,7 @@ export default function ElectivesPage() {
     activeRole=workspaceRole(user,useLocation().pathname),
     language = useUIStore((state) => state.language),
     tr = (fr: string, en: string) => (language === "fr" ? fr : en),
-    managerRole = activeRole === "admin" && user?.id !== "configured-superadmin",
+    managerRole = activeRole === "admin",
     teacherRole =
       activeRole === "teacher",
     student = user?.role === "student";
@@ -103,6 +103,8 @@ export default function ElectivesPage() {
   };
   useEffect(() => {
     void load();
+  }, []);
+  useEffect(()=>{
     if (admin)
       electivesAPI
         .teachers()
@@ -115,7 +117,7 @@ export default function ElectivesPage() {
             ),
           ),
         );
-  }, []);
+  }, [admin]);
   const cycles: C[] = data.cycles || [],
     cycle = cycles.find((c) => c.id === selected) || cycles[0];
   const statusLabel = (value: string) =>
@@ -207,7 +209,9 @@ export default function ElectivesPage() {
         ),
       }) as Record<string, string>
     )[value] || value;
+  const actionLock=useRef(false);
   const act = async (fn: () => Promise<any>) => {
+    if(actionLock.current)return;actionLock.current=true;
     setBusy(true);
     setMessage("");
     try {
@@ -221,7 +225,7 @@ export default function ElectivesPage() {
           tr("Opération impossible", "Operation failed"),
       );
     } finally {
-      setBusy(false);
+      actionLock.current=false;setBusy(false);
     }
   };
   const add = (e: FormEvent) => {

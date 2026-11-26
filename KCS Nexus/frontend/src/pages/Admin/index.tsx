@@ -1,3 +1,4 @@
+import{rememberOfficialPortraits,cachedOfficialPortraits}from'@/utils/officialPortraitCache'
 import AcademicHomeWelcome from '@/components/shared/AcademicHomeWelcome'
 import SchoolHistoryCenter from '@/components/admin/SchoolHistoryCenter'
 import InstitutionalCredentialsDialog from '@/components/admin/InstitutionalCredentialsDialog'
@@ -713,6 +714,7 @@ const apiAdmissionToAdminRequest = (item: any): AdminAdmissionRequest => ({
 
 const saveRoster = (items: AdminStudentRecord[]) => {
   if (typeof window === 'undefined') return
+  void rememberOfficialPortraits(useAuthStore.getState().user?.id||'',items).catch(()=>{})
   // Registry portraits can be multi-megabyte data URLs. Keeping them in the
   // synchronous localStorage snapshot blocks the UI and quickly exceeds the
   // browser quota. The live API response remains authoritative for photos.
@@ -3582,6 +3584,7 @@ const AdminDashboard = () => {
   const location = useLocation()
   const activeSegment = getAdminSegment(location.pathname)
   const [officialRoster, setOfficialRoster] = useState<AdminStudentRecord[]>(readStoredRoster)
+  useEffect(()=>{let active=true;const owner=user?.id||'';void cachedOfficialPortraits(owner,readStoredRoster().map(row=>row.id)).then(photos=>{if(active&&useAuthStore.getState().user?.id===owner)setOfficialRoster(current=>current.map(row=>row.photoData===undefined&&photos.has(row.id)?{...row,photoData:photos.get(row.id)}:row))}).catch(()=>{});return()=>{active=false}},[user?.id]);
   const [admissionRequests, setAdmissionRequests] = useState<AdminAdmissionRequest[]>(readStoredAdmissions)
   const [dashboardTab,setDashboardTab]=useState<'overview'|'operations'|'governance'|'community'>('overview')
   const [dashboardFinance, setDashboardFinance] = useState<EduPayFinanceSummary | null>(null)
