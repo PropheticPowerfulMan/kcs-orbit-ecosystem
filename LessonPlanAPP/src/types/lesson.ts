@@ -69,15 +69,16 @@ export interface WeeklyPlanDay {
   guidedPractice: string;
   exitTicket: string;
   assessment: string;
-  homework: string;
+  homework: string; // Legacy content is migrated into assessment.
+  assessmentTypes?: string[];
   activityDurations?: {
     introduction?: number;
     presentation?: number;
     guidedPractice?: number;
     exitTicket?: number;
   };
-  lockedFields?: Partial<Record<keyof Omit<WeeklyPlanDay, "day" | "activityDurations" | "lockedFields" | "editedFields">, boolean>>;
-  editedFields?: Partial<Record<keyof Omit<WeeklyPlanDay, "day" | "activityDurations" | "lockedFields" | "editedFields">, boolean>>;
+  lockedFields?: Partial<Record<keyof Omit<WeeklyPlanDay, "day" | "activityDurations" | "lockedFields" | "editedFields" | "assessmentTypes">, boolean>>;
+  editedFields?: Partial<Record<keyof Omit<WeeklyPlanDay, "day" | "activityDurations" | "lockedFields" | "editedFields" | "assessmentTypes">, boolean>>;
 }
 
 export interface BloomQuestions {
@@ -155,6 +156,8 @@ export interface LessonWorkflowEvent {
 }
 
 export interface LessonPlan {
+  saveRevisionId?: string;
+  printSettings?: {orientation: "portrait" | "landscape"; fontSize: number; layout: "grid" | "details"; language?: "en" | "fr"};
   id: string;
   ownerId: string;
   ownerName: string;

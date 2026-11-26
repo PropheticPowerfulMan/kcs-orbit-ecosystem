@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "start": "node index.mjs",
-    "check": "node --check index.mjs && node --check emailTemplate.mjs && node --check send-test-email.mjs",
-    "send:test": "node send-test-email.mjs"
+    "check": "node --check index.mjs && node --check lessonDocument.mjs && node --check lessonDocuments.mjs && node --check lessonOutbox.mjs && node --check lessonPdf.mjs && node --check pdfViews.mjs && node --check emailTemplate.mjs && node --check send-test-email.mjs",
+    "send:test": "node send-test-email.mjs",
+    "test": "node --test *.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
     "dotenv": "^16.6.1",
-    "nodemailer": "^9.0.5"
+    "nodemailer": "^9.0.5",
+    "pdfkit": "0.20.2",
+    "qrcode": "1.5.4"
   }
 }

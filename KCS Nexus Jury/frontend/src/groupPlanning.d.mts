@@ -1,0 +1,1 @@
+export function fold(value:unknown):string;export function teacherName(course:any):string;export function filterCourses(courses:any[],options?:any):any[];export function compositionIssues(groups:any[],participants:any[]):string[];export function allocateGroups(participants:any[],options?:any):any[];

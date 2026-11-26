@@ -1,0 +1,2 @@
+export function clientId():string;
+export function createLessonOutbox(options: {storage: Storage; actor: ()=>string; remote: {read:(id:string)=>Promise<any>;write:(row:any,revision?:string,saveRevisionId?:string)=>Promise<any>};emit?:(state:any)=>void}): {generation:()=>number;changedSince:(id:string,epoch:number)=>boolean;enqueue:(row:any,actor?:string)=>void;flush:(id:string)=>Promise<any>;pending:(id:string)=>any;remember:(id:string,row:any)=>void;status:(id:string)=>any;retry:()=>Promise<void>;discard:(id:string)=>void};

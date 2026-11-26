@@ -7,8 +7,9 @@ export function academicWorkspaceFor(account:Account|null|undefined,superadmin=f
  const role=account.role.toUpperCase()
  if(!['ADMIN','STAFF','TEACHER'].includes(role))return role==='STUDENT'?'student':null
  if(superadmin)return 'superadmin'
- if(hasPrincipalWorkspaceAccess(account))return 'principal'
+ if(account.permissions?.includes('nexus:principal-workspace'))return 'principal'
  if(hasSeniorWorkspaceAccess(account))return 'senior'
+ if(hasPrincipalWorkspaceAccess(account))return 'principal'
  return role==='TEACHER'||account.teacherProfile?'teacher':null
 }
 export const academyRoleFor=(workspace:AcademicWorkspace)=>workspace==='superadmin'?'SUPER_ADMIN':workspace==='principal'||workspace==='senior'?'ADMIN':workspace==='student'?'STUDENT':'TEACHER'

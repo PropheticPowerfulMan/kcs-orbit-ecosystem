@@ -1,8 +1,12 @@
+import {clientId} from "../../server/lessonOutbox.mjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ChevronDown, ChevronUp, Copy, Download, FileDown, Layers3, Loader2, Printer, Save, Sparkles, Trash2 } from "lucide-react";
-import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useReactToPrint } from "react-to-print";
+import {useApp} from "../contexts/AppContext";
+import {cloudAuthService} from "../services/cloudAuthService";
+import {officialLessonPdf} from "../services/lessonDocumentService";
+import {assessmentTypes,assessmentLabels,migrateAssessmentDay} from "../../server/lessonDocument.mjs";
 import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
 import { useToast } from "../components/Toast";
@@ -65,22 +69,34 @@ type SetupField =
   | "term"
   | "classroom"
   | "numberOfStudents";
-type WeeklyEditableKey = keyof Omit<WeeklyPlanDay, "day" | "activityDurations" | "lockedFields" | "editedFields">;
+type WeeklyEditableKey = "lesson" | "objectives" | "introduction" | "presentation" | "guidedPractice" | "exitTicket" | "assessment" | "homework";
 
 export const Editor = () => {
   const { id } = useParams();
+  const {language}=useApp();const tr=(en:string,fr:string)=>language==='fr'?fr:en;
+  const [panel,setPanel]=useState<'setup'|'weekly'|'review'>('setup');
+  const [selectedDay,setSelectedDay]=useState(0);
+  const [saveState,setSaveState]=useState({status:'saved',error:'',code:''});
+  const [pdfDocument,setPdfDocument]=useState<{url:string;viewUrl:string;filename:string}|null>(null);
+  const [pdfError,setPdfError]=useState('');
+  const [pdfBusy,setPdfBusy]=useState(false);
+  const lastSaved=useRef('');
+  const currentId=useRef(id);currentId.current=id;
+
   const navigate = useNavigate();
   const { notify } = useToast();
   const { currentUser, can } = useAuth();
   const [preview, setPreview] = useState(false);
   const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
   const [revisionNote, setRevisionNote] = useState("");
-  const [qualityChecksCollapsed, setQualityChecksCollapsed] = useState(false);
+  const [qualityChecksCollapsed, setQualityChecksCollapsed] = useState(true);
   const printRef = useRef<HTMLDivElement>(null);
   const [lesson, setLesson] = useState<LessonPlan | undefined>(() => (id ? lessonRepository.get(id) : undefined));
   const fallback = useMemo(() => createBlankLesson(`LP-${new Date().getFullYear()}-0001`), []);
+  const [lessonLoading,setLessonLoading]=useState(()=>Boolean(id&&!lesson));
+  const [lessonError,setLessonError]=useState('');
   const canViewCurrent = lesson ? canViewLesson(currentUser, lesson) : true;
-  const canEditCurrent = lesson ? canEditLesson(currentUser, lesson) : can("lesson:create");
+  const canEditCurrent = !lessonLoading&&!lessonError&&(lesson ? canEditLesson(currentUser, lesson) : can("lesson:create"));
   const canDeleteCurrent = lesson ? canDeleteLesson(currentUser, lesson) : false;
   const canReviewCurrent = lesson ? canReviewLesson(currentUser, lesson) : false;
 
@@ -90,21 +106,24 @@ export const Editor = () => {
     mode: "onChange"
   });
 
+  const editEpoch=useRef(0),savedEpoch=useRef(0),loadedPlan=useRef(id);
+  useEffect(()=>{const subscription=form.watch((_value,info)=>{if(info.name&&!["versions","activityLogs","updatedAt"].includes(info.name)){editEpoch.current++;setSaveState({status:"editing",error:"",code:""})}});return()=>subscription.unsubscribe()},[form]);
   useEffect(() => {
     const localLesson = id ? lessonRepository.get(id) : undefined;
-    setLesson(localLesson);
-    if (localLesson) form.reset(localLesson);
+    setLesson(localLesson);setLessonError('');setLessonLoading(!localLesson);
+    if(loadedPlan.current!==id||localLesson&&form.getValues('id')!==id){loadedPlan.current=id;editEpoch.current=0;savedEpoch.current=0;lastSaved.current="";form.reset(localLesson||fallback)}
+    const startedEpoch=editEpoch.current;
     if (!id || !currentUser) return;
     let cancelled = false;
     lessonRepository.syncFromCloud()
       .then(() => {
-        const syncedLesson = lessonRepository.get(id);
-        if (!cancelled && syncedLesson) {
-          setLesson(syncedLesson);
-          form.reset(syncedLesson);
-        }
+        if(cancelled)return;
+        const syncedLesson=id?lessonRepository.get(id):undefined;
+        if(!syncedLesson){setLessonError(tr('This lesson is unavailable or outside your access.','Ce plan est indisponible ou hors de votre accès.'));setLessonLoading(false);return}
+        setLesson(syncedLesson);setLessonLoading(false);
+        if(editEpoch.current===startedEpoch&&!form.formState.isDirty)form.reset(syncedLesson);
       })
-      .catch(() => undefined);
+      .catch(()=>{if(!cancelled&&!localLesson){setLessonError(tr('The saved lesson could not be loaded. Reconnect and retry; no data was changed.','Le plan enregistré n’a pas pu être chargé. Reconnectez-vous et réessayez ; aucune donnée n’a été modifiée.'));setLessonLoading(false)}});
     return () => {
       cancelled = true;
     };
@@ -122,7 +141,7 @@ export const Editor = () => {
   const weeklyPlan = normalizeEditableWeeklyPlan(values.weeklyPlan, values.subject, values.gradeClass, currentChapter);
   const displayedPlan = planType === "daily" ? weeklyPlan.slice(0, 1) : weeklyPlan;
   const lessonSignature = weeklyPlan.map((day) => day.lesson).join("|");
-  const printableLesson = toPrintableLesson(values);
+  const printableLesson = {...values,weeklyPlan};
   const teacherFeedback = useMemo(() => getTeacherFeedback(values), [values]);
   const curriculumItems = useMemo(() => curriculumRepository.list(), []);
   const curriculumSuggestions = useMemo(() => findCurriculumSuggestions(curriculumItems, values.gradeClass, values.subject), [curriculumItems, values.gradeClass, values.subject]);
@@ -154,16 +173,18 @@ export const Editor = () => {
   }, [canEditCurrent, form, values.duration, values.planType, values.subject, values.gradeClass, values.chapter]);
 
   useEffect(() => {
+    if(!canEditCurrent)return;
     const current = form.getValues();
     const chapter = sanitizeChapter(current.chapter);
     const hasSetup = Boolean(current.subject || current.gradeClass || chapter);
     const support = createAutomaticLessonSupport(current.subject, current.gradeClass, chapter);
     const previousSetup = previousSetupRef.current;
     const hasManualWeeklyEdits = current.weeklyPlan?.some((day) => day.editedFields && Object.values(day.editedFields).some(Boolean));
-    const planCanSync =
-      !hasManualWeeklyEdits &&
-      (isAutoGeneratedWeeklyPlan(current.weeklyPlan, current.subject, current.gradeClass, chapter) ||
-      isAutoGeneratedWeeklyPlan(current.weeklyPlan, previousSetup.subject, previousSetup.gradeClass, previousSetup.chapter));
+    const previousGeneratedPlan=createVariedWeeklyPlan({...current,subject:previousSetup.subject,gradeClass:previousSetup.gradeClass,chapter:previousSetup.chapter});
+    const generatedPlan=createVariedWeeklyPlan(current);
+    const matchesSuggestion=(expected:WeeklyPlanDay[])=>Boolean(current.weeklyPlan?.length)&&current.weeklyPlan.every((day,index)=>(['lesson','objectives','introduction','presentation','guidedPractice','exitTicket','assessment'] as const).every(key=>!day[key]||day[key]===expected[index]?.[key]));
+    // A historical plan without edit flags is still teacher work, not permission to replace its text.
+    const planCanSync=!hasManualWeeklyEdits&&(matchesSuggestion(previousGeneratedPlan)||matchesSuggestion(generatedPlan));
 
     previousSetupRef.current = {
       subject: current.subject,
@@ -193,12 +214,12 @@ export const Editor = () => {
         const generatedDay = nextGenerated[index];
         const previousDay = previousGenerated[index];
         const nextDay = { ...day };
-        (["lesson", "objectives", "introduction", "presentation", "guidedPractice", "exitTicket", "assessment", "homework"] as WeeklyEditableKey[]).forEach((key) => {
+        (["lesson", "objectives", "introduction", "presentation", "guidedPractice", "exitTicket", "assessment"] as WeeklyEditableKey[]).forEach((key) => {
           const locked = Boolean(day.lockedFields?.[key]);
           const manuallyEdited = Boolean(day.editedFields?.[key]);
           const currentValue = String(day[key] || "").trim();
           const previousValue = String(previousDay?.[key] || "").trim();
-          const shouldSync = !locked && (!manuallyEdited || !currentValue || currentValue === previousValue || hasOldSetupText(currentValue, previousSetup));
+          const shouldSync = !locked && !manuallyEdited && (!currentValue || currentValue === previousValue);
           if (shouldSync && generatedDay?.[key] && currentValue !== generatedDay[key]) {
             nextDay[key] = generatedDay[key];
             changed = true;
@@ -279,9 +300,10 @@ export const Editor = () => {
         shouldValidate: false
       });
     }
-  }, [form, values.subject, values.gradeClass, values.chapter, values.week, values.weekStartDate, values.weekEndDate, values.date, values.planType]);
+  }, [canEditCurrent, form, values.subject, values.gradeClass, values.chapter, values.week, values.weekStartDate, values.weekEndDate, values.date, values.planType]);
 
   useEffect(() => {
+    if(!canEditCurrent)return;
     const current = form.getValues();
     const currentPlan = normalizeEditableWeeklyPlan(current.weeklyPlan, current.subject, current.gradeClass, sanitizeChapter(current.chapter));
     let changed = false;
@@ -295,10 +317,9 @@ export const Editor = () => {
       const objectiveLocked = Boolean(day.lockedFields?.objectives);
       const objectiveManuallyEdited = Boolean(day.editedFields?.objectives);
       const objectiveCanSync =
-        (!objectiveLocked && !currentObjective.trim()) ||
+        (!objectiveLocked && !objectiveManuallyEdited && !currentObjective.trim()) ||
         (!objectiveLocked && !objectiveManuallyEdited && currentObjective === previousAutoObjective) ||
-        (!objectiveLocked && !objectiveManuallyEdited && currentObjective === previousLessonObjective) ||
-        (!objectiveLocked && isGenericObjective(currentObjective, current.gradeClass, sanitizeChapter(current.chapter)));
+        (!objectiveLocked && !objectiveManuallyEdited && currentObjective === previousLessonObjective);
       const nextDay = { ...day };
 
       previousAutoObjectivesRef.current[index] = autoObjective;
@@ -313,7 +334,7 @@ export const Editor = () => {
         changed = true;
       }
 
-      (["introduction", "presentation", "guidedPractice", "exitTicket", "assessment", "homework"] as WeeklyEditableKey[]).forEach((key) => {
+      (["introduction", "presentation", "guidedPractice", "exitTicket", "assessment"] as WeeklyEditableKey[]).forEach((key) => {
         const locked = Boolean(day.lockedFields?.[key]);
         const manuallyEdited = Boolean(day.editedFields?.[key]);
         const currentValue = String(day[key] || "");
@@ -335,7 +356,7 @@ export const Editor = () => {
         guidedPractice: generatedFromLesson.guidedPractice,
         exitTicket: generatedFromLesson.exitTicket,
         assessment: generatedFromLesson.assessment,
-        homework: generatedFromLesson.homework
+        homework: ""
       };
 
       return nextDay;
@@ -347,7 +368,7 @@ export const Editor = () => {
         shouldValidate: false
       });
     }
-  }, [form, lessonSignature, values.subject, values.gradeClass, values.chapter, values.topic]);
+  }, [canEditCurrent, form, lessonSignature, values.subject, values.gradeClass, values.chapter, values.topic]);
 
   const completion = useMemo(() => {
     const required = [
@@ -360,55 +381,63 @@ export const Editor = () => {
     return Math.round((required.filter(Boolean).length / required.length) * 100);
   }, [displayedPlan, values]);
 
-  const save = (withVersion = false) => {
+  const save = (withVersion = false): LessonPlan | undefined => {
     if (!canEditCurrent) return;
     const current = form.getValues();
+    const signature=JSON.stringify({...current,updatedAt:'',saveRevisionId:'',activityLogs:[],versions:[]});
+    if(!withVersion&&signature===lastSaved.current){savedEpoch.current=editEpoch.current;setSaveState(lessonRepository.saveStatus(current.id));return lessonRepository.get(current.id)||current;}
     const now = new Date().toISOString();
-    const currentWeeklyPlan = normalizeEditableWeeklyPlan(current.weeklyPlan, current.subject, current.gradeClass, sanitizeChapter(current.chapter));
-    const persistedWeeklyPlan = currentWeeklyPlan.map((day) => ({ ...day }));
-    const next: LessonPlan = {
-      ...toPrintableLesson(current),
-      weeklyPlan: persistedWeeklyPlan,
-      updatedAt: now,
-      versions: withVersion
-        ? [{ id: crypto.randomUUID(), savedAt: now, summary: `Manual save: ${current.chapter || current.topic}`, snapshot: { ...current, weeklyPlan: persistedWeeklyPlan, versions: [] } }, ...(current.versions || [])].slice(0, 20)
-        : current.versions || []
-    };
-    lessonRepository.save(next, currentUser, withVersion ? "Manual save with revision snapshot" : "Autosaved lesson changes");
-    if (withVersion) {
-      form.reset(next, { keepValues: true });
-      notify(`Saved checkpoint ${next.versions.length}`);
-    }
+    const persistedWeeklyPlan=normalizeEditableWeeklyPlan(current.weeklyPlan,current.subject,current.gradeClass,sanitizeChapter(current.chapter));
+    const next:LessonPlan={...current,weeklyPlan:persistedWeeklyPlan,updatedAt:now,versions:withVersion?[{id:clientId(),savedAt:now,summary:`Manual save: ${current.chapter||current.topic}`,snapshot:{...current,weeklyPlan:persistedWeeklyPlan,versions:[]}},...(current.versions||[])].slice(0,20):current.versions||[]};
+    try{
+      const saved=lessonRepository.save(next,currentUser,withVersion?'Manual save with revision snapshot':'Autosaved lesson changes');
+      lastSaved.current=signature;savedEpoch.current=editEpoch.current;
+      // Updating only history leaves any newly typed fields and the dirty flag intact.
+      if(withVersion)form.setValue('versions',saved.versions,{shouldDirty:false});
+      return saved;
+    }catch(error){setSaveState({status:'pending',error:error instanceof Error?error.message:'The local draft could not be stored.',code:''});if(withVersion)notify(tr('Save failed. Keep this page open and try again.','Enregistrement échoué. Gardez cette page ouverte et réessayez.'));return undefined}
   };
+  const saveConfirmed=async()=>{
+    const next=save(true);if(!next)return;
+    try{await lessonRepository.flush(next.id);if(currentId.current===next.id)notify(cloudAuthService.enabled?tr('Saved and confirmed by the server.','Enregistré et confirmé par le serveur.'):tr('Saved on this device.','Enregistré sur cet appareil.'))}
+    catch(error){notify(tr('Draft kept on this device. Server confirmation is still required.','Brouillon conservé sur cet appareil. La confirmation du serveur reste nécessaire.'))}
+  };
+  useDebouncedEffect(()=>{if(canEditCurrent&&editEpoch.current>savedEpoch.current)save(false)},[values,canEditCurrent],900);
+  const preserveDraft=useRef<()=>void>(()=>undefined);
+  preserveDraft.current=()=>{if(canEditCurrent&&editEpoch.current>savedEpoch.current)save(false)};
+  useEffect(()=>{const preserve=()=>preserveDraft.current(),hide=()=>{if(document.visibilityState==='hidden')preserve()};window.addEventListener('pagehide',preserve);window.addEventListener('beforeunload',preserve);document.addEventListener('visibilitychange',hide);return()=>{preserve();window.removeEventListener('pagehide',preserve);window.removeEventListener('beforeunload',preserve);document.removeEventListener('visibilitychange',hide)}},[]);
 
-  useDebouncedEffect(() => {
-    if (canEditCurrent && form.formState.isDirty) save(false);
-  }, [values, canEditCurrent], 900);
-
-  const printTitle = printableLesson.topic || printableLesson.chapter || "lesson-plan";
-  const print = useReactToPrint({ contentRef: printRef, documentTitle: printTitle });
-
-  useKeyboardShortcuts({
-    save: () => save(true),
-    print
-  });
-
-  const exportDocument = async (type: "pdf" | "docx") => {
-    if (!printRef.current || exporting) return;
-    setExporting(type);
-    notify(type === "pdf" ? "PDF download in progress..." : "DOCX download in progress...");
-    try {
-      if (type === "pdf") {
-        await exportElementToPdf(printRef.current, `${printTitle}.pdf`);
-      } else {
-        await exportElementToDocx(printRef.current, `${printTitle}.docx`);
-      }
-      notify(type === "pdf" ? "PDF downloaded" : "DOCX downloaded");
-    } catch {
-      notify("Download failed");
-    } finally {
-      setExporting(null);
-    }
+  useEffect(()=>{
+    const listener=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail.id===id)setSaveState(detail.status==='saved'&&editEpoch.current>savedEpoch.current?{status:'editing',error:'',code:''}:detail)};
+    setSaveState(lessonRepository.saveStatus(id||''));window.addEventListener('eduplanner:save-state',listener);
+    return()=>window.removeEventListener('eduplanner:save-state',listener);
+  },[id]);
+  useEffect(()=>()=>{if(pdfDocument)URL.revokeObjectURL(pdfDocument.url)},[pdfDocument]);
+  const printTitle=printableLesson.topic||printableLesson.chapter||'Lesson Plan';
+  const pdf=async(mode:'preview'|'download'|'print'='preview')=>{
+    if(pdfBusy||lessonLoading||lessonError)return;
+    // Reserve a native PDF viewer during the click gesture (mobile popup policies).
+    const viewer=mode==='print'?window.open('about:blank','_blank'):null;
+    if(viewer){viewer.opener=null;viewer.document.title='KCS · Preparing PDF';viewer.document.body.textContent=tr('Preparing your saved lesson plan…','Préparation du plan de leçon enregistré…')}
+    setPdfBusy(true);setPdfError('');setPreview(true);
+    try{
+      const next=canEditCurrent?save(true):form.getValues();if(!next)throw new Error(tr('The draft could not be saved.','Le brouillon n’a pas pu être enregistré.'));
+      await lessonRepository.flush(next.id);
+      const result=await officialLessonPdf(next,language),document={url:URL.createObjectURL(result.blob),viewUrl:result.viewUrl,filename:decodeURIComponent(result.filename)};
+      if(currentId.current!==next.id){URL.revokeObjectURL(document.url);viewer?.close();return}
+      setPdfDocument(document);
+      if(mode==='download'){const a=window.document.createElement('a');a.href=document.url;a.download=document.filename;a.click()}
+      if(viewer)viewer.location.replace(document.url);
+    }catch(error){viewer?.close();setPdfError(error instanceof Error?error.message:tr('PDF unavailable. Your draft is preserved.','PDF indisponible. Votre brouillon est conservé.'))}
+    finally{setPdfBusy(false)}
+  };
+  const print=()=>{void pdf('print')};
+  useKeyboardShortcuts({save:()=>{void saveConfirmed()},print});
+  const exportDocument=async(type:'pdf'|'docx')=>{
+    if(type==='pdf'){await pdf('download');return}
+    if(!printRef.current||exporting)return;setExporting(type);
+    try{await exportElementToDocx(printRef.current,`${printTitle}.docx`);notify(tr('DOCX downloaded','DOCX téléchargé'))}
+    catch{notify(tr('Download failed','Échec du téléchargement'))}finally{setExporting(null)}
   };
 
   const duplicate = () => {
@@ -416,7 +445,7 @@ export const Editor = () => {
     const now = new Date().toISOString();
     const copy = prepareNewLessonForUser({
       ...form.getValues(),
-      id: crypto.randomUUID(),
+      id: clientId(),
       ownerId: "",
       ownerName: "",
       department: "",
@@ -438,7 +467,7 @@ export const Editor = () => {
     const created = sourcePlan.map((day, index) => {
       const daily = prepareNewLessonForUser({
         ...current,
-        id: crypto.randomUUID(),
+        id: clientId(),
         lessonNumber: `${current.lessonNumber || `LP-${new Date().getFullYear()}`}-D${index + 1}`,
         planType: "daily",
         status: "draft",
@@ -491,7 +520,7 @@ export const Editor = () => {
     const now = new Date().toISOString();
     const weekly = prepareNewLessonForUser({
       ...current,
-      id: crypto.randomUUID(),
+      id: clientId(),
       lessonNumber: `LP-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`,
       planType: "weekly",
       status: "draft",
@@ -684,6 +713,7 @@ export const Editor = () => {
     notify("Curriculum suggestions applied");
   };
 
+  if(lessonLoading||lessonError)return <Card className="ep-editor mx-auto max-w-3xl p-6"><h1 className="text-xl font-bold">{lessonLoading?tr('Loading your saved lesson…','Chargement de votre plan enregistré…'):tr('Saved lesson unavailable','Plan enregistré indisponible')}</h1><p className="mt-3" role={lessonError?'alert':'status'}>{lessonError||tr('Your existing plan will appear after the server confirms access.','Votre plan existant apparaîtra après la vérification de l’accès par le serveur.')}</p>{lessonError&&<div className="mt-4 flex gap-2"><Button onClick={()=>window.location.reload()}>{tr('Retry','Réessayer')}</Button><Button variant="outline" onClick={()=>navigate('/plans')}>{tr('Back to plans','Retour aux plans')}</Button></div>}</Card>;
   if (!canViewCurrent) {
     return (
       <Card className="mx-auto mt-10 max-w-xl p-8 text-center">
@@ -696,7 +726,7 @@ export const Editor = () => {
   }
 
   return (
-    <div className="min-w-0 space-y-4 overflow-hidden">
+    <div className="ep-editor min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-black uppercase text-cyan-200">KCS {planType === "daily" ? "daily" : "weekly"} lesson plan</p>
@@ -711,11 +741,11 @@ export const Editor = () => {
           </p>
         </div>
         <div className="flex min-w-0 flex-wrap gap-2">
-          {canEditCurrent && <Button variant="outline" onClick={() => save(true)} title="Ctrl+S"><Save size={17} /> Save</Button>}
+          {canEditCurrent && <Button variant="outline" onClick={()=>void saveConfirmed()} title="Ctrl+S"><Save size={17} /> Save</Button>}
           {canEditCurrent && planType === "weekly" && <Button variant="outline" onClick={splitWeeklyIntoDailyPlans}><Copy size={17} /> Split daily</Button>}
           {canEditCurrent && planType === "daily" && <Button variant="outline" onClick={buildWeeklyFromDailyPlans}><Layers3 size={17} /> Build weekly</Button>}
           {can("lesson:create") && <Button variant="outline" onClick={duplicate}><Copy size={17} /> Duplicate</Button>}
-          <Button variant="outline" onClick={() => setPreview(true)}><Printer size={17} /> Preview</Button>
+          <Button variant="outline" onClick={()=>void pdf()}><Printer size={17} /> Preview</Button>
           <Button variant="outline" disabled={Boolean(exporting)} onClick={() => exportDocument("pdf")}>{exporting === "pdf" ? <Loader2 className="animate-spin" size={17} /> : <FileDown size={17} />} {exporting === "pdf" ? "PDF..." : "PDF"}</Button>
           <Button variant="outline" disabled={Boolean(exporting)} onClick={() => exportDocument("docx")}>{exporting === "docx" ? <Loader2 className="animate-spin" size={17} /> : <Download size={17} />} {exporting === "docx" ? "DOCX..." : "DOCX"}</Button>
           {canDeleteCurrent && <Button variant="danger" onClick={() => { if (confirm("Move this lesson plan to deleted items?")) { lessonRepository.remove(values.id, currentUser); navigate("/plans"); } }}><Trash2 size={17} /></Button>}
@@ -764,9 +794,15 @@ export const Editor = () => {
         </Card>
       )}
 
-      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
-        <form className="min-w-0 space-y-4" onSubmit={form.handleSubmit(() => save(true))}>
+      <div className="ep-editor-toolbar" role="tablist" aria-label={tr('Lesson plan sections','Sections du plan de leçon')}>
+        {(['setup','weekly','review'] as const).map((key,index)=><Button key={key} role="tab" aria-selected={panel===key} variant={panel===key?'primary':'outline'} onClick={()=>setPanel(key)}>{index+1}. {key==='setup'?tr('Essential setup','Informations essentielles'):key==='weekly'?tr('Weekly grid','Grille hebdomadaire'):tr('Review & PDF','Révision et PDF')}</Button>)}
+        <span className={'ep-save-status '+saveState.status} role="status">{saveState.status==='editing'?tr('Unsaved changes','Modifications non enregistrées'):saveState.status==='unverified'?tr('Verifying synchronization…','Vérification de la synchronisation…'):saveState.status==='saving'?tr('Saving to server…','Enregistrement sur le serveur…'):saveState.status==='saved'?tr('Server synchronized','Synchronisé avec le serveur'):saveState.status==='conflict'?tr('Version conflict · draft preserved','Conflit de versions · brouillon conservé'):tr('Local draft · synchronization pending','Brouillon local · synchronisation en attente')}</span>
+      </div>
+      {saveState.error&&<Card className="ep-save-warning p-3"><p>{saveState.code==='conflict'?tr('Another saved version exists. Your edits are safe on this device.','Une autre version enregistrée existe. Vos modifications sont conservées sur cet appareil.'):tr('Server confirmation is pending. Keep this device’s draft until synchronization succeeds.','La confirmation du serveur est en attente. Conservez ce brouillon jusqu’à la synchronisation.')} {saveState.error}</p><div className="flex flex-wrap gap-2 mt-2"><Button onClick={()=>void saveConfirmed()}>{tr('Retry save','Réessayer')}</Button><Button variant="outline" onClick={duplicate}>{tr('Keep my draft as a copy','Conserver mon brouillon dans une copie')}</Button><Button variant="outline" onClick={async()=>{if(!confirm(tr('Load the saved server version? Save a copy first to keep your local changes.','Charger la version du serveur ? Conservez d’abord une copie de vos modifications locales.')))return;lessonRepository.discardPending(values.id);await lessonRepository.syncFromCloud();const latest=lessonRepository.get(values.id);if(latest){form.reset(latest);setLesson(latest);lastSaved.current=''}}}>{tr('Load server version','Charger la version du serveur')}</Button></div></Card>}
+      <div className="min-w-0 w-full">
+        <form className="min-w-0 space-y-4" onSubmit={form.handleSubmit(()=>void saveConfirmed())}>
           <fieldset disabled={!canEditCurrent} className="min-w-0 space-y-4 disabled:opacity-75">
+          <div hidden={panel!=="setup"} className="space-y-4">
           <Card className="w-full max-w-full overflow-hidden p-3 sm:p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -876,7 +912,8 @@ export const Editor = () => {
               <datalist id="subtopic-suggestions">{subtopicOptions.map((item) => <option key={item} value={item} />)}</datalist>
             </Card>
           )}
-
+          </div>
+          <div hidden={panel!=="weekly"}>
           <Card className="w-full max-w-full overflow-hidden p-3 sm:p-4">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -891,13 +928,14 @@ export const Editor = () => {
                 </div>
               )}
             </div>
-            <div className={`grid min-w-0 grid-cols-1 gap-3 ${planType === "weekly" ? "md:grid-cols-2 2xl:grid-cols-5" : ""}`}>
+            <div className="ep-day-tabs" role="tablist" aria-label={tr('Teaching days','Jours de cours')}>{displayedPlan.map((day,index)=><Button type="button" role="tab" aria-selected={selectedDay===index} key={day.day} variant={selectedDay===index?'primary':'outline'} onClick={()=>setSelectedDay(index)}>{language==='fr'?['Lundi','Mardi','Mercredi','Jeudi','Vendredi'][index]:day.day}</Button>)}</div>
+            <div className="min-w-0 mt-4">
               {displayedPlan.map((day, index) => {
                 const durations = getActivityDurations(day, index);
                 const allocated = durations.introduction + durations.presentation + durations.guidedPractice + durations.exitTicket;
                 const lessonDuration = parseMinutes(values.duration) || allocated;
                 return (
-                <div key={day.day} className="theme-dark-panel min-w-0 rounded-lg border border-cyan-300/15 bg-[#030d14]/70 p-3">
+                <div hidden={selectedDay!==index&&planType!=="daily"} key={day.day} className="ep-day-card min-w-0 rounded-xl border p-3 sm:p-5">
                   <div className="mb-3 rounded-md border border-cyan-300/20 bg-cyan-500/10 px-3 py-2 text-center">
                     <h3 className="text-sm font-black text-cyan-100">{planType === "daily" ? "Daily Lesson" : day.day}</h3>
                     <div className="mx-auto mt-2 flex max-w-[11rem] items-center justify-center gap-2">
@@ -914,7 +952,7 @@ export const Editor = () => {
                     <p className="mt-1 text-[11px] font-bold text-cyan-50/70">{allocated} min in activities</p>
                     {canEditCurrent && <Button type="button" variant="ghost" className="mt-2 h-7 px-2 text-xs" onClick={() => regenerateDay(index)}><Sparkles size={13} /> Regenerate day</Button>}
                   </div>
-                  <div className="space-y-2">
+                  <div className="ep-day-fields grid gap-4 lg:grid-cols-2">
                     <WeeklyField label="Lesson" locked={Boolean(day.lockedFields?.lesson)} onRegenerate={() => regenerateCell(index, "lesson")} onToggleLock={() => toggleCellLock(index, "lesson")}>
                       <Textarea className="min-h-16" value={day.lesson} onChange={(event) => updateWeeklyDay(index, "lesson", event.target.value)} />
                     </WeeklyField>
@@ -937,21 +975,21 @@ export const Editor = () => {
                       <Label className="text-xs text-cyan-100">Exit Ticket ({durations.exitTicket} min)</Label>
                       <Textarea className="min-h-16" value={day.exitTicket} onChange={(event) => updateWeeklyDay(index, "exitTicket", event.target.value)} />
                       <Input type="number" min="0" className="mt-1 h-8" value={durations.exitTicket} onChange={(event) => updateActivityDuration(index, "exitTicket", event.target.value)} />
+                      <fieldset className="ep-assessment-types mb-2"><legend className="font-bold text-sm mb-2">{tr('Assessment types · select one or more','Types d’évaluation · sélectionnez un ou plusieurs')}</legend><div className="flex flex-wrap gap-2">{assessmentTypes.map(type=><label key={type} className={(day.assessmentTypes||[]).includes(type)?'selected':''}><input type="checkbox" checked={(day.assessmentTypes||[]).includes(type)} onChange={event=>{const next=form.getValues('weeklyPlan');next[index]={...next[index],assessmentTypes:event.target.checked?[...(next[index].assessmentTypes||[]),type]:(next[index].assessmentTypes||[]).filter(value=>value!==type)};form.setValue('weeklyPlan',next,{shouldDirty:true})}}/>{assessmentLabels[type]?.[language==='fr'?1:0]||type}</label>)}</div></fieldset>
                       <Label className="mt-2 text-xs text-cyan-100">Assessment</Label>
                       <Textarea className="min-h-16" value={day.assessment} onChange={(event) => updateWeeklyDay(index, "assessment", event.target.value)} />
                     </WeeklyField>
-                    <WeeklyField label="Homework" locked={Boolean(day.lockedFields?.homework)} onRegenerate={() => regenerateCell(index, "homework")} onToggleLock={() => toggleCellLock(index, "homework")}>
-                      <Textarea className="min-h-16" value={day.homework} onChange={(event) => updateWeeklyDay(index, "homework", event.target.value)} />
-                    </WeeklyField>
+
                   </div>
                 </div>
               );})}
             </div>
           </Card>
+          </div>
           </fieldset>
         </form>
 
-        <aside className="space-y-4">
+        <aside hidden={panel!=="review"} className="space-y-4">
           <Card className="w-full max-w-full overflow-hidden p-3 sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -966,11 +1004,12 @@ export const Editor = () => {
                 <Textarea className="min-h-20" value={revisionNote} onChange={(event) => setRevisionNote(event.target.value)} placeholder="Explain what changed or what needs review..." />
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    const next = lessonRepository.addRevisionNote(values.id, revisionNote, currentUser);
-                    if (next) form.reset(next);
-                    setRevisionNote("");
-                    notify("Revision note added");
+                  onClick={async () => {
+                    if(!save(false))return;
+                    const next=lessonRepository.addRevisionNote(values.id,revisionNote,currentUser);
+                    if(next)form.setValue('revisionNotes',next.revisionNotes,{shouldDirty:false});
+                    setRevisionNote('');
+                    try{await lessonRepository.flush(values.id);notify(tr('Revision note saved.','Note de révision enregistrée.'))}catch{notify(tr('Note kept locally; synchronization pending.','Note conservée localement ; synchronisation en attente.'))}
                   }}
                   disabled={!revisionNote.trim()}
                 >
@@ -1003,15 +1042,15 @@ export const Editor = () => {
             </div>
           </Card>
 
-          <Card className="sticky top-24 w-full max-w-full overflow-hidden p-3 sm:p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black text-white">Print preview</h2>
-                <p className="text-xs text-muted-foreground">Scaled to fit the screen.</p>
-              </div>
-              <Button type="button" onClick={print}><Printer size={16} /> Print</Button>
+          <Card className="ep-pdf-settings w-full p-4 sm:p-6">
+            <h2 className="text-xl font-bold">{tr('Document studio','Atelier du document')}</h2><p className="text-sm text-muted-foreground mb-4">{tr('Readable, multi-page A4 PDFs with the KCS header, watermark and a verification QR in the footer.','PDF A4 lisibles sur plusieurs pages avec en-tête KCS, filigrane et QR de vérification dans le pied de page.')}</p>
+            <div className="grid gap-4 sm:grid-cols-3">
+             <Field label={tr('Page orientation','Orientation')}><Select value={values.printSettings?.orientation||'landscape'} onChange={event=>form.setValue('printSettings',{fontSize:11,layout:'grid',...values.printSettings,orientation:event.target.value as 'landscape'|'portrait'},{shouldDirty:true})}><option value="landscape">{tr('Landscape','Paysage')}</option><option value="portrait">{tr('Portrait','Portrait')}</option></Select></Field>
+             <Field label={tr('Font size (pt)','Taille de police (pt)')}><Input type="number" min="9" max="18" value={values.printSettings?.fontSize||11} onChange={event=>form.setValue('printSettings',{orientation:'landscape',layout:'grid',...values.printSettings,fontSize:Math.min(18,Math.max(9,Number(event.target.value)||11))},{shouldDirty:true})}/></Field>
+             <Field label={tr('Document layout','Présentation')}><Select value={values.printSettings?.layout||'grid'} onChange={event=>form.setValue('printSettings',{orientation:'landscape',fontSize:11,...values.printSettings,layout:event.target.value as 'grid'|'details'},{shouldDirty:true})}><option value="grid">{tr('Weekly grid','Grille hebdomadaire')}</option><option value="details">{tr('Detailed teaching days','Journées détaillées')}</option></Select></Field>
             </div>
-            <PrintPreview lesson={printableLesson} zoom={0.34} />
+            <p className="mt-3 text-sm text-muted-foreground">{tr('Pages are added automatically. No content is squeezed onto a single page.','Les pages sont ajoutées automatiquement, sans comprimer le contenu sur une seule page.')}</p>
+            <div className="mt-4 flex flex-wrap gap-2"><Button disabled={pdfBusy} onClick={()=>void pdf()}><Printer size={17}/>{tr('Preview saved PDF','Aperçu du PDF enregistré')}</Button><Button disabled={pdfBusy} variant="outline" onClick={print}>{tr('Print','Imprimer')}</Button><Button disabled={pdfBusy} variant="outline" onClick={()=>void pdf('download')}><Download size={17}/>{tr('Download PDF','Télécharger le PDF')}</Button></div>
           </Card>
         </aside>
       </div>
@@ -1020,80 +1059,22 @@ export const Editor = () => {
         <LessonPrint lesson={printableLesson} ref={printRef} />
       </div>
 
-      <Dialog open={preview} title={`${planType === "daily" ? "Daily" : "Weekly"} Lesson Plan Preview`} onClose={() => setPreview(false)} size="preview">
-        <div className="mb-4 flex justify-end gap-2">
-          <Button onClick={print}><Printer size={17} /> Print</Button>
-          <Button variant="outline" disabled={Boolean(exporting)} onClick={() => exportDocument("pdf")}>{exporting === "pdf" ? <Loader2 className="animate-spin" size={17} /> : <FileDown size={17} />} {exporting === "pdf" ? "PDF..." : "PDF"}</Button>
-          <Button variant="outline" disabled={Boolean(exporting)} onClick={() => exportDocument("docx")}>{exporting === "docx" ? <Loader2 className="animate-spin" size={17} /> : <Download size={17} />} {exporting === "docx" ? "DOCX..." : "DOCX"}</Button>
+      <Dialog open={preview} title={tr('Official lesson plan · PDF','Plan de leçon officiel · PDF')} onClose={()=>setPreview(false)} size="preview">
+        <div className="ep-pdf-preview flex h-full min-h-0 flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">{pdfDocument&&!pdfBusy&&<><a className="ep-document-link" href={pdfDocument.url} download={pdfDocument.filename}><Download size={16}/>{tr('Download PDF','Télécharger le PDF')}</a><a className="ep-document-link" href={pdfDocument.url} target="_blank" rel="noopener noreferrer"><Printer size={16}/>{tr('Open / Print PDF','Ouvrir / Imprimer le PDF')}</a></>}<Button variant="outline" disabled={pdfBusy} onClick={()=>void pdf()}>{tr('Refresh from my current fields','Actualiser avec ma saisie')}</Button></div>
+          {pdfBusy?<div className="grid flex-1 place-items-center p-8" role="status"><span className="flex gap-3 items-center"><Loader2 className="animate-spin"/>{tr('Saving, verifying and preparing your PDF…','Enregistrement, vérification et préparation du PDF…')}</span></div>:pdfError?<div role="alert" className="ep-save-warning p-5">{pdfError}<p className="mt-2">{tr('Your typed content is still in the editor. Synchronize your draft and try again.','Votre saisie est conservée dans l’éditeur. Synchronisez le brouillon et réessayez.')}</p></div>:pdfDocument?<><p className="text-xs text-muted-foreground">{tr('If your device cannot show embedded PDFs, use Open / Print PDF or Download PDF above.','Si votre appareil n’affiche pas le PDF intégré, utilisez Ouvrir / Imprimer ou Télécharger ci-dessus.')}</p><iframe src={pdfDocument.viewUrl} title={tr('Saved lesson plan PDF','PDF du plan enregistré')} referrerPolicy="no-referrer" className="w-full flex-1 min-h-[55dvh] rounded-lg bg-white"/></>:null}
         </div>
-        <PrintPreview lesson={printableLesson} zoom={0.68} fitWindow />
       </Dialog>
     </div>
   );
 };
 
-const toPrintableLesson = (lesson: LessonPlan): LessonPlan => {
-  const subject = lesson.subject || "";
-  const gradeClass = lesson.gradeClass || "";
-  const chapter = sanitizeChapter(lesson.chapter);
-  const support = createAutomaticLessonSupport(subject, gradeClass, chapter);
-  const weeklyPlan = normalizeEditableWeeklyPlan(lesson.weeklyPlan, subject, gradeClass, chapter);
-  const learningObjectives = hasFilledItems(lesson.learningObjectives)
-    ? lesson.learningObjectives
-    : support.learningObjectives.map((value, index) => ({ id: `auto-objective-${index + 1}`, value }));
-  const learningOutcomes = hasFilledItems(lesson.learningOutcomes)
-    ? lesson.learningOutcomes
-    : support.learningOutcomes.map((value, index) => ({ id: `auto-outcome-${index + 1}`, value }));
-  const successCriteria = hasFilledItems(lesson.successCriteria)
-    ? lesson.successCriteria
-    : support.successCriteria.map((value, index) => ({ id: `auto-criteria-${index + 1}`, value }));
-
-  return {
-    ...lesson,
-    schoolName: schoolDisplayName,
-    planType: lesson.planType || "weekly",
-    subject,
-    gradeClass,
-    chapter,
-    weekStartDate: lesson.weekStartDate || getWeekStartFromDate(lesson.date),
-    weekEndDate: lesson.weekEndDate || addBusinessWeekEnd(lesson.weekStartDate || getWeekStartFromDate(lesson.date)),
-    topic: buildAutomaticTitle({ ...lesson, subject, gradeClass, chapter, planType: lesson.planType || "weekly" }),
-    weeklyPlan: (lesson.planType || "weekly") === "daily" ? weeklyPlan.map((day, index) => (index === 0 ? day : weeklyPlan[index])) : weeklyPlan,
-    learningObjectives,
-    learningOutcomes,
-    successCriteria,
-    vocabulary: hasFilledItems(lesson.vocabulary) ? lesson.vocabulary : [{ id: "vocabulary", value: support.vocabulary }],
-    materialsResources: hasFilledItems(lesson.materialsResources) ? lesson.materialsResources : [{ id: "materials", value: support.materialsResources }],
-    differentiation: mergeFilled({
-      strugglingLearners: "",
-      eslSupport: "",
-      giftedLearners: "",
-      specialNeeds: "",
-      inclusiveStrategies: support.differentiation
-    }, lesson.differentiation || {}),
-    assessment: mergeFilled({
-      diagnostic: "",
-      formative: "",
-      summative: "",
-      observationChecklist: "",
-      rubric: "",
-      exitTicket: "",
-      teacherComments: support.assessment
-    }, lesson.assessment || {}),
-    reflection: mergeFilled({
-      whatWentWell: "",
-      challenges: "",
-      improvements: "",
-      followUpActivities: "",
-      teacherNotes: support.reflection
-    }, lesson.reflection || {})
-  };
-};
+const toPrintableLesson=(lesson:LessonPlan):LessonPlan=>({...lesson,weeklyPlan:normalizeEditableWeeklyPlan(lesson.weeklyPlan,lesson.subject,lesson.gradeClass,lesson.chapter)});
 
 const normalizeEditableWeeklyPlan = (weeklyPlan: Partial<WeeklyPlanDay>[] | undefined, subject = "", gradeClass = "", chapter = ""): WeeklyPlanDay[] => {
   const base = createFlexibleWeeklyPlan(subject, gradeClass, chapter);
 
-  return base.map((day, index) => ({
+  return base.map((day, index) => migrateAssessmentDay({
     ...day,
     ...(weeklyPlan?.[index] || {}),
     day: weeklyPlan?.[index]?.day || day.day,
@@ -1104,8 +1085,8 @@ const normalizeEditableWeeklyPlan = (weeklyPlan: Partial<WeeklyPlanDay>[] | unde
     guidedPractice: weeklyPlan?.[index]?.guidedPractice ?? day.guidedPractice,
     exitTicket: weeklyPlan?.[index]?.exitTicket ?? day.exitTicket,
     assessment: weeklyPlan?.[index]?.assessment ?? day.assessment,
-    homework: weeklyPlan?.[index]?.homework ?? day.homework
-  }));
+    homework: weeklyPlan?.[index]?.homework ?? ""
+  }) as unknown as WeeklyPlanDay);
 };
 
 const createLessonBasedSuggestion = (lesson: Partial<LessonPlan>, day: Partial<WeeklyPlanDay> | undefined, index: number) => {
@@ -1271,30 +1252,17 @@ const Field = ({ label, children, error }: { label: string; children: React.Reac
   </div>
 );
 
-const WeeklyField = ({
-  label,
-  locked,
-  onRegenerate,
-  onToggleLock,
-  children
-}: {
-  label: string;
-  locked: boolean;
-  onRegenerate: () => void;
-  onToggleLock: () => void;
-  children: React.ReactNode;
-}) => (
-  <div className="min-w-0 space-y-1">
-    <div className="flex items-center justify-between gap-2">
-      <Label>{label}</Label>
-      <div className="flex gap-1">
-        <Button type="button" variant="ghost" className="h-7 px-2 text-[11px]" onClick={onRegenerate}>Restore suggestion</Button>
-        <Button type="button" variant="ghost" className="h-7 px-2 text-[11px]" onClick={onToggleLock}>{locked ? "Unlock" : "Lock"}</Button>
-      </div>
-    </div>
-    {children}
+const WeeklyField=({label,locked,onRegenerate,onToggleLock,children}:{label:string;locked:boolean;onRegenerate:()=>void;onToggleLock:()=>void;children:React.ReactNode})=>{
+ const {language}=useApp(),tr=(en:string,fr:string)=>language==='fr'?fr:en;
+ const [expanded,setExpanded]=useState(()=>!window.matchMedia('(max-width:767px)').matches||['Lesson','Objectives'].includes(label));
+ return <div className="ep-teaching-field min-w-0 space-y-2">
+  <div className="ep-field-heading flex items-start justify-between gap-2">
+   <button type="button" className="ep-field-toggle" aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)}><span>{label}</span>{expanded?<ChevronUp size={15}/>:<ChevronDown size={15}/>}</button>
+   <div className="ep-field-actions flex gap-1"><Button type="button" variant="ghost" className="h-7 px-2 text-[11px]" onClick={onRegenerate}>{tr('Restore suggestion','Restaurer la suggestion')}</Button><Button type="button" variant="ghost" className="h-7 px-2 text-[11px]" onClick={onToggleLock}>{locked?tr('Unlock','Déverrouiller'):tr('Lock','Verrouiller')}</Button></div>
   </div>
-);
+  {expanded&&<div className="ep-field-body space-y-1">{children}</div>}
+ </div>
+};
 
 const rowLabel = (key: WeeklyEditableKey) => key.replace(/([A-Z])/g, " $1").toLowerCase();
 
@@ -1323,51 +1291,6 @@ const getTeacherFeedback = (lesson: LessonPlan) => {
     userName: source.userName,
     timestamp: source.timestamp
   };
-};
-
-const PrintPreview = ({ lesson, zoom, fitWindow = false }: { lesson: LessonPlan; zoom: number; fitWindow?: boolean }) => {
-  const shellRef = useRef<HTMLDivElement>(null);
-  const [shellSize, setShellSize] = useState({ width: 0, height: 0 });
-
-  useEffect(() => {
-    const shell = shellRef.current;
-    if (!shell) return;
-
-    const updateSize = () => {
-      const rect = shell.getBoundingClientRect();
-      setShellSize({ width: rect.width, height: rect.height });
-    };
-    updateSize();
-
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateSize);
-      return () => window.removeEventListener("resize", updateSize);
-    }
-
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(shell);
-    return () => observer.disconnect();
-  }, []);
-
-  const availableWidth = Math.max(0, shellSize.width - (fitWindow ? 24 : 20));
-  const availableHeight = Math.max(0, shellSize.height - (fitWindow ? 24 : 20));
-  const widthScale = availableWidth ? availableWidth / 1123 : zoom;
-  const heightScale = availableHeight ? availableHeight / 794 : zoom;
-  const responsiveScale = fitWindow ? Math.min(widthScale, heightScale) : widthScale;
-  const viewportZoom = Math.max(0.18, Math.min(fitWindow ? 1 : zoom, responsiveScale || zoom));
-  const width = `${297 * viewportZoom}mm`;
-  const height = `${210 * viewportZoom}mm`;
-  const style = { "--preview-scale": viewportZoom } as CSSProperties;
-
-  return (
-    <div ref={shellRef} className={fitWindow ? "print-preview-shell flex h-[80dvh] max-h-[80dvh] min-h-[420px] max-w-full items-center justify-center overflow-auto rounded-lg border border-cyan-300/15 bg-slate-950/70 p-2 sm:p-3" : "print-preview-shell flex max-h-[72dvh] max-w-full items-start justify-center overflow-auto rounded-lg border border-cyan-300/15 bg-slate-950/70 p-2 sm:p-3 lg:max-h-[62dvh]"}>
-      <div style={{ width, height }} className="max-w-full shrink-0 overflow-hidden">
-        <div className="origin-top-left scale-[var(--preview-scale)]" style={{ ...style, width: "297mm", height: "210mm" }}>
-          <LessonPrint lesson={lesson} />
-        </div>
-      </div>
-    </div>
-  );
 };
 
 const stripPlanTitle = (value?: string) => {

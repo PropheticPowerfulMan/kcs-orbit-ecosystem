@@ -67,9 +67,15 @@ export async function saveGroups(actor: Actor, id: string, revision: number, gro
     leaderParticipantId?: string;
     participantIds: string[];
 }[]) { return projectTransaction(actor, id, revision, async (tx, { project }) => { assertComposition(project); if (project.mode === 'INDIVIDUAL')
-    throw new JuryError('GROUP_MODE_REQUIRED', 'This project uses individual assessment.'); const known = new Set(project.juryParticipant_project.map((p: any) => p.id)), ids = groups.flatMap(g => g.participantIds); if (new Set(ids).size !== ids.length || ids.some(p => !known.has(p)))
+    throw new JuryError('GROUP_MODE_REQUIRED', 'This project uses individual assessment.');
+    const groupNames=groups.map(g=>g.name.normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase()),groupIds=groups.map(g=>g.id).filter(Boolean);
+    if(new Set(groupNames).size!==groupNames.length)throw new JuryError('GROUP_NAME_DUPLICATE','Every group must have a distinct name.');
+    if(new Set(groupIds).size!==groupIds.length)throw new JuryError('GROUP_ID_DUPLICATE','The same saved group cannot be used twice in one composition.');
+    const known = new Set(project.juryParticipant_project.map((p: any) => p.id)), ids = groups.flatMap(g => g.participantIds); if (new Set(ids).size !== ids.length || ids.some(p => !known.has(p)))
     throw new JuryError('GROUP_MEMBERSHIP_INVALID', 'A participant may belong to only one group in this project.'); const old = await tx.juryGroup.findMany({ where: { projectId: id } }); if (groups.some(g => g.id && !old.some((o: any) => o.id === g.id)))
     throw new JuryError('GROUP_NOT_FOUND', 'One of the groups does not belong to this project.'); const remove = old.filter((g: any) => !groups.some(n => n.id === g.id)); if (remove.length) {
+    const submitted=await tx.juryCandidate.count({where:{projectId:id,groupId:{in:remove.map((g:any)=>g.id)},jurySubmission_candidate:{some:{}}}});
+    if(submitted)throw new JuryError('GROUP_HAS_SUBMISSIONS','A group with a project portfolio cannot be removed. Preserve its identity and revise its membership instead.',409);
     await tx.juryCandidate.deleteMany({ where: { projectId: id, groupId: { in: remove.map((g: any) => g.id) } } });
     await tx.juryGroup.deleteMany({ where: { id: { in: remove.map((g: any) => g.id) } } });
 } await tx.juryGroupMember.deleteMany({ where: { projectId: id } }); let pos = await tx.juryCandidate.count({ where: { projectId: id, groupId: null } }); for (const g of groups) {

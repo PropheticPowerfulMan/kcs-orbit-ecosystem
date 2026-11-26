@@ -85,13 +85,13 @@ export const Plans = () => {
     notify("Lesson plan duplicated");
   };
 
-  const setStatus = (lesson: LessonPlan, status: LessonStatus, description?: string) => {
+  const setStatus = async (lesson: LessonPlan, status: LessonStatus, description?: string) => {
     lessonRepository.changeStatus(lesson.id, status, currentUser, description);
     refresh();
-    notify(`Status updated to ${statusLabel(status)}`);
+    try{await lessonRepository.flush(lesson.id);notify(`Status updated to ${statusLabel(status)}`)}catch{notify(tr('Change kept locally; server confirmation pending.','Modification conservée localement ; confirmation du serveur en attente.'))}
   };
 
-  const workflow = (lesson: LessonPlan, action: Parameters<typeof lessonRepository.workflowAction>[1], status: LessonStatus, message: string, needsComment = false) => {
+  const workflow = async (lesson: LessonPlan, action: Parameters<typeof lessonRepository.workflowAction>[1], status: LessonStatus, message: string, needsComment = false) => {
     const comment = needsComment ? prompt(message) || "" : prompt(message) || "";
     if (needsComment && !comment.trim()) {
       notify("A reviewer comment is required");
@@ -99,7 +99,7 @@ export const Plans = () => {
     }
     lessonRepository.workflowAction(lesson.id, action, status, currentUser, comment);
     refresh();
-    notify(`Workflow updated: ${statusLabel(status)}`);
+    try{await lessonRepository.flush(lesson.id);notify(`Workflow updated: ${statusLabel(status)}`)}catch{notify(tr('Workflow kept locally; server confirmation pending.','Modification conservée localement ; confirmation du serveur en attente.'))}
   };
 
   const softDelete = (lesson: LessonPlan) => {

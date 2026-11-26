@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
@@ -17,12 +17,15 @@ export const Dialog = ({
   onClose: () => void;
   size?: "default" | "preview" | "message" | "compact";
 }) => {
+  const box=useRef<HTMLDivElement>(null);
+  useEffect(()=>{if(!open)return;const previous=document.activeElement as HTMLElement|null,overflow=document.body.style.overflow;document.body.style.overflow='hidden';const frame=requestAnimationFrame(()=>box.current?.focus());const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();onClose()}if(event.key==='Tab'){const items=Array.from(box.current?.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input,select,textarea,[tabindex="0"]')||[]).filter(el=>el.getClientRects().length);const first=items[0],last=items[items.length-1];if(event.shiftKey&&(document.activeElement===first||document.activeElement===box.current)){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}}};window.addEventListener('keydown',key);return()=>{cancelAnimationFrame(frame);document.body.style.overflow=overflow;window.removeEventListener('keydown',key);if(previous?.isConnected)previous.focus()}},[open]);
   const dialog = (
     <AnimatePresence>
       {open && (
         <motion.div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/80 p-2 sm:p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
           <motion.div
-            className={`glass flex w-full flex-col overflow-hidden rounded-lg border-cyan-300/20 p-3 sm:p-4 ${
+            ref={box} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
+            className={`glass ep-dialog flex w-full flex-col overflow-hidden rounded-lg border-cyan-300/20 p-3 sm:p-4 ${
               size === "preview"
                 ? "h-[96dvh] max-h-[96dvh] max-w-[98vw] sm:w-[96vw] lg:h-[94dvh] lg:w-[92vw] xl:w-[88vw] 2xl:w-[82vw]"
                 : size === "message"

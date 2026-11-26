@@ -372,8 +372,10 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   }
 
   return <main className="login-page">
-    <button className="language-fab" onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}><Languages size={18} /> {lang.toUpperCase()}</button>
-    <InstallAppButton lang={lang} />
+    <div className="login-toolbar" role="group" aria-label={lang === 'fr' ? 'Options de connexion' : 'Sign-in options'}>
+      <button type="button" className="language-fab" onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}><Languages size={18} /> {lang.toUpperCase()}</button>
+      <InstallAppButton lang={lang} />
+    </div>
     <section className="login-brand">
       <img src="./images/kcs-logo.png" alt="Kinshasa Christian School" />
       <span>KCS ORBIT ECOSYSTEM</span>
