@@ -828,3 +828,19 @@ authRouter.put("/access-code", authGuard, async (req: AuthenticatedRequest, res)
 
   return res.json(updated);
 });
+
+
+async function personalPortraitGateway(req:AuthenticatedRequest,res:any,write=false){
+ const user=await prisma.user.findUnique({where:{id:req.user!.sub},include:{parent:true}});if(!user)return res.status(401).json({message:'Account not found'})
+ const identity=user.parent?.orbitId?{kind:'orbit',id:user.parent.orbitId}:user.role==='SUPER_ADMIN'?{kind:'adminEmail',id:user.email}:{kind:'accessCode',id:user.accessCode}
+ const url=new URL('/api/personal-portraits/'+encodeURIComponent(identity.id),env.KCS_NEXUS_API_URL);url.searchParams.set('kind',identity.kind)
+ const image=write?z.object({image:z.string().max(1500000)}).strict().parse(req.body).image:null
+ const response=await fetch(url,{method:write?'PUT':'GET',headers:{'x-api-key':env.KCS_ORBIT_API_KEY,'x-app-slug':'EDUPAY',...(write?{'content-type':'application/json'}:{})},...(write?{body:JSON.stringify({image})}:{}),signal:AbortSignal.timeout(8000)})
+ res.setHeader('Cache-Control','private, no-store');if(response.status===204)return res.json({image:null})
+ if(!response.ok)return res.status(response.status===403?403:503).json({message:'Personal portrait temporarily unavailable'})
+ if(write)return res.json(await response.json())
+ const type=response.headers.get('content-type')||'';if(!/^image\/(?:jpeg|png|webp)/.test(type))throw Error('Invalid personal portrait');const bytes=Buffer.from(await response.arrayBuffer());if(bytes.length>1500000)throw Error('Personal portrait too large')
+ return res.json({image:'data:'+type.split(';')[0]+';base64,'+bytes.toString('base64')})
+}
+authRouter.get('/personal-portrait',authGuard,(req:AuthenticatedRequest,res,next)=>void personalPortraitGateway(req,res).catch(next))
+authRouter.put('/personal-portrait',authGuard,(req:AuthenticatedRequest,res,next)=>void personalPortraitGateway(req,res,true).catch(next))

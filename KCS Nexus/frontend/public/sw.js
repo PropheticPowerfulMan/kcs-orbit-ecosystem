@@ -1,6 +1,6 @@
-const CACHE_NAME = 'kcs-nexus-shell-safe-updates-20261123-v52'
+const CACHE_NAME = 'kcs-nexus-shell-isolated-required-updates-20261127-v53'
 const isSibling=(pathname)=>SIBLING_APP_PREFIXES.some(prefix=>pathname===prefix.slice(0,-1)||pathname.startsWith(prefix));
-const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/lesson-plan/', '/edupay/', '/savanex/']
+const SIBLING_APP_PREFIXES = ['/jury/', '/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/lesson-plan/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -137,3 +137,5 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+self.addEventListener("message",event=>{if(event.data?.type==="SKIP_WAITING")self.skipWaiting()});

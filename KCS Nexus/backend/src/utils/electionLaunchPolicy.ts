@@ -22,6 +22,7 @@ export function electionLaunchUrl(audience:ElectionLaunchAudience,ticket:string)
 }
 export function electionSessionAllows(audience:unknown,method:string,url:string,readOnly=false){
  let pathname:string;try{pathname=new URL(url,'https://nexus.invalid').pathname}catch{return false}
+ if(['ADMIN','PARENT','STUDENT'].includes(String(audience))&&method==='GET'&&pathname==='/api/elections/personal-portrait')return true
  if(audience==='ADMIN')return (/^\/api\/elections\/admin(?:\/|$)/.test(pathname)&&(!readOnly||['GET','HEAD'].includes(method)))||method==='GET'&&/^\/api\/elections\/(?:PARENT|STUDENT)\/(?:public|results|history)$/.test(pathname)
  if(audience!=='PARENT'&&audience!=='STUDENT')return false
  const prefix='/api/elections/'+audience

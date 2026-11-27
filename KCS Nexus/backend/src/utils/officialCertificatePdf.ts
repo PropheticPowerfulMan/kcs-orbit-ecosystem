@@ -1,3 +1,4 @@
+import {certificateNarrative} from './certificateNarrative.js';
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { createHash } from "node:crypto";
@@ -9,6 +10,8 @@ export type OfficialCertificateInput = {
   studentId: string;
   studentNumber: string;
   studentName: string;
+  dateOfBirth?:string|Date|null;
+  placeOfBirth?:string|null;
   grade: string;
   academicYear: string;
   documentType: "completion" | "attendance";
@@ -94,51 +97,17 @@ export async function officialCertificatePdf(input: OfficialCertificateInput) {
     .moveTo(190, 194)
     .lineTo(width - 190, 194)
     .stroke();
-  doc
-    .fillColor("#354F68")
-    .font("Helvetica")
-    .fontSize(12)
-    .text(
-      tr(
-        "La Direction de Kinshasa Christian School certifie que",
-        "Kinshasa Christian School hereby certifies that",
-      ),
-      65,
-      211,
-      { width: width - 130, align: "center" },
-    );
-  doc
-    .fillColor("#173D54")
-    .font("Helvetica-Bold")
-    .fontSize(input.studentName.length > 48 ? 21 : 27)
-    .text(input.studentName, 65, 240, { width: width - 130, align: "center" });
-  const statement =
-    input.documentType === "completion"
-      ? tr(
-          `a satisfait aux exigences du niveau ${input.grade} et a achevé cette étape du parcours scolaire.`,
-          `has fulfilled the requirements of ${input.grade} and successfully completed this stage of the school program.`,
-        )
-      : tr(
-          `est régulièrement inscrit(e) en ${input.grade} et fréquente notre établissement pendant l’année scolaire indiquée.`,
-          `is duly enrolled in ${input.grade} and attends our institution during the academic year stated above.`,
-        );
-  doc
-    .font("Helvetica")
-    .fontSize(12)
-    .fillColor("#354F68")
-    .text(statement, 105, 287, {
-      width: width - 210,
-      align: "center",
-      lineGap: 4,
-    });
-  doc
-    .fontSize(9)
-    .text(
-      `${tr("Matricule", "Student ID")} · ${input.studentNumber}     ${tr("Émis le", "Issued")} · ${issued.toLocaleDateString(input.language === "fr" ? "fr-FR" : "en-GB", { timeZone: "Africa/Kinshasa" })}`,
-      60,
-      341,
-      { width: width - 120, align: "center" },
-    );
+  const narrative=certificateNarrative({...input,signatoryName:input.principal?.name,issuedAt:issued});
+  const paragraphs=[narrative.intro,narrative.identity,narrative.statement,narrative.purpose,narrative.issued].filter(Boolean);
+  let bodyFont=11; const nameFont=input.studentName.length>48?17:20;
+  const nameHeight=doc.font('Helvetica-Bold').fontSize(nameFont).heightOfString(input.studentName,{width:width-150});
+  const requiredHeight=()=>paragraphs.reduce((sum,text)=>sum+doc.font('Helvetica').fontSize(bodyFont).heightOfString(text,{width:width-150,lineGap:3})+8,0)+nameHeight+10;
+  while(bodyFont>9.25&&requiredHeight()>200)bodyFont-=.25;
+  let y=208;
+  const paragraph=(text:string,bold=false)=>{doc.font(bold?'Helvetica-Bold':'Helvetica').fontSize(bodyFont).fillColor('#354F68');const h=doc.heightOfString(text,{width:width-150,lineGap:3});doc.text(text,75,y,{width:width-150,lineGap:3,align:'left'});y+=h+8};
+  paragraph(narrative.intro);
+  doc.font('Helvetica-Bold').fontSize(nameFont).fillColor('#173D54').text(input.studentName,75,y,{width:width-150,align:'center'});y=doc.y+10;
+  for(const text of paragraphs.slice(1))paragraph(text);
   const image = (
     value: string | null | undefined,
     x: number,
@@ -161,18 +130,18 @@ export async function officialCertificatePdf(input: OfficialCertificateInput) {
     x: number,
     label: string,
   ) => {
-    if (input.includeAuthentication) image(entry?.image, x + 18, 402, 144, 38);
+    if (input.includeAuthentication) image(entry?.image, x + 18, 434, 144, 32);
     doc
       .strokeColor("#42627D")
       .lineWidth(0.7)
-      .moveTo(x, 455)
-      .lineTo(x + 180, 455)
+      .moveTo(x, 474)
+      .lineTo(x + 180, 474)
       .stroke();
     doc
       .font("Helvetica-Bold")
       .fontSize(8)
       .fillColor("#173D54")
-      .text(input.includeAuthentication ? entry?.name || "" : "", x, 461, {
+      .text(entry?.name || "", x, 480, {
         width: 180,
         align: "center",
       });
@@ -180,7 +149,7 @@ export async function officialCertificatePdf(input: OfficialCertificateInput) {
       .font("Helvetica")
       .fontSize(8)
       .fillColor("#52677D")
-      .text(label, x, 475, { width: 180, align: "center" });
+      .text(label, x, 493, { width: 180, align: "center" });
   };
   signature(
     input.principal,
@@ -199,14 +168,14 @@ export async function officialCertificatePdf(input: OfficialCertificateInput) {
     ),
   );
   if (input.includeAuthentication) image(input.seal, width - 115, 493, 56, 56);
-  doc.image(qr, width / 2 - 40, 386, { width: 80, height: 80 });
+  doc.image(qr, width / 2 - 34, 421, { width: 68, height: 68 });
   doc
     .fontSize(7)
     .fillColor("#52677D")
     .text(
       tr("Vérification numérique KCS", "KCS digital verification"),
       width / 2 - 80,
-      470,
+      491,
       { width: 160, align: "center" },
     );
   doc
@@ -214,7 +183,7 @@ export async function officialCertificatePdf(input: OfficialCertificateInput) {
     .text(
       documentId + "\nSHA-256 · " + fingerprint.slice(0, 32),
       width / 2 - 130,
-      492,
+      509,
       { width: 260, align: "center" },
     );
   doc

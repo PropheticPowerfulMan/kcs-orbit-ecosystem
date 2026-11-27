@@ -26,6 +26,7 @@ self.addEventListener('fetch', event => {
   const request = event.request
   if (request.method !== 'GET') return
   const url = new URL(request.url)
+  if(url.pathname.endsWith('/app-version.json'))return;
   if (url.origin !== self.location.origin || !url.pathname.startsWith(SCOPE_PATH) || url.pathname.startsWith(SCOPE_PATH + 'api/')) return
 
   if (request.mode === 'navigate') {
@@ -38,3 +39,5 @@ self.addEventListener('fetch', event => {
     return response
   })))
 })
+
+self.addEventListener("message",event=>{if(event.data?.type==="SKIP_WAITING")self.skipWaiting()});

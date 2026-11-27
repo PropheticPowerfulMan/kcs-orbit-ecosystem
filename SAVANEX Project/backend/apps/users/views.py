@@ -468,3 +468,26 @@ def update_institutional_email(request, pk):
         elif user.role in {User.ROLE_TEACHER, User.ROLE_EMPLOYEE} and hasattr(user, 'teacher_profile'):
             transaction.on_commit(lambda: sync_teacher(user.teacher_profile))
     return Response({'email': email, 'oldValue': old_value, 'changedBy': request.user.pk, 'reason': reason})
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def personal_portrait(request):
+    import base64
+    from urllib import request as urlrequest, parse, error
+    from apps.integration.orbit import KCS_ORBIT_API_KEY
+    identity = parse.quote(request.user.access_code or '', safe='')
+    if not identity:
+        return Response({'image': None})
+    url = settings.KCS_NEXUS_API_URL.rstrip('/').removesuffix('/api') + '/api/personal-portraits/' + identity + '?kind=accessCode'
+    try:
+        with urlrequest.urlopen(urlrequest.Request(url, headers={'x-api-key': KCS_ORBIT_API_KEY, 'x-app-slug': 'SAVANEX'}), timeout=8) as response:
+            if response.status == 204:
+                return Response({'image': None}, headers={'Cache-Control': 'private, no-store'})
+            mime = response.headers.get_content_type()
+            data = response.read(1_500_001)
+            if mime not in ('image/jpeg', 'image/png', 'image/webp') or len(data) > 1_500_000:
+                raise ValueError('Invalid personal portrait')
+            return Response({'image': 'data:' + mime + ';base64,' + base64.b64encode(data).decode('ascii')}, headers={'Cache-Control': 'private, no-store'})
+    except (error.URLError, ValueError, TimeoutError):
+        return Response({'detail': 'Personal portrait temporarily unavailable'}, status=503)

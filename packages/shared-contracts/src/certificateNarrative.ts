@@ -1,0 +1,18 @@
+/** Administrative wording only. Never invent missing identity or conduct information. */
+export type CertificateNarrativeInput={documentType:'attendance'|'completion'|'admission';language:'fr'|'en';studentName:string;studentNumber?:string;grade:string;academicYear:string;dateOfBirth?:string|Date|null;placeOfBirth?:string|null;signatoryName?:string|null;issuedAt?:Date};
+export function certificateNarrative(input:CertificateNarrativeInput){
+ const fr=input.language==='fr',tr=(a:string,b:string)=>fr?a:b,school='Kinshasa Christian School',name=input.signatoryName?.trim(),issued=input.issuedAt??new Date();
+ const date=(value:Date,timeZone:string)=>new Intl.DateTimeFormat(fr?'fr-FR':'en-GB',{day:'numeric',month:'long',year:'numeric',timeZone}).format(value);
+ const birth=input.dateOfBirth?new Date(input.dateOfBirth):null,birthDate=birth&&!Number.isNaN(birth.getTime())?date(birth,'UTC'):null;
+ const birthText=[birthDate?tr('né(e) le '+birthDate,'born on '+birthDate):'',input.placeOfBirth?.trim()?tr('à '+input.placeOfBirth.trim(),'in '+input.placeOfBirth.trim()):''].filter(Boolean).join(' ');
+ const identity=[birthText,input.studentNumber?tr('matricule '+input.studentNumber,'student ID '+input.studentNumber):''].filter(Boolean).join(' · ');
+ const title=tr('Préfet des études','Principal');
+ return{
+  intro:name?tr('Je soussigné(e), '+name+', agissant en qualité de '+title+' de '+school+', certifie par la présente que :','I, '+name+', in my capacity as '+title+' of '+school+', hereby certify that:'):tr('La Direction de '+school+', au vu des informations figurant au registre scolaire, certifie par la présente que :','The Administration of '+school+', having examined the official school register, hereby certifies that:'),
+  identity,
+  statement:input.documentType==='completion'?tr('L’élève susnommé(e), inscrit(e) en '+input.grade+' pour l’année scolaire '+input.academicYear+', a satisfait aux exigences académiques requises et a achevé avec succès ce niveau de son parcours scolaire.','The above-named learner, enrolled in '+input.grade+' for the '+input.academicYear+' academic year, has met the required academic standards and has successfully completed this stage of the school programme.'):input.documentType==='admission'?tr('L’élève susnommé(e) a été admis(e) au sein de notre établissement en classe de '+input.grade+' pour l’année scolaire '+input.academicYear+'. Son admission est enregistrée dans les dossiers officiels de l’école.','The above-named learner has been admitted to our institution in '+input.grade+' for the '+input.academicYear+' academic year. This admission is recorded in the school’s official register.'):tr('L’élève susnommé(e) est régulièrement inscrit(e) au sein de notre établissement pour l’année scolaire '+input.academicYear+' en classe de '+input.grade+'. La présente attestation confirme sa situation scolaire telle qu’elle est enregistrée dans les dossiers de l’école.','The above-named learner is duly enrolled at our institution for the '+input.academicYear+' academic year in '+input.grade+'. This certificate confirms the learner’s school status as recorded in the official school register.'),
+  purpose:tr('En foi de quoi, le présent document est délivré à l’intéressé(e) ou à son représentant légal pour servir et valoir ce que de droit.','In witness whereof, this certificate is issued to the learner or their legal guardian for all lawful administrative purposes.'),
+  issued:tr('Fait à Kinshasa, le '+date(issued,'Africa/Kinshasa'),'Issued in Kinshasa on '+date(issued,'Africa/Kinshasa')),
+  signatoryTitle:title,signatoryName:name||'',
+ }
+}

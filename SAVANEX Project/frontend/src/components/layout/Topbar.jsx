@@ -1,3 +1,5 @@
+import {useDashboardPortrait} from '../../useDashboardPortrait';
+import {api} from '../../services/api';
 import React from 'react';
 import { Bell, PanelLeft, PanelLeftClose, LogOut, Menu } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +17,7 @@ const getGreeting = (hour) => {
 const Topbar = ({ onMenuClick = () => {}, isSidebarCollapsed = false, onSidebarToggle = () => {} }) => {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
+  const personalPortrait=useDashboardPortrait(user?.id,async()=> (await api.get('/users/personal-portrait/')).data);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const displayName = user?.first_name || user?.full_name || user?.username || 'Administrateur';
   const greeting = getGreeting(new Date().getHours());
@@ -38,6 +41,7 @@ const Topbar = ({ onMenuClick = () => {}, isSidebarCollapsed = false, onSidebarT
       </div>
 
       <div data-savanex-header-actions className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-github-border text-sm font-bold text-slate-200">{personalPortrait?<img src={personalPortrait} alt={displayName} className="h-full w-full object-cover"/>:displayName.charAt(0).toUpperCase()}</span>
         <button
           type="button"
           onClick={onSidebarToggle}

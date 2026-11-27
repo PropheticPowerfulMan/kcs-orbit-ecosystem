@@ -1,3 +1,4 @@
+import {useDashboardPortrait} from '../useDashboardPortrait';
 import InternationalPhoneInput from "./InternationalPhoneInput";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -78,6 +79,7 @@ function EmptyState({ children }) {
 
 export default function DashboardPanel() {
   const { token, logout, user, profileLoading } = useAuth();
+  const personalPortrait=useDashboardPortrait(user?.id?String(user.id)+':'+token:null,()=>apiRequest('/auth/personal-portrait','GET',null,token));
   const { isDark, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("chat");
   const [menuHidden, setMenuHidden] = useState(() => localStorage.getItem("edusync_menu_hidden") === "true");
@@ -426,7 +428,7 @@ export default function DashboardPanel() {
   return (
     <main className="mobile-app-shell">
       <section className={"phone-frame" + (menuHidden ? " nav-hidden" : "")} aria-label="EduSync AI workspace">
-        <header className="mobile-header">
+        <header className="mobile-header"><span className="personal-dashboard-portrait" aria-label={user?.full_name||'KCS'}>{personalPortrait?<img src={personalPortrait} alt={user?.full_name||'KCS'}/>:String(user?.full_name||'KCS').slice(0,1)}</span>
           <div className="brand-lockup compact social-brand">
             <img src={schoolLogo} alt="Kinshasa Christian School" className="school-logo" />
             <div>
@@ -435,7 +437,7 @@ export default function DashboardPanel() {
               <span className="presence-line">{profileLoading ? "Loading your workspace..." : greetingForNow() + ", " + (user?.full_name || "KCS member") + " · " + displayRole(user?.role)}</span>
             </div>
           </div>
-          <div className="icon-actions">
+          <div className="icon-actions"><span className="personal-dashboard-portrait" aria-label={user?.full_name||'KCS'}>{personalPortrait?<img src={personalPortrait} alt={user?.full_name||'KCS'}/>:String(user?.full_name||'KCS').slice(0,1)}</span>
             <button type="button" className="icon-button menu-toggle" onClick={() => setMenuHidden((current) => !current)} aria-label={menuHidden ? "Show navigation" : "Hide navigation"} title={menuHidden ? "Show navigation" : "Hide navigation"}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>{menuHidden ? <path d="m13 9 3 3-3 3"/> : <path d="m16 9-3 3 3 3"/>}</svg>
             </button>

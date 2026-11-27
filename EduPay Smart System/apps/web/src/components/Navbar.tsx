@@ -1,3 +1,4 @@
+import {useDashboardPortrait} from '../useDashboardPortrait'
 import { uiText } from "../uiText";
 import {createPortal}from"react-dom";
 import { KeyRound, ShieldCheck, Eye, EyeOff, X, PanelLeftClose, PanelLeftOpen } from "lucide-react";
@@ -112,7 +113,8 @@ function ChangePasswordModal({ onClose, onChanged, temporaryPassword = false }: 
 export function Navbar() {
   const { t, lang } = useI18n();
   const L = (fr: string, en: string) => lang === "fr" ? fr : en;
-  const { fullName, role, photoUrl, mustChangePassword, setPhotoUrl, setMustChangePassword, logout } = useAuthStore();
+  const { token,fullName, role, mustChangePassword, setPhotoUrl, setMustChangePassword, logout } = useAuthStore();
+  const personalPortrait=useDashboardPortrait(token,()=>api<{image:string|null}>('/api/auth/personal-portrait'));
   const isDesktopSidebarOpen = useUiStore((s) => s.isDesktopSidebarOpen);
   const isMobileNavOpen = useUiStore((s) => s.isMobileNavOpen);
   const toggleDesktopSidebar = useUiStore((s) => s.toggleDesktopSidebar);
@@ -149,12 +151,8 @@ export function Navbar() {
     setPhotoError("");
     try {
       const nextPhotoUrl = await imageFileToAvatar(file, lang);
-      if (role === "PARENT") {
-        await api<{ photoUrl: string }>("/api/parents/me/photo", {
-          method: "PUT",
-          body: JSON.stringify({ photoUrl: nextPhotoUrl })
-        });
-      }
+      await api('/api/auth/personal-portrait',{method:'PUT',body:JSON.stringify({image:nextPhotoUrl})});
+      window.dispatchEvent(new Event('kcs:personal-portrait-changed'));
       setPhotoUrl(nextPhotoUrl);
     } catch (error) {
       setPhotoError(error instanceof Error ? error.message : t("profilePhotoFailed"));
@@ -164,12 +162,8 @@ export function Navbar() {
   const removePhoto = async () => {
     setPhotoError("");
     try {
-      if (role === "PARENT") {
-        await api<{ photoUrl: string }>("/api/parents/me/photo", {
-          method: "PUT",
-          body: JSON.stringify({ photoUrl: "" })
-        });
-      }
+      await api('/api/auth/personal-portrait',{method:'PUT',body:JSON.stringify({image:''})});
+      window.dispatchEvent(new Event('kcs:personal-portrait-changed'));
       setPhotoUrl(null);
     } catch (error) {
       setPhotoError(error instanceof Error ? error.message : t("profilePhotoFailed"));
@@ -249,8 +243,8 @@ export function Navbar() {
                   <p className="text-xs text-ink-dim capitalize">{role || t("guest")}</p>
                 </div>
                 <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-white via-brand-200 to-brand-500 text-sm font-bold text-slate-950 ring-1 ring-white/30">
-                  {photoUrl ? (
-                    <img src={photoUrl} alt={fullName || t("user")} className="h-full w-full object-cover" />
+                  {personalPortrait ? (
+                    <img src={personalPortrait||undefined} alt={fullName || t("user")} className="h-full w-full object-cover" />
                   ) : (
                     (fullName || t("user")).charAt(0).toUpperCase()
                   )}
@@ -263,8 +257,8 @@ export function Navbar() {
                   <div className="px-4 py-3 border-b border-brand-300/15">
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-brand-200 to-brand-500 text-sm font-bold text-slate-950">
-                        {photoUrl ? (
-                          <img src={photoUrl} alt={fullName || t("user")} className="h-full w-full object-cover" />
+                        {personalPortrait ? (
+                          <img src={personalPortrait||undefined} alt={fullName || t("user")} className="h-full w-full object-cover" />
                         ) : (
                           (fullName || t("user")).charAt(0).toUpperCase()
                         )}
@@ -283,10 +277,10 @@ export function Navbar() {
                   </div>
                   <div className="ep-profile-preferences flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-3 lg:hidden"><FontSwitch/><LanguageSwitch/></div>
                   <label className="block w-full cursor-pointer px-4 py-2 text-sm text-ink-dim transition-all duration-200 hover:bg-brand-500/10 hover:text-white">
-                    {photoUrl ? t("changeProfilePhoto") : t("addProfilePhoto")}
+                    {personalPortrait ? t("changeProfilePhoto") : t("addProfilePhoto")}
                     <input type="file" accept="image/*" className="hidden" onChange={(event) => void updatePhoto(event.target.files?.[0])} />
                   </label>
-                  {photoUrl && (
+                  {personalPortrait && (
                     <button
                       onClick={() => void removePhoto()}
                       className="w-full text-left px-4 py-2 text-sm text-ink-dim transition-all duration-200 hover:bg-brand-500/10 hover:text-white"

@@ -1,3 +1,4 @@
+import {OfficialDocumentAuthoritiesSettings} from '@/components/admin/OfficialDocumentAuthoritiesSettings'
 import{rememberOfficialPortraits,cachedOfficialPortraits}from'@/utils/officialPortraitCache'
 import AcademicHomeWelcome from '@/components/shared/AcademicHomeWelcome'
 import SchoolHistoryCenter from '@/components/admin/SchoolHistoryCenter'
@@ -3544,6 +3545,7 @@ const AdminSectionView = ({
     return (
       <div className="space-y-6">
         <AccountSettingsPanel roleLabel="Compte super administrateur" />
+        <OfficialDocumentAuthoritiesSettings/>
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Role Permissions</h2>

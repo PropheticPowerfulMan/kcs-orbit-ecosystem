@@ -1,3 +1,4 @@
+import {officialDocumentAuthorities,officialDocumentAuthorityName,resolveDocumentAuthority,documentAuthorityTypes,type DocumentAuthorityType} from '../services/officialDocumentAuthority.service.js'
 import {hasPrincipalWorkspaceAccess,hasSeniorWorkspaceAccess} from '../utils/staffWorkspace.js'
 import { reportCardVisibility } from '../utils/reportCardVisibility.js'
 import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
@@ -245,8 +246,8 @@ academicRecordsRouter.get('/official-signatures', requireRoles('admin','staff','
    : prisma.user.findUnique({where:{id:req.user!.sub},select:{firstName:true,middleName:true,lastName:true,signatureImage:true,officialSealImage:true}}),
   studentId ? prisma.studentProfile.findUnique({where:{id:studentId},select:{grade:true,section:true}}) : null,
   prisma.user.findMany({
-   where:{signatureImage:{not:null},OR:[{role:'STAFF'},{role:'ADMIN'}]},
-   select:{firstName:true,middleName:true,lastName:true,staffFunction:true,signatureImage:true,staffProfile:{select:{function:true}}},
+   where:{OR:[{role:'STAFF'},{role:'ADMIN'},{role:'TEACHER'}]},
+   select:{firstName:true,middleName:true,lastName:true,permissions:true,staffFunction:true,signatureImage:true,staffProfile:{select:{function:true}}},
   }),
  ])
  let mainTeacher = req.user!.role === 'teacher' ? signatureIdentity(requester) : null
@@ -260,10 +261,11 @@ academicRecordsRouter.get('/official-signatures', requireRoles('admin','staff','
   mainTeacher=signatureIdentity(match?.user??null)
  }
  const title=(item:(typeof leadership)[number])=>`${item.staffFunction||''} ${item.staffProfile?.function||''}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
- const principal=leadership.find(item=>/principal|prefet/.test(title(item)))??null
+ const principal=leadership.find(item=>item.permissions.includes('nexus:principal-workspace'))??leadership.find(item=>/principal|prefet/.test(title(item)))??null
  const headOfSchool=leadership.find(item=>/head of school|school head|directeur|direction/.test(title(item)))??null
  const superAdministrator=req.user!.sub==='configured-superadmin'||requester?.officialSealImage?signatureIdentity(requester):null
- return success(res,{mainTeacher,principal:signatureIdentity(principal),headOfSchool:signatureIdentity(headOfSchool),superAdministrator,officialSealImage:requester?.officialSealImage??null},'Official document signatures loaded')
+ const documentType=z.enum(documentAuthorityTypes).parse(req.query.documentType||'report_card');const principalIdentity=signatureIdentity(principal);const principalName=await officialDocumentAuthorityName(documentType)
+ return success(res,{mainTeacher,principal:{...principalIdentity,name:principalName},headOfSchool:signatureIdentity(headOfSchool),superAdministrator,officialSealImage:requester?.officialSealImage??null},'Official document signatures loaded')
 }))
 const legacyHeaders=['studentNumber','academicYear','gradeLevel','term','courseCode','courseName','credits','percentage','letterGrade','sourceSchool','sourceDocument']
 const legacyCell=(row:Record<string,unknown>,key:string)=>{
@@ -833,11 +835,15 @@ academicRecordsRouter.patch('/report-cards/:id/editorial',requireSuperAdmin(),as
  return success(res,card,'Report-card academic and presentation fields updated and audited')
 }))
 
+const documentAuthoritiesSchema=z.object({defaultName:z.string().trim().min(2).max(120),overrides:z.object({report_card:z.string().trim().max(120).optional(),transcript:z.string().trim().max(120).optional(),attendance_certificate:z.string().trim().max(120).optional(),completion_certificate:z.string().trim().max(120).optional(),admission_certificate:z.string().trim().max(120).optional()}).strict()}).strict()
+academicRecordsRouter.get('/document-authorities',requireSuperAdmin(),asyncHandler(async(_req,res)=>{res.setHeader('Cache-Control','private, no-store');return success(res,await officialDocumentAuthorities())}))
+academicRecordsRouter.put('/document-authorities',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{const payload=documentAuthoritiesSchema.parse(req.body);for(const value of Object.values(payload.overrides))if(value&&value.length<2)throw new ApiError(400,'An authority name requires at least two characters');const actorId=await resolveAcademicActorId(req);if(!actorId)throw new ApiError(403,'An identified Super Administrator is required');await prisma.auditLog.create({data:{actorId,action:'OFFICIAL_DOCUMENT_AUTHORITIES',targetType:'OfficialDocumentAuthorities',targetId:'global',metadata:payload}});return success(res,{...payload,configured:true},'Official document authorities saved')}))
+
 academicRecordsRouter.get('/report-cards/official-settings',requireSuperAdmin(),asyncHandler(async(_req,res)=>{
  const latest=await prisma.auditLog.findFirst({where:{action:'REPORT_CARD_OFFICIALIZATION_SETTINGS',targetType:'ReportCardSettings',targetId:'global'},orderBy:{createdAt:'desc'},select:{metadata:true}})
  const account=await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{signatureImage:true,officialSealImage:true}})
  const metadata=(latest?.metadata??{}) as Record<string,unknown>
- return success(res,{principalName:String(metadata.principalName??''),signatureImage:typeof metadata.signatureImage==='string'?metadata.signatureImage:account?.signatureImage??'',officialSealImage:typeof metadata.officialSealImage==='string'?metadata.officialSealImage:account?.officialSealImage??''})
+ return success(res,{principalName:await officialDocumentAuthorityName('report_card',String(metadata.principalName??'')),signatureImage:typeof metadata.signatureImage==='string'?metadata.signatureImage:account?.signatureImage??'',officialSealImage:typeof metadata.officialSealImage==='string'?metadata.officialSealImage:account?.officialSealImage??''})
 }))
 
 academicRecordsRouter.put('/report-cards/official-settings',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
@@ -845,6 +851,7 @@ academicRecordsRouter.put('/report-cards/official-settings',requireSuperAdmin(),
  const actorId=await resolveAcademicActorId(req)
  if(!actorId)throw new ApiError(403,'A configured Super Administrator account is required to save official assets')
  await prisma.$transaction(async tx=>{
+  const authority=await officialDocumentAuthorities(tx);await tx.auditLog.create({data:{actorId,action:'OFFICIAL_DOCUMENT_AUTHORITIES',targetType:'OfficialDocumentAuthorities',targetId:'global',metadata:{defaultName:authority.defaultName,overrides:{...authority.overrides,report_card:payload.principalName}}}});
   await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_OFFICIALIZATION_SETTINGS',targetType:'ReportCardSettings',targetId:'global',metadata:{principalName:payload.principalName,signatureImage:payload.signatureImage,officialSealImage:payload.officialSealImage,hasSignature:Boolean(payload.signatureImage),hasSeal:Boolean(payload.officialSealImage)}}})
  })
  return success(res,payload,'Official report-card signature, principal name, and school seal saved')
@@ -860,6 +867,7 @@ type PdfReportCard = Prisma.ReportCardGetPayload<{include:{student:{select:typeo
 async function prepareReportCardPdfs(cards: PdfReportCard[], language: 'fr' | 'en', htmlOnly = false) {
  const settingsRow=await prisma.auditLog.findFirst({where:{action:'REPORT_CARD_OFFICIALIZATION_SETTINGS',targetType:'ReportCardSettings',targetId:'global'},orderBy:{createdAt:'desc'},select:{metadata:true}})
  const officialSettings=(settingsRow?.metadata??{}) as {principalName?:string;signatureImage?:string;officialSealImage?:string}
+ officialSettings.principalName=await officialDocumentAuthorityName('report_card',officialSettings.principalName)
  const officialAccount=await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{signatureImage:true,officialSealImage:true}})
  const mainTeachers=await prisma.teacherProfile.findMany({where:{status:'HOMEROOM_TEACHER'},select:{status:true,homeroomGrade:true,homeroomSection:true,user:{select:{firstName:true,middleName:true,lastName:true,signatureImage:true}}}})
  const missingAttendance = await reportCardAttendanceSummaries(cards)

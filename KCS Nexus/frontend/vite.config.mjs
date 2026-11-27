@@ -1,3 +1,4 @@
+import {mandatoryUpdatePlugin} from './client-runtime/vite.mjs'
 import {createHash} from 'node:crypto'
 import {readFileSync,readdirSync} from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -32,7 +33,7 @@ includeVersion(path.join(__dirname,'src'));includeVersion(path.join(__dirname,'p
 const buildId=versionHash.digest('hex').slice(0,20)
 export default defineConfig({
   define:{'import.meta.env.VITE_APP_VERSION':JSON.stringify(buildId)},
-  plugins: [react(),{name:'nexus-public-version',generateBundle(){this.emitFile({type:'asset',fileName:'app-version.json',source:JSON.stringify({app:'KCS_NEXUS',id:buildId})});}}],
+  plugins: [react(),mandatoryUpdatePlugin('KCS_NEXUS')],
   base: getBasePath(),
   resolve: {
     alias: {

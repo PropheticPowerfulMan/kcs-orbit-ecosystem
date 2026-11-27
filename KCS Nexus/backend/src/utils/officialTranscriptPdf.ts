@@ -6,12 +6,12 @@ import QRCode from 'qrcode'
 import type {OfficialTranscript} from '../services/officialTranscript.service.js'
 import {renderOfficialPdf} from '../services/reportPdfRenderer.service.js'
 const escapeHtml=(value:unknown)=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]??char))
-export async function officialTranscriptDocument(transcript:OfficialTranscript){
+export async function officialTranscriptDocument(transcript:OfficialTranscript & {principalName?:string}){
  const preview=!transcript.rows.length
  const language='en';const tr=(_fr:string,en:string)=>en;const dateLocale='en-GB'
  const localizedTerm=(value:string)=>value.replace(/Trimester/gi,'Quarter')
  const issueDate=new Date(transcript.generatedAt);const compactDate=issueDate.toISOString().slice(0,10).replace(/-/g,'')
- const fingerprint=createHash('sha256').update(transcript.sourceVersion+':'+createHash('sha256').update(transcript.student.photoUrl??'').digest('hex')+':'+compactDate+(preview?':en:transcript-preview-v1':':en:official-transcript-v2')).digest('hex').toUpperCase()
+ const fingerprint=createHash('sha256').update(transcript.sourceVersion+':'+createHash('sha256').update(transcript.student.photoUrl??'').digest('hex')+':'+compactDate+':'+(transcript.principalName||'')+(preview?':en:transcript-preview-v1':':en:official-transcript-v2')).digest('hex').toUpperCase()
  const documentId=`KCS-TR-${preview?'PREVIEW-':''}${compactDate}-${fingerprint.slice(0,16)}`
  const verificationUrl=new URL('/verify/transcript',process.env.FRONTEND_URL||'https://kinshasachristianschool.org')
  if(!['https:','http:'].includes(verificationUrl.protocol))throw new Error('Invalid public document verification URL')
@@ -48,10 +48,10 @@ export async function officialTranscriptDocument(transcript:OfficialTranscript){
   <div class="records-title"><h2>02 / Detailed scholastic record</h2><span>Approved Nexus results and verified imported academic records only</span></div>${records||'<div class="empty">No approved academic result has been published for this learner yet.</div>'}
   <section class="policy"><h3>Academic summary method</h3><p>Course credits are counted once per academic year. Approved annual results take precedence; otherwise the KCS quarter and semester rules apply. Missing periods are not scored as zero. GPA uses the KCS 4-point scale (90/80/70/60% thresholds).</p><p><b>Grade 9–12 coverage:</b> ${escapeHtml(transcript.summary.gradeCoverage.map(item=>item.gradeLevel+': '+item.records+' record(s)').join(' · '))}</p>${transcript.summary.missingGradeLevels.length?'<p><b>Records not yet on file:</b> '+escapeHtml(transcript.summary.missingGradeLevels.join(', '))+'. No missing results have been inferred.</p>':''}${transcript.summary.unclassifiedRecords?'<p>Historical records awaiting grade-level verification: '+transcript.summary.unclassifiedRecords+'</p>':''}<p class="academic-certification">This transcript is generated from the official Kinshasa Christian School academic register. Alteration invalidates the document. Provisional, projected or unauthorized results are excluded.</p></section>
   <section class="document-identity"><img src="${escapeHtml(qrCode)}" alt="Verification QR code"><div class="auth-copy"><h3>Digital document identity</h3><b>Document ID:</b> ${escapeHtml(documentId)}<br><b>Issuer:</b> Kinshasa Christian School<br><b>Status:</b> ${preview?'REGISTERED PREVIEW · NOT AN ISSUED TRANSCRIPT':'OFFICIAL · VERIFIED ACADEMIC RECORD'}<br><b>Generated (UTC):</b> ${escapeHtml(issueDate.toISOString())}<br><b>SHA-256:</b> <span class="fingerprint">${fingerprint}</span><br>QR ISO/IEC 18004 · ECC H · KCS verification register<br><a href="${escapeHtml(verifyUrl)}">${escapeHtml(verifyUrl)}</a>${preview?'<br><b>This QR verifies the registered preview and its status; it does not certify academic results.</b>':''}</div></section>
-  <div class="signatures"><div class="signature"><b>Registrar</b>Academic Records Officer</div><div class="signature"><b>School Director</b>Authorized signature</div></div>
+  <div class="signatures"><div class="signature"><b>Registrar</b>Academic Records Officer</div><div class="signature"><b>${escapeHtml(transcript.principalName||'Principal')}</b>Principal · Authorized signature</div></div>
   <footer><div><strong>Kinshasa Christian School</strong><br>Avenue de la République n° 1 · Macampagne, Ngaliema · Kinshasa, Democratic Republic of Congo · Réf. 80 jours<br>+243 895 326 011 · +243 994 645 735<br>kinshasachristianschool@gmail.com · www.kinshasachristianschool.org</div><div style="text-align:right">KCS Nexus AI<br>Institutional Academic Record<br>${escapeHtml(documentId)}</div></footer>
   </div></main></body></html>`
 
  }
 }
-export async function officialTranscriptPdf(transcript:OfficialTranscript){const document=await officialTranscriptDocument(transcript);return{...document,buffer:await renderOfficialPdf(document.html)}}
+export async function officialTranscriptPdf(transcript:OfficialTranscript & {principalName?:string}){const document=await officialTranscriptDocument(transcript);return{...document,buffer:await renderOfficialPdf(document.html)}}

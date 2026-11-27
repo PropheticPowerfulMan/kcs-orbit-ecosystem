@@ -1,3 +1,4 @@
+import {officialDocumentAuthorityName} from '../services/officialDocumentAuthority.service.js'
 import { env } from '../config/env.js'
 import { Prisma } from '@prisma/client'
 import { Router } from 'express'
@@ -150,7 +151,7 @@ admissionsRouter.post('/:id/approve', authenticate, requireSuperAdmin(), asyncHa
     const display = (user: typeof officials[number] | undefined) => user ? { name: [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' '), image: user.signatureImage } : null
     const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
     for (const [index, child] of submittedChildren.entries()) {
-      const certificate = await admissionCertificatePdf({ applicationNumber: application.applicationNumber, academicYear: certificateOptions.academicYear, language: certificateOptions.language, includeAuthentication: certificateOptions.includeAuthentication, child: { ...child, studentNumber: `${application.applicationNumber}-STU-${String(index + 1).padStart(2, '0')}` }, principal: display(principalUser), headOfSchool: display(headUser) })
+      const certificate = await admissionCertificatePdf({ applicationNumber: application.applicationNumber, academicYear: certificateOptions.academicYear, language: certificateOptions.language, includeAuthentication: certificateOptions.includeAuthentication, child: { ...child, studentNumber: `${application.applicationNumber}-STU-${String(index + 1).padStart(2, '0')}` }, principal: {...display(principalUser),name:await officialDocumentAuthorityName('admission_certificate')}, headOfSchool: display(headUser) })
       attachments.push({ filename: `${certificate.documentId}.pdf`, content: certificate.buffer, contentType: 'application/pdf' })
     }
     const fr = certificateOptions.language === 'fr'
