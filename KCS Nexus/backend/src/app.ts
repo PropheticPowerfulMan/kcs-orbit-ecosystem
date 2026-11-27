@@ -1,3 +1,4 @@
+import {privateSyllabusUploadStatus} from './utils/privateSyllabusUpload.js'
 import {processClassroomWebhook,authorizeMedia} from './services/remoteLearning.service.js'
 import {asyncHandler} from './utils/api.js'
 import {juryRouter} from './jury/routes.js'
@@ -80,6 +81,7 @@ app.use(express.urlencoded({ extended: true }))
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 // Approved election profiles are rendered on the school's separate election origin.
 app.use('/api/uploads/elections',(_req,res,next)=>{res.setHeader('Cross-Origin-Resource-Policy','cross-origin');next()})
+app.use('/api/uploads', (req,res,next)=>{const status=privateSyllabusUploadStatus(req.path);if(status)return res.status(status).json({success:false,message:'File unavailable'});return next()})
 app.use('/api/uploads', express.static(uploadRoot, { immutable: true, maxAge: '7d', fallthrough: true }), notFoundHandler)
 
 app.get('/health', (_req, res) => {

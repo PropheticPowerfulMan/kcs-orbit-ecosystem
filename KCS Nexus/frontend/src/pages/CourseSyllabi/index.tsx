@@ -1,3 +1,4 @@
+import {confirmPortalAction} from '@/utils/portalActionDialogs'
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BookOpen, CheckCircle2, Download, FileText, Loader2, Pencil, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import PublishedCalendarStrip from '@/components/shared/PublishedCalendarStrip';
@@ -17,6 +18,7 @@ type Version = {
   publishedAt: string;
 };
 type Item = Version & {
+  audienceMode?:'COURSE'|'SELECTED';
   id: string;
   history?: Version[];
   targetUserIds?: string[];
@@ -141,11 +143,10 @@ export default function CourseSyllabi() {
   useEffect(() => {
     if (selected) {
       setTitle(tr('Syllabus de ', 'Syllabus for ') + selected.name);
-      setTargetMode('all');
-      setTargetClass('');
-      setTargetUserIds([]);
+      const restricted=selected.syllabus?.audienceMode==='SELECTED'||(!selected.syllabus?.audienceMode&&Boolean(selected.syllabus?.targetUserIds?.length||selected.syllabus?.sharedUserIds?.length));
+      setTargetMode(restricted?'selected':'all');setTargetClass('');setTargetUserIds(selected.syllabus?.targetUserIds||[]);setSharedUserIds(selected.syllabus?.sharedUserIds||[]);setRecipientQuery('');setRecipientRole('ALL');
     }
-  }, [courseId, selected]);
+  }, [courseId]);
   const learnerTargets = targetMode === 'all' ? [] : targetMode === 'class' ? learners.filter((student) => [student.grade, student.section].filter(Boolean).join(' ') === targetClass).map((student) => student.userId) : targetUserIds;
   const resolvedTargets = [...new Set([...learnerTargets, ...sharedUserIds])];
   const publish = async () => {
@@ -153,10 +154,13 @@ export default function CourseSyllabi() {
       setError(tr('Sélectionnez le cours, le document et indiquez un titre.', 'Select the course and document, then enter a title.'));
       return;
     }
+    if(targetMode==='class'&&!targetClass){setError(tr('Choisissez la classe ciblée.','Choose the target class.'));return;}
     if (targetMode !== 'all' && !resolvedTargets.length) {
       setError(tr('Sélectionnez au moins un élève destinataire.', 'Select at least one learner recipient.'));
       return;
     }
+    const effectiveIds=[...new Set([...(targetMode==='all'?learners.map(s=>s.userId):learnerTargets),...sharedUserIds])];
+    if(!await confirmPortalAction(tr('Confirmer la publication pour ','Confirm publication for ')+effectiveIds.length+tr(' compte(s) Nexus ?',' Nexus account(s)?')+'\n'+(targetMode==='all'?tr('Tous les inscrits + destinataires complémentaires.','All enrolled + additional recipients.'):tr('Uniquement les destinataires choisis. Aucun autre élève du cours.','Selected recipients only. No other course learner.'))))return;
     setBusy(true);
     setError('');
     try {
@@ -164,13 +168,15 @@ export default function CourseSyllabi() {
       form.append('academicYear', year);
       form.append('title', title);
       form.append('description', description);
+      form.append('audienceMode',targetMode==='all'?'COURSE':'SELECTED');
+      if(selected?.syllabus?.publishedAt)form.append('expectedPublishedAt',selected.syllabus.publishedAt);
       form.append('targetUserIds', JSON.stringify(learnerTargets));
       form.append('sharedUserIds', JSON.stringify(sharedUserIds));
       form.append('file', file);
-      await syllabiAPI.publish(courseId, form);
+      const response=await syllabiAPI.publish(courseId, form);
       setFile(null);
       setDescription('');
-      setNotice(tr(`Syllabus envoyé à ${targetMode === 'all' ? learners.length : resolvedTargets.length} élève(s).`, `Syllabus sent to ${targetMode === 'all' ? learners.length : resolvedTargets.length} learner(s).`));
+      setNotice(tr(`Syllabus publié pour ${response.data.data.delivery.recipients} compte(s) Nexus.`, `Syllabus published for ${response.data.data.delivery.recipients} Nexus account(s).`));
       await load();
     } catch (e: any) {
       setError(e.response?.data?.message || tr('Publication impossible.', 'Publication failed.'));
@@ -212,6 +218,8 @@ export default function CourseSyllabi() {
       form.append('academicYear', editYear);
       form.append('title', editTitle.trim());
       form.append('description', editDescription.trim());
+      form.append('audienceMode',editing.audienceMode??(editing.targetUserIds?.length||editing.sharedUserIds?.length?'SELECTED':'COURSE'));
+      form.append('expectedPublishedAt',editing.publishedAt);
       form.append('targetUserIds', JSON.stringify(editing.targetUserIds ?? []));
       form.append('sharedUserIds', JSON.stringify(editing.sharedUserIds ?? []));
       if (editFile) form.append('file', editFile);
@@ -303,7 +311,7 @@ export default function CourseSyllabi() {
                 <label className="grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">
                   {tr('Destinataires', 'Recipients')}
                   <select className={field} value={targetMode} onChange={(e) => setTargetMode(e.target.value as any)}>
-                    <option value="all">{tr('Toute la classe / tous les inscrits', 'Whole class / all enrolled')}</option>
+                    <option value="all">{tr('Tous les inscrits + destinataires complémentaires', 'All enrolled + additional recipients')}</option>
                     <option value="class">{tr('Une catégorie / classe', 'One category / class')}</option>
                     <option value="selected">{tr('Sélection nominative', 'Named selection')}</option>
                   </select>
@@ -365,7 +373,7 @@ export default function CourseSyllabi() {
                   <div className="mt-2 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
                     {filteredEcosystemRecipients.map((recipient) => (
                       <label key={recipient.id} className="flex cursor-pointer gap-2 rounded-xl bg-sky-50 p-3 text-sm dark:bg-kcs-blue-800/40 dark:text-white">
-                        <input type="checkbox" className="mt-1" checked={sharedUserIds.includes(recipient.id)} onChange={() => setSharedUserIds((current) => (current.includes(recipient.id) ? current.filter((id) => id !== recipient.id) : [...current, recipient.id]))} />
+                        <input type="checkbox" className="mt-1" checked={sharedUserIds.includes(recipient.id)} onChange={() => {if(!sharedUserIds.includes(recipient.id)&&targetMode==='all')setTargetMode('selected');setSharedUserIds((current) => (current.includes(recipient.id) ? current.filter((id) => id !== recipient.id) : [...current, recipient.id]));}} />
                         <span>
                           <b className="block">{recipient.name}</b>
                           <small className="block text-slate-500 dark:text-slate-300">
@@ -376,6 +384,7 @@ export default function CourseSyllabi() {
                     ))}
                   </div>
                 </fieldset>
+                <div className="md:col-span-2 rounded-xl border border-teal-300 bg-teal-50 p-4 text-sm text-teal-950 dark:border-teal-700 dark:bg-teal-950/40 dark:text-teal-100"><strong>{tr('Résumé du ciblage','Audience summary')}</strong><p className="mt-1">{targetMode==='all'?tr('Tous les inscrits à ce cours','All enrolled course learners'):tr('Seulement les destinataires sélectionnés','Selected recipients only')} · {resolvedTargets.length} {tr('compte(s) choisi(s) explicitement','explicitly selected account(s)')}</p><p className="mt-1 text-xs">{tr('Choisir un contact bascule vers un partage limité. Choisissez explicitement « Tous les inscrits » pour inclure la classe.','Choosing a contact switches to limited sharing. Explicitly choose All enrolled to include the class.')}</p></div>
                 <label className="md:col-span-2 grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">
                   {tr('Note d’accompagnement (facultative)', 'Accompanying note (optional)')}
                   <textarea className={[field, 'min-h-24 resize-y'].join(' ')} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={tr('Contexte, objectifs, consignes ou message utile aux élèves…', 'Context, objectives, instructions or a helpful message for learners…')} />

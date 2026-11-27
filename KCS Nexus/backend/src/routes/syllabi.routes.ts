@@ -1,3 +1,5 @@
+import {canReadSyllabus,syllabusAudienceMode,type SyllabusAudience} from '../utils/syllabusAccess.js'
+import {databaseActorId} from '../utils/databaseActor.js'
 import {uploadPath} from '../utils/uploadStorage.js'
 import { randomUUID } from 'crypto'
 import { mkdir, unlink, writeFile } from 'fs/promises'
@@ -20,6 +22,8 @@ const upload = multer({
     : callback(new ApiError(400, 'PDF, DOC or DOCX required')),
 })
 const input = z.object({
+  audienceMode:z.enum(['COURSE','SELECTED']).optional(),
+  expectedPublishedAt:z.string().optional(),
   academicYear: z.string().trim().regex(/^\d{4}-\d{4}$/),
   title: z.string().trim().min(2).max(180),
   description: z.string().trim().max(2000).optional(),
@@ -32,7 +36,7 @@ const input = z.object({
     try { return z.array(z.string().min(1)).max(1000).parse(JSON.parse(value)) } catch { throw new ApiError(422, 'Invalid ecosystem recipient selection') }
   }),
 })
-type SyllabusVersion = {
+type SyllabusVersion = SyllabusAudience & {
   academicYear: string
   title: string
   description?: string
@@ -56,7 +60,7 @@ const item = (course: any) => ({
 const versionSnapshot = (meta: Meta): SyllabusVersion => ({
   academicYear: meta.academicYear, title: meta.title, description: meta.description,
   fileName: meta.fileName, storedName: meta.storedName, mimeType: meta.mimeType,
-  fileSize: meta.fileSize, publishedAt: meta.publishedAt,
+  fileSize: meta.fileSize, publishedAt: meta.publishedAt,audienceMode:syllabusAudienceMode(meta),targetUserIds:meta.targetUserIds,sharedUserIds:meta.sharedUserIds,
 })
 syllabiRouter.get('/', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const role = req.user!.role
@@ -65,21 +69,19 @@ syllabiRouter.get('/', authenticate, asyncHandler(async (req: AuthenticatedReque
     select: { id: true, name: true, code: true, grade: true, syllabus: true, teacher: { select: { userId: true, user: { select: { firstName: true, middleName: true, lastName: true } } } }, enrollments: { select: { student: { select: { userId: true } } } } },
     orderBy: [{ grade: 'asc' }, { name: 'asc' }],
   })
-  const entries=courses.map(item)
-  return success(res,entries.filter((entry,index)=>{
-    if(!entry.fileName)return false
-    if(['admin','staff'].includes(role))return true
-    if(entry.sharedUserIds?.includes(req.user!.sub))return true
-    if(role==='teacher')return courses[index].teacher.userId===req.user!.sub
-    if(role==='student')return courses[index].enrollments.some(row=>row.student.userId===req.user!.sub)&&(!entry.targetUserIds?.length||entry.targetUserIds.includes(req.user!.sub))
-    if(role==='parent')return false
-    return false
+  res.setHeader('Cache-Control','private, no-store')
+  return success(res,courses.flatMap<unknown>(course=>{
+    const meta=parse(course.syllabus),scope={ownerId:course.teacher.userId,enrolledIds:course.enrollments.map(row=>row.student.userId)},actor={id:req.user!.sub,role}
+    if(!meta?.fileName||!canReadSyllabus(actor,scope,meta))return[]
+    if(['admin','staff'].includes(role)||scope.ownerId===actor.id)return[item(course)]
+    const safe=(v:SyllabusVersion)=>({academicYear:v.academicYear,title:v.title,description:v.description,fileName:v.fileName,mimeType:v.mimeType,fileSize:v.fileSize,publishedAt:v.publishedAt})
+    return[{id:course.id,...safe(meta),history:(meta.history||[]).filter(v=>canReadSyllabus(actor,scope,v,true)).map(safe),course:{id:course.id,name:course.name,code:course.code,grade:course.grade,teacher:course.teacher}}]
   }))
 }))
 
 syllabiRouter.get('/recipient-directory',authenticate,requireRoles('teacher'),asyncHandler(async(_req,res)=>{
  const users=await prisma.user.findMany({
-  where:{role:{in:['ADMIN','STAFF','TEACHER','PARENT','STUDENT']}},
+  where:{accountBlockedAt:null,NOT:{permissions:{has:'nexus:media-only'}},OR:[{role:{in:['ADMIN','STAFF','TEACHER','PARENT']}},{role:'STUDENT',studentProfile:{is:{status:{equals:'active',mode:'insensitive'},archive:{is:null}}}}]},
   select:{id:true,firstName:true,middleName:true,lastName:true,email:true,role:true,studentProfile:{select:{grade:true,section:true,studentNumber:true}},teacherProfile:{select:{department:true,employeeNumber:true}},staffProfile:{select:{department:true,function:true,employeeNumber:true}}},
   orderBy:[{role:'asc'},{lastName:'asc'},{firstName:'asc'}],
  })
@@ -105,7 +107,16 @@ syllabiRouter.post('/:courseId', authenticate, requireRoles('teacher'), upload.s
     },
   })
   if (!course) throw new ApiError(403, 'This course is not assigned to the authenticated teacher')
+  const mode=payload.audienceMode??syllabusAudienceMode(payload)
+  const explicitIds=[...new Set([...payload.targetUserIds,...payload.sharedUserIds])]
+  if(mode==='SELECTED'&&!explicitIds.length)throw new ApiError(422,'Choisissez les destinataires : une sélection vide ne diffuse jamais à toute la classe. / Choose recipients: an empty selection never broadcasts to the whole course.')
+  const valid=explicitIds.length?await prisma.user.findMany({where:{id:{in:explicitIds},accountBlockedAt:null,NOT:{permissions:{has:'nexus:media-only'}},OR:[{role:{not:'STUDENT'}},{studentProfile:{is:{status:{equals:'active',mode:'insensitive'},archive:{is:null}}}}]},select:{id:true}}):[]
+  if(valid.length!==explicitIds.length)throw new ApiError(422,'Un destinataire est indisponible. Actualisez la sélection. / A recipient is unavailable. Refresh the selection.')
+  const activeEnrolled=await prisma.enrollment.findMany({where:{courseId:course.id,student:{status:{equals:'active',mode:'insensitive'},archive:{is:null},user:{accountBlockedAt:null}}},select:{student:{select:{userId:true}}}})
+  const recipients=[...new Set([...(mode==='COURSE'?activeEnrolled.map(row=>row.student.userId):[]),...explicitIds])]
+
   const previous = parse(course.syllabus)
+  if(payload.expectedPublishedAt&&previous?.publishedAt!==payload.expectedPublishedAt)throw new ApiError(409,'Le syllabus a changé. Rechargez avant de modifier. / Syllabus changed. Reload before editing.')
   if (!req.file && !previous) throw new ApiError(400, 'Syllabus document is required')
 
   let replacementStoredName: string | undefined
@@ -116,7 +127,7 @@ syllabiRouter.post('/:courseId', authenticate, requireRoles('teacher'), upload.s
     await writeFile(path.join(root, replacementStoredName), req.file.buffer)
   }
   const meta: Meta = {
-    ...payload,
+    academicYear:payload.academicYear,title:payload.title,description:payload.description,audienceMode:mode,
     fileName: req.file?.originalname ?? previous!.fileName,
     storedName: replacementStoredName ?? previous!.storedName,
     mimeType: req.file?.mimetype ?? previous!.mimeType,
@@ -126,18 +137,16 @@ syllabiRouter.post('/:courseId', authenticate, requireRoles('teacher'), upload.s
     targetUserIds: payload.targetUserIds.length ? payload.targetUserIds : undefined,
     sharedUserIds: payload.sharedUserIds.length ? [...new Set(payload.sharedUserIds)] : undefined,
   }
-  const saved = await prisma.$transaction(async (transaction) => {
+  const actorId=await databaseActorId(req.user!.sub)
+  let saved:any
+  try { saved = await prisma.$transaction(async (transaction) => {
+    const locked=await transaction.$queryRawUnsafe<Array<{syllabus:string|null}>>('SELECT syllabus FROM "Course" WHERE id = $1 FOR UPDATE',course.id)
+    if(locked[0]?.syllabus!==course.syllabus)throw new ApiError(409,'Syllabus changed. Reload before editing. / Syllabus modifié. Rechargez avant de modifier.')
     const updated = await transaction.course.update({
       where: { id: course.id },
       data: { syllabus: JSON.stringify(meta) },
       select: { id: true, name: true, code: true, grade: true, syllabus: true, teacher: { select: { user: { select: { firstName: true, middleName: true, lastName: true } } } } },
     })
-    const enrolledRecipients = [...new Set(course.enrollments.map((entry) => entry.student.userId))]
-    const requestedRecipients = new Set(payload.targetUserIds)
-    const learnerRecipients = requestedRecipients.size ? enrolledRecipients.filter((userId) => requestedRecipients.has(userId)) : enrolledRecipients
-    const sharedCandidates=[...new Set([...payload.sharedUserIds,...payload.targetUserIds.filter(userId=>!enrolledRecipients.includes(userId))])]
-    const validSharedRecipients=sharedCandidates.length?await transaction.user.findMany({where:{id:{in:sharedCandidates}},select:{id:true}}):[]
-    const recipients=[...new Set([...learnerRecipients,...validSharedRecipients.map(user=>user.id)])]
     if (recipients.length) await transaction.notification.createMany({
       data: recipients.map((userId) => ({
         userId,
@@ -149,33 +158,30 @@ syllabiRouter.post('/:courseId', authenticate, requireRoles('teacher'), upload.s
     })
     await transaction.auditLog.create({
       data: {
-        actorId: req.user!.sub,
+        actorId,
         action: previous ? 'COURSE_SYLLABUS_UPDATED' : 'COURSE_SYLLABUS_PUBLISHED',
         targetType: 'Course',
         targetId: course.id,
-        metadata: { academicYear: payload.academicYear, recipients: recipients.length, targetedLearners: requestedRecipients.size, sharedRecipients: validSharedRecipients.length, fileSize: meta.fileSize, fileReplaced: Boolean(req.file) },
+        metadata: { academicYear: payload.academicYear, recipients: recipients.length, targetedLearners: payload.targetUserIds.length, sharedRecipients: payload.sharedUserIds.length,audienceMode:mode, fileSize: meta.fileSize, fileReplaced: Boolean(req.file) },
       },
     })
     return updated
-  })
-  return success(res, item(saved), previous ? 'Syllabus updated and learners notified' : 'Syllabus published and learners notified', 201)
+  }) } catch(error) { if(replacementStoredName)await unlink(path.join(root,replacementStoredName)).catch(()=>undefined);throw error }
+  return success(res, {...item(saved),delivery:{recipients:recipients.length,audienceMode:mode}}, previous ? 'Syllabus updated and learners notified' : 'Syllabus published and learners notified', 201)
 }))
 
 syllabiRouter.get('/:courseId/download', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const course = await prisma.course.findUnique({ where: { id: String(req.params.courseId) }, include: { teacher: true, enrollments: { include: { student: true } } } })
   if (!course) throw new ApiError(404, 'Course not found')
-  const role = req.user!.role
-  const permitted = ['admin', 'staff'].includes(role)
-    || (role === 'teacher' && course.teacher.userId === req.user!.sub)
-    || (role === 'student' && course.enrollments.some((entry) => entry.student.userId === req.user!.sub))
-    || Boolean(parse(course.syllabus)?.sharedUserIds?.includes(req.user!.sub))
-  if (!permitted) throw new ApiError(403, 'You are not enrolled in this course')
-  const meta = parse(course.syllabus)
-  if (!meta) throw new ApiError(404, 'No syllabus has been published for this course')
-  if (role === 'student' && meta.targetUserIds?.length && !meta.targetUserIds.includes(req.user!.sub)) throw new ApiError(403, 'This syllabus was not assigned to this learner')
-  const requestedVersion = String(req.query.version ?? '')
-  const document = requestedVersion ? meta.history?.find((entry) => entry.publishedAt === requestedVersion) : meta
-  if (!document) throw new ApiError(404, 'This syllabus version is no longer available')
+  const role=req.user!.role,meta=parse(course.syllabus),scope={ownerId:course.teacher.userId,enrolledIds:course.enrollments.map(row=>row.student.userId)},actor={id:req.user!.sub,role}
+  if(!meta)throw new ApiError(404,'No syllabus has been published for this course')
+  if(!canReadSyllabus(actor,scope,meta))throw new ApiError(403,'This syllabus was not assigned to this account / Ce syllabus ne vous est pas destiné')
+  const requestedVersion=String(req.query.version??'')
+  const document=requestedVersion?meta.history?.find(entry=>entry.publishedAt===requestedVersion):meta
+  if(!document)throw new ApiError(404,'This syllabus version is no longer available')
+  if(requestedVersion&&!canReadSyllabus(actor,scope,document,true))throw new ApiError(403,'This version was not assigned to this account / Cette version ne vous est pas destinée')
+  if(!/^[a-f0-9-]+\.(?:pdf|doc|docx)$/i.test(document.storedName))throw new ApiError(404,'File unavailable')
+  res.setHeader('Cache-Control','private, no-store')
   res.setHeader('Content-Type', document.mimeType)
   res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(document.fileName))
   return res.sendFile(path.join(root, document.storedName))
@@ -190,7 +196,10 @@ syllabiRouter.delete('/:courseId', authenticate, requireRoles('teacher', 'admin'
   if (req.user!.role === 'teacher' && course.teacher.userId !== req.user!.sub) throw new ApiError(403, 'This course belongs to another teacher')
   const meta = parse(course.syllabus)
   if (!meta) return success(res, { id: course.id, alreadyRemoved: true }, 'Syllabus was already absent')
-  const recipients = [...new Set([...course.enrollments.map((entry) => entry.student.userId),...(meta.sharedUserIds??[])])]
+  const scope={ownerId:course.teacher.userId,enrolledIds:course.enrollments.map(row=>row.student.userId)}
+  const users=await prisma.user.findMany({where:{id:{in:[...new Set([...scope.enrolledIds,...(meta.targetUserIds||[]),...(meta.sharedUserIds||[])])]}},select:{id:true,role:true}})
+  const recipients=users.filter(user=>canReadSyllabus({id:user.id,role:user.role.toLowerCase()},scope,meta)).map(user=>user.id)
+  const actorId=await databaseActorId(req.user!.sub)
   await prisma.$transaction(async (transaction) => {
     await transaction.course.update({ where: { id: course.id }, data: { syllabus: null } })
     if (recipients.length) await transaction.notification.createMany({
@@ -204,7 +213,7 @@ syllabiRouter.delete('/:courseId', authenticate, requireRoles('teacher', 'admin'
     })
     await transaction.auditLog.create({
       data: {
-        actorId: req.user!.sub,
+        actorId,
         action: 'COURSE_SYLLABUS_REMOVED',
         targetType: 'Course',
         targetId: course.id,

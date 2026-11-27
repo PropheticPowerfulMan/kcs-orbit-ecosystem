@@ -16,3 +16,6 @@ Deployment requires tested images, backup, targeted migrations and health checks
 
 - Principal communication: distinct internal announcements, class/role targeting, drafts/publication/archive, explicit revision-bound reading confirmations and dashboard feeds for linked families; paginated correspondence and report review; own grants/activity view. No public website publishing or external mail is implied by internal announcements.
 - Annual placement snapshots are stored before a supervised rollover and reused by canonical report-card PDFs; retrying does not overwrite the original school-year placement.
+
+- Learner home: percentage-based performance colour bands, published-grade controls retained, centred accessible notification reader with server-persisted reading state.
+- Syllabus privacy: explicit COURSE/SELECTED audiences, confirmation before publication, per-version permissions and current revocation, safe legacy selected-only interpretation, no empty-selection broadcast, concurrency checks, private static-path exclusion including encoded aliases, and public course catalogue metadata minimization. Public profile images remain accessible. Previously downloaded copies cannot be recalled.

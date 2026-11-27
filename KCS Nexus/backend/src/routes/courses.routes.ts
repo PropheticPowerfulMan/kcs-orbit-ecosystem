@@ -11,20 +11,21 @@ export const coursesRouter = Router()
 
 coursesRouter.get('/', asyncHandler(async (_req, res) => {
   const courses = await prisma.course.findMany({
-    include: { teacher: { include: { user: true } }, schedules: true },
+    include: { teacher: { include: { user: {select:{firstName:true,middleName:true,lastName:true}} } }, schedules: true },
     orderBy: { name: 'asc' },
   })
-  return success(res, courses)
+  return success(res, courses.map(({syllabus,...course})=>course))
 }))
 
 coursesRouter.get('/:id', asyncHandler(async (req, res) => {
   const courseId = getRouteParam(req.params.id)
   const course = await prisma.course.findUnique({
     where: { id: courseId },
-    include: { teacher: { include: { user: true } }, schedules: true, assignments: true, enrollments: true },
+    include: { teacher: { include: { user: {select:{firstName:true,middleName:true,lastName:true}} } }, schedules: true, assignments: true, enrollments: true },
   })
   if (!course) throw new ApiError(404, 'Course not found')
-  return success(res, course)
+  const {syllabus,assignments,enrollments,...catalog}=course
+  return success(res, {...catalog,assignmentCount:assignments.length,enrollmentCount:enrollments.length})
 }))
 
 coursesRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
