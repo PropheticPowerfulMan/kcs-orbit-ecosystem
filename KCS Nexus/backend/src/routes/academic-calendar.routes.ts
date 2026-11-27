@@ -1,3 +1,5 @@
+import {freezeAnnualPlacements} from '../services/annualPlacementSnapshot.service.js'
+import {invalidateOrbitSharedDirectory} from '../services/orbitSharedDirectory.js'
 import { closeAcademicPeriod } from '../services/academicPeriodClosure.service.js'
 import {attendanceCalendarKey,nonSchoolSettings} from '../services/attendanceCalendar.service.js'
 import {DRC_HOLIDAYS} from '../utils/schoolDayPolicy.js'
@@ -236,26 +238,45 @@ async function graduationAuthorization(input: Record<string, unknown>, requireCl
   if (!year || !/^\d{4}-\d{4}$/.test(year)) throw new ApiError(409, 'Select a published academic year before rollover.')
   const closed = access.closedPeriods.some(period => period.academicYear === year && period.term === 'Annual final')
   if (requireClosed && !closed) throw new ApiError(409, 'Confirm the annual closure in Nexus before promoting or graduating students.')
-  const cards = await prisma.reportCard.findMany({ where: { term: year+' · Annual final', publicationStatus: { in: ['APPROVED','EMAILED','POSTED_TO_PORTAL'] }, approvedAt: { not: null }, average: { gte: 70, lte: 100 }, student: { grade: 'Grade 12' } }, select: { average: true, student: { select: { user: { select: { orbitUserId: true } } } } } })
-  const payload = JSON.stringify({ organizationId: calendarOrganizationId, academicYear: year, closed, expiresAt: Date.now()+60000, students: cards.filter(card=>card.student.user.orbitUserId).map(card=>({id:card.student.user.orbitUserId!,average:card.average})) })
+  const calendar=(await academicCalendars()).find(c=>c.name===year)
+  if(!calendar)throw new ApiError(409,'A published school calendar is required for this year.')
+  const cards = await prisma.reportCard.findMany({where:{term:year+' · Annual final',publicationStatus:{in:['APPROVED','EMAILED','POSTED_TO_PORTAL']},approvedAt:{not:null},average:{gte:0,lte:100},student:{OR:[{status:{equals:'active',mode:'insensitive'},archive:{is:null}},{grade:'Grade 12',status:{equals:'graduated',mode:'insensitive'}}]}},select:{average:true,student:{select:{grade:true,user:{select:{orbitUserId:true}}}}}})
+  const annualResults=cards.filter(card=>card.student.user.orbitUserId&&/^Grade\s*(?:[1-9]|1[0-2])(?:\s|$)/i.test(card.student.grade)).map(card=>({id:card.student.user.orbitUserId!,average:card.average,grade:card.student.grade}))
+  const requested=z.array(z.object({studentId:z.string().min(1),decision:z.enum(['AUTO','PROMOTE','REPEAT','MANUAL_TRANSFER','HOLD','GRADUATE']),targetClassId:z.string().optional(),targetClassName:z.string().optional(),reason:z.string().optional()}).strict()).max(10000).parse(input.overrides||input.decisions||[])
+  const early=await prisma.studentProfile.findMany({where:{grade:{in:['K3','K4','K5']},status:{equals:'active',mode:'insensitive'}},select:{user:{select:{orbitUserId:true}}}})
+  const earlyIds=new Set(early.map(s=>s.user.orbitUserId).filter(Boolean))
+  const earlyYearsDecisions=requested.filter(d=>earlyIds.has(d.studentId)&&d.decision!=='AUTO')
+  if(earlyYearsDecisions.some(d=>(d.reason||'').trim().length<8))throw new ApiError(400,'Chaque décision de maternelle requiert un motif explicite. / Every kindergarten decision requires a clear reason.')
+  const payload = JSON.stringify({organizationId:calendarOrganizationId,academicYear:year,closed,endDate:calendar.endDate.slice(0,10),expiresAt:Date.now()+60000,students:annualResults.filter(row=>row.grade==='Grade 12'&&row.average>=70).map(({id,average})=>({id,average})),annualResults,earlyYearsDecisions})
   return { payload, signature: createHmac('sha256', calendarApiKey!).update(payload).digest('hex') }
 }
 
+const rolloverFingerprint=(plan:any)=>createHash('sha256').update(JSON.stringify({academicYear:plan.academicYear,nextAcademicYear:plan.nextAcademicYear,items:[...(plan.items||[])].map((row:any)=>({studentId:row.studentId,fromClassName:row.fromClassName,toClassName:row.toClassName,action:row.action,averagePercent:row.averagePercent,decision:row.decision,warnings:row.warnings})).sort((a,b)=>a.studentId.localeCompare(b.studentId))})).digest('hex')
+academicCalendarRouter.get('/rollover/status',requireSuperAdmin(),asyncHandler(async(req,res)=>{
+ const year=z.string().regex(/^\d{4}-\d{4}$/).parse(req.query.academicYear),access=await academicPeriodAccess(),record=await prisma.auditLog.findUnique({where:{id:'annual-rollover-result:'+year},select:{metadata:true,createdAt:true}})
+ res.setHeader('Cache-Control','private, no-store');return success(res,{academicYear:year,closed:access.closedPeriods.some(p=>p.academicYear===year&&p.term==='Annual final'),completed:record?{...record.metadata as object,createdAt:record.createdAt}:null,threshold:70,earlyYears:'SUPERADMIN_MANUAL_DECISION'})
+}))
 academicCalendarRouter.post('/rollover/preview', requireCalendarManager, asyncHandler(async (req, res) => {
   const response = await fetch(orbitUrl('/rollover/preview'), {
-    method: 'POST', headers: headers(true),
-    body: JSON.stringify({ ...req.body, organizationId: calendarOrganizationId, graduationApproval: await graduationAuthorization(req.body, false) }),
+    method: 'POST', headers: headers(true),signal:AbortSignal.timeout(30000),
+    body: JSON.stringify({ ...req.body, organizationId: calendarOrganizationId, passThreshold:70,graduationApproval: await graduationAuthorization(req.body, false) }),
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new ApiError(response.status, data.message || 'Academic promotion preview failed.')
-  res.json(data)
+  res.json({...data,fingerprint:rolloverFingerprint((data as any).plan||{})})
 }))
 
 academicCalendarRouter.post('/rollover/run', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if(req.body?.confirmed!==true)throw new ApiError(400,'Une confirmation explicite du SuperAdmin est requise. / Explicit SuperAdmin confirmation is required.')
   const graduationApproval = await graduationAuthorization(req.body, true)
   if (JSON.parse(graduationApproval.payload).students.length && (!env.SAVANEX_API_URL || !env.SAVANEX_AUTH_API_KEY)) throw new ApiError(503, 'The source identity authority must be configured before graduation can revoke ecosystem access.')
+  const check=await fetch(orbitUrl('/rollover/preview'),{method:'POST',headers:headers(true),signal:AbortSignal.timeout(30000),body:JSON.stringify({...req.body,organizationId:calendarOrganizationId,passThreshold:70,graduationApproval})})
+  const reviewed=await check.json().catch(()=>({})) as any
+  if(!check.ok||!reviewed.plan)throw new ApiError(409,'Impossible de vérifier le bilan annuel. / Annual review cannot be verified.')
+  if(typeof req.body.fingerprint!=='string'||req.body.fingerprint!==rolloverFingerprint(reviewed.plan))throw new ApiError(409,'Le bilan a changé. Actualisez et validez les décisions à nouveau. / The annual review changed. Refresh and approve again.')
+  await freezeAnnualPlacements(JSON.parse(graduationApproval.payload).academicYear)
   const response = await fetch(orbitUrl('/rollover/run'), {
-    method: 'POST', headers: headers(true),
+    method: 'POST', headers: headers(true),signal:AbortSignal.timeout(30000),
     body: JSON.stringify({ ...req.body, organizationId: calendarOrganizationId, passThreshold: 70, graduationApproval }),
   })
   const data = await response.json().catch(() => ({}))
@@ -294,6 +315,9 @@ academicCalendarRouter.post('/rollover/run', requireSuperAdmin(), asyncHandler(a
     }
     ;(data as any).nexusGraduationArchive = { requested: graduates.length, archived: profiles.filter((profile) => !profile.archive).length }
   }
+  const completedYear=JSON.parse(graduationApproval.payload).academicYear
+  await prisma.auditLog.upsert({where:{id:'annual-rollover-result:'+completedYear},create:{id:'annual-rollover-result:'+completedYear,actorId:await databaseActorId(req.user!.sub),action:'ANNUAL_ROLLOVER_COMPLETED',targetType:'AcademicYear',targetId:completedYear,metadata:{counts:(data as any).plan?.counts??{},fingerprint:req.body.fingerprint,threshold:70,earlyYears:'SUPERADMIN_MANUAL_DECISION'}},update:{metadata:{counts:(data as any).plan?.counts??{},fingerprint:req.body.fingerprint,threshold:70,earlyYears:'SUPERADMIN_MANUAL_DECISION'}}})
+  invalidateOrbitSharedDirectory()
   res.json(data)
 }))
 

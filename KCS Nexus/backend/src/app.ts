@@ -1,3 +1,6 @@
+import {privateSyllabusUploadStatus} from './utils/privateSyllabusUpload.js'
+import {processClassroomWebhook,authorizeMedia} from './services/remoteLearning.service.js'
+import {asyncHandler} from './utils/api.js'
 import {juryRouter} from './jury/routes.js'
 import {uploadRoot} from './utils/uploadStorage.js'
 import {publishedSchoolCalendarRouter} from './routes/published-school-calendar.routes.js'
@@ -71,11 +74,14 @@ app.use(cors({
   },
   credentials: true,
 }))
+app.post('/api/learning/media-webhook',express.raw({type:'application/webhook+json',limit:'256kb'}),asyncHandler(async(req,res)=>{if(!Buffer.isBuffer(req.body))return res.status(400).end();await processClassroomWebhook(req.body.toString('utf8'),req.get('Authorization'));return res.status(204).end()}))
+app.get('/api/learning/media-authorize',asyncHandler(async(req,res)=>{await authorizeMedia(req.get('X-KCS-Classroom-Token')||'');return res.status(204).end()}))
 app.use(express.json({ limit: '8mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 // Approved election profiles are rendered on the school's separate election origin.
 app.use('/api/uploads/elections',(_req,res,next)=>{res.setHeader('Cross-Origin-Resource-Policy','cross-origin');next()})
+app.use('/api/uploads', (req,res,next)=>{const status=privateSyllabusUploadStatus(req.path);if(status)return res.status(status).json({success:false,message:'File unavailable'});return next()})
 app.use('/api/uploads', express.static(uploadRoot, { immutable: true, maxAge: '7d', fallthrough: true }), notFoundHandler)
 
 app.get('/health', (_req, res) => {

@@ -1,3 +1,4 @@
+import {hasNumericGpa} from '../utils/academicGpa.js'
 import {reportCardAttendanceSummaries} from '../services/reportCardAttendanceSnapshot.service.js'
 import { studentReportAverage } from '../services/studentReportAverage.service.js'
 import { Router } from 'express'
@@ -555,6 +556,7 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
     const children = orbitProfiles.map((profile) => {
       const local = localByNumber.get(profile.studentNumber.toLowerCase())
       const reportAverage = studentReportAverage(local?.grades ?? [], local?.reportCards ?? [])
+      reportAverage.gpa=hasNumericGpa(profile.grade)?reportAverage.gpa:null
       const average = reportAverage.average
       const attendanceRate = attendanceRateFromStatuses(local?.attendanceRecords.map((record) => record.status) ?? [])
       const pendingAssignments = local?.submissions.filter((submission) => submission.status === 'PENDING').length ?? 0
@@ -617,7 +619,7 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
   const overdueAssignments = student.submissions.filter((submission) => submission.status === 'PENDING' && submission.assignment.dueDate < new Date()).length
   const completedAssignments = student.submissions.filter((submission) => ['SUBMITTED', 'GRADED'].includes(submission.status)).length
   const assignmentCompletion = student.submissions.length ? Number(((completedAssignments / student.submissions.length) * 100).toFixed(1)) : null
-  const academicSummary = { ...reportAverage, average, attendanceRate, publishedGrades: student.grades.length, attendanceRecords: student.attendanceRecords.length, pendingAssignments, overdueAssignments, assignmentCompletion, enrolledCourses: student.enrollments.length }
+  const academicSummary = { ...reportAverage, gpa:hasNumericGpa(student.grade)?reportAverage.gpa:null, average, attendanceRate, publishedGrades: student.grades.length, attendanceRecords: student.attendanceRecords.length, pendingAssignments, overdueAssignments, assignmentCompletion, enrolledCourses: student.enrollments.length }
   const activityDates = [
     ...student.grades.map((record) => record.createdAt),
     ...student.attendanceRecords.map((record) => record.updatedAt),

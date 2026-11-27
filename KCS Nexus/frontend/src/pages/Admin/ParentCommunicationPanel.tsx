@@ -97,6 +97,7 @@ const mergeMessages = (current: any[], incoming: any[]) => {
 
 export default function ParentCommunicationPanel() {
   const { i18n } = useTranslation()
+  const isTeacher=useAuthStore(state=>state.user?.role==='teacher')
   const isSuperAdmin=useAuthStore(state=>state.user?.id==='configured-superadmin')
   const authenticatedUserId = useAuthStore((state) => state.user?.id || state.user?.email || 'anonymous')
   const communicationCacheKey = `${communicationCachePrefix}:${authenticatedUserId}`
@@ -106,13 +107,13 @@ export default function ParentCommunicationPanel() {
   const [parents, setParents] = useState<any[]>(() => cachedCommunication?.parents ?? [])
   const [selectedParents, setSelectedParents] = useState<string[]>([])
   const [parentQuery, setParentQuery] = useState('')
-  const [roleFilter, setRoleFilter] = useState('ALL')
+  const [roleFilter, setRoleFilter] = useState(isTeacher?'STUDENT':'ALL')
   const [gradeFilter, setGradeFilter] = useState('ALL')
   const [contactFilter, setContactFilter] = useState('ALL')
   const [quickClasses, setQuickClasses] = useState<string[]>([])
   const deliveryIntent = useRef<{ signature: string; requestId: string } | null>(null)
   const sendingRef = useRef(false)
-  const [channels, setChannels] = useState<Array<'email' | 'sms'>>(['email', 'sms'])
+  const [channels, setChannels] = useState<Array<'email' | 'sms' | 'nexus'>>(isTeacher?['nexus']:['email','sms'])
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [attachment, setAttachment] = useState<File | null>(null)
@@ -330,7 +331,7 @@ export default function ParentCommunicationPanel() {
       const smsSent = delivery.filter((row: any) => row.sms?.sent || row.sms?.queued).length
       const emailFailed = channels.includes('email') ? delivery.length - emailSent : 0
       const smsFailed = channels.includes('sms') ? delivery.length - smsSent : 0
-      setNotice(c.recorded(data?.recipients ?? 0, emailSent, emailFailed, smsSent, smsFailed))
+      setNotice(channels.includes('nexus')?(language==='fr'?`Message enregistré dans ${data?.primaryRecipients??0} comptes Nexus. Aucun e-mail ni SMS envoyé.`:`Message stored in ${data?.primaryRecipients??0} Nexus accounts. No email or SMS sent.`):c.recorded(data?.recipients ?? 0, emailSent, emailFailed, smsSent, smsFailed))
       setDeliveryReport({ delivery, channels: data?.channels ?? channels, recipients: data?.recipients ?? delivery.length })
       deliveryIntent.current = null
       setSubject('')
@@ -421,10 +422,10 @@ export default function ParentCommunicationPanel() {
 
         <section id="communication-compose" data-communications-step role="tabpanel" aria-labelledby="communication-compose-tab" hidden={workspaceStep!=='communication-compose'} className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-sky-800 dark:bg-kcs-blue-900/50">
           <p className="text-xs font-bold uppercase text-kcs-gold-600">{c.official}</p>
-          <h2 className="text-2xl font-bold dark:text-white">{c.channels}</h2>
+          <h2 className="text-2xl font-bold dark:text-white">{isTeacher?(language==='fr'?'Choisir le canal de communication':'Choose the communication channel'):c.channels}</h2>
           <div className="communications-audience-summary"><span>{selectedParents.length} {c.selected}</span><p>{parents.filter(person=>selectedParents.includes(person.id)).slice(0,5).map(displayName).join(' · ')}{selectedParents.length>5?' …':''}</p><button type="button" onClick={()=>setWorkspaceStep('communication-recipients')}>{language==='fr'?'Modifier les destinataires':'Review recipients'}</button></div>
           <div className="mt-4 grid grid-cols-2 gap-2">
-            {(['email', 'sms'] as const).map((channel) => <button key={channel} onClick={() => toggle(setChannels as React.Dispatch<React.SetStateAction<string[]>>, channel)} className={`${primaryButton} ${channels.includes(channel) ? 'ring-2 ring-kcs-gold-400' : 'opacity-65'}`}>{channel === 'email' ? <Mail size={18} /> : <MessageSquare size={18} />}{channels.includes(channel) ? '✓ ' : ''}{channel.toUpperCase()}</button>)}
+            {isTeacher&&<button type="button" aria-pressed={channels.includes('nexus')} onClick={()=>setChannels(['nexus'])} className={primaryButton+' col-span-2 '+(channels.includes('nexus')?'ring-2 ring-kcs-gold-400':'opacity-65')}><MessageSquare size={18}/>{language==='fr'?'Comptes Nexus de mes élèves uniquement':'My learners’ Nexus accounts only'}</button>}{(['email', 'sms'] as const).map((channel) => <button key={channel} onClick={() => setChannels(current=>current.includes(channel)?current.filter(c=>c!==channel):[...current.filter(c=>c!=='nexus'),channel])} className={`${primaryButton} ${channels.includes(channel) ? 'ring-2 ring-kcs-gold-400' : 'opacity-65'}`}>{channel === 'email' ? <Mail size={18} /> : <MessageSquare size={18} />}{channels.includes(channel) ? '✓ ' : ''}{channel.toUpperCase()}</button>)}
           </div>
           <input className={fieldClass + ' mt-4'} aria-label={c.subject} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder={c.subject} />
           <textarea className={fieldClass + ' mt-3 min-h-44 resize-y'} aria-label={c.exactMessage} value={body} onChange={(event) => setBody(event.target.value)} placeholder={c.exactMessage} />
@@ -479,7 +480,7 @@ export default function ParentCommunicationPanel() {
       {deliveryReport ? <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={() => setDeliveryReport(null)} role="dialog" aria-modal="true" aria-labelledby="delivery-result-title">
         <section className="max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl border border-kcs-blue-300/30 bg-white p-6 shadow-2xl dark:bg-kcs-blue-950" onClick={(event) => event.stopPropagation()}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-600">{c.official}</p><h3 id="delivery-result-title" className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{c.deliveryTitle}</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-300">{c.deliveryIntro}</p></div><button className={primaryButton} onClick={() => setDeliveryReport(null)}><X size={17}/>{c.close}</button></div>
-          <div className="mt-5 space-y-3">{deliveryReport.delivery.map((row: any) => <article key={`${row.userId}-${row.relationship ?? 'PRIMARY'}`} className="rounded-2xl border border-gray-200 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50"><h4 className="font-bold text-kcs-blue-950 dark:text-white">{row.name}</h4><div className="mt-3 grid gap-3 sm:grid-cols-2">{deliveryReport.channels.map((channel: 'email' | 'sms') => { const result = row[channel]; const accepted = Boolean(result?.sent || result?.queued); const reason = result?.reason === 'SMS_INSUFFICIENT_BALANCE' ? (language === 'fr' ? 'Solde SMS du fournisseur insuffisant.' : 'SMS provider balance is insufficient.') : result?.reason === 'SMS_INVALID_PHONE' ? (language === 'fr' ? 'Numéro de téléphone invalide.' : 'Invalid phone number.') : result?.reason === 'SMTP_SEND_FAILED' ? (language === 'fr' ? 'Le serveur e-mail a temporairement refusé l’envoi.' : 'The email server temporarily rejected delivery.') : result?.reason; return <div key={channel} className={`rounded-xl border p-3 ${accepted ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30' : 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/30'}`}><div className="flex items-center gap-2">{accepted ? <CheckCircle2 className="text-emerald-600" size={20}/> : <AlertTriangle className="text-red-600" size={20}/>}<b className="text-kcs-blue-950 dark:text-white">{channel === 'email' ? c.emailLabel : c.smsLabel}</b></div><p className={`mt-2 text-sm font-bold ${accepted ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>{result?.queued ? (language === 'fr' ? 'Enregistré dans la file d’envoi' : 'Recorded in the delivery queue') : accepted ? c.providerAccepted : c.notSent}</p>{accepted ? <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{c.finalPending}</p> : reason ? <p className="mt-1 text-xs text-red-700 dark:text-red-300">{reason}</p> : null}</div> })}</div></article>)}</div>
+          <div className="mt-5 space-y-3">{deliveryReport.delivery.map((row: any) => <article key={`${row.userId}-${row.relationship ?? 'PRIMARY'}`} className="rounded-2xl border border-gray-200 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50"><h4 className="font-bold text-kcs-blue-950 dark:text-white">{row.name}</h4><div className="mt-3 grid gap-3 sm:grid-cols-2">{deliveryReport.channels.map((channel: 'email' | 'sms' | 'nexus') => { const result = row[channel]; const accepted = Boolean(result?.sent || result?.queued); const reason = result?.reason === 'SMS_INSUFFICIENT_BALANCE' ? (language === 'fr' ? 'Solde SMS du fournisseur insuffisant.' : 'SMS provider balance is insufficient.') : result?.reason === 'SMS_INVALID_PHONE' ? (language === 'fr' ? 'Numéro de téléphone invalide.' : 'Invalid phone number.') : result?.reason === 'SMTP_SEND_FAILED' ? (language === 'fr' ? 'Le serveur e-mail a temporairement refusé l’envoi.' : 'The email server temporarily rejected delivery.') : result?.reason; return <div key={channel} className={`rounded-xl border p-3 ${accepted ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30' : 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/30'}`}><div className="flex items-center gap-2">{accepted ? <CheckCircle2 className="text-emerald-600" size={20}/> : <AlertTriangle className="text-red-600" size={20}/>}<b className="text-kcs-blue-950 dark:text-white">{channel==='nexus'?c.nexus:channel === 'email' ? c.emailLabel : c.smsLabel}</b></div><p className={`mt-2 text-sm font-bold ${accepted ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>{result?.queued ? (language === 'fr' ? 'Enregistré dans la file d’envoi' : 'Recorded in the delivery queue') : accepted ? (channel==='nexus'?(language==='fr'?'Disponible dans la messagerie Nexus':'Available in the Nexus inbox'):c.providerAccepted) : c.notSent}</p>{accepted&&channel!=='nexus' ? <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{c.finalPending}</p> : reason ? <p className="mt-1 text-xs text-red-700 dark:text-red-300">{reason}</p> : null}</div> })}</div></article>)}</div>
           <div className="mt-5 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"><AlertTriangle className="mt-0.5 shrink-0" size={20}/><p>{c.deliveryNote}</p></div>
         </section>
       </div> : null}

@@ -1,3 +1,4 @@
+import CertificateReceiptStatus from './CertificateReceiptStatus'
 import ReportCardWorkflowBoard, { type ReportQueue } from './ReportCardWorkflowBoard'
 import CertificateDeliveryDialog from './CertificateDeliveryDialog'
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -270,6 +271,7 @@ export default function CertificateControlCenter() {
   };
   return (
     <section className="space-y-5">
+      <details className="nexus-workspace-card rounded-2xl border p-4 dark:border-slate-600"><summary className="cursor-pointer font-bold">{tr('Suivi des certificats : envois et accusés de réception','Certificate deliveries and receipt confirmations')}</summary><div className="mt-4"><CertificateReceiptStatus cards={students.map(student=>({id:student.id,student:{grade:student.grade,section:student.section,user:{firstName:student.user?.firstName??'',lastName:student.user?.lastName??'',middleName:student.user?.middleName}}}))} sending={deliveryOpen}/></div></details>
       {deliveryOpen && <CertificateDeliveryDialog studentIds={deliveryScope} academicYear={academicYear} documentType={documentType} authenticated={authenticated} initialGrade="ALL" onDelivered={() => { setSelected(new Set()); setGrade('ALL'); setWorkflowSection('ALL'); setQuery(''); setWorkflowQueue('SENT'); setNotice(tr('Envoi enregistré. Les certificats concernés sont classés dans Envois enregistrés.', 'Delivery recorded. The certificates are filed under Delivery recorded.')); void loadWorkflow() }} onClose={() => { setDeliveryOpen(false); setDeliveryScope(undefined); void loadWorkflow() }}/>}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
         <div className="text-sm text-kcs-blue-950 dark:text-white"><b>{deliveryTargets.length} {tr('élève(s) ciblé(s)', 'targeted learner(s)')}</b><p className="text-xs text-slate-600 dark:text-slate-300">{selectedStudents.length ? tr('La sélection nominative ci-dessous sera utilisée.', 'The named selection below will be used.') : tr('Les élèves de la liste actuellement affichée seront utilisés.', 'Learners in the currently displayed list will be used.')}</p></div>

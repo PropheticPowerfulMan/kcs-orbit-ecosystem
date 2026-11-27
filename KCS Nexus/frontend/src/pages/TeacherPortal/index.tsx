@@ -1,3 +1,4 @@
+import RemoteLearningWorkspace from '@/components/shared/RemoteLearningWorkspace'
 import AcademicHomeWelcome from '@/components/shared/AcademicHomeWelcome'
 import EarlyYearsWorkspace from '@/components/teacher/EarlyYearsWorkspace'
 import {useEarlyYearsContext} from '@/hooks/useEarlyYearsContext'
@@ -3087,7 +3088,7 @@ const TeacherPortal = () => {
         <div className="min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6">
           <PublishedCalendarStrip/>
 
-          {!isDashboard && (activeSegment==='early-years'?<EarlyYearsWorkspace/>:['reports', 'messages', 'discipline'].includes(activeSegment) ? <TeacherReportsHub academicReports={<TeacherSectionView segment="reports"/>} disciplineReports={<TeacherSectionView segment="discipline"/>}/> : <TeacherSectionView segment={activeSegment} />)}
+          {!isDashboard && (activeSegment==='distance-learning'?<RemoteLearningWorkspace/>:activeSegment==='early-years'?<EarlyYearsWorkspace/>:['reports', 'messages', 'discipline'].includes(activeSegment) ? <TeacherReportsHub academicReports={<TeacherSectionView segment="reports"/>} disciplineReports={<TeacherSectionView segment="discipline"/>}/> : <TeacherSectionView segment={activeSegment} />)}
 
           {isDashboard && (earlyYears.loading?<div role="status" className="nexus-workspace-card p-6 text-sm">{language==='fr'?'Préparation de votre espace…':'Preparing your workspace…'}</div>:earlyYears.enabled?<EarlyYearsWorkspace/>:<TeacherDashboardHome />)}
 

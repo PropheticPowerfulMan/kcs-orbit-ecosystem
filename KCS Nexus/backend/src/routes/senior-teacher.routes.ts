@@ -1,3 +1,4 @@
+import {updateRegistryEntity} from './registry.routes.js'
 import {Router} from 'express'
 import {Prisma} from '@prisma/client'
 import {z} from 'zod'
@@ -30,6 +31,26 @@ async function permitted(req:AuthenticatedRequest,db:Prisma.TransactionClient|ty
  const user=await db.user.findUnique({where:{id:req.user!.sub},select:{role:true,permissions:true,accountBlockedAt:true}})
  if(!user||user.accountBlockedAt||!hasSeniorWorkspaceAccess(user))throw new ApiError(403,'SENIOR_ACCESS_REQUIRED')
 }
+// This capability is intentionally limited to learner email; it grants no general registry editing.
+seniorTeacherRouter.get('/learner-emails',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ await permitted(req)
+ const rows=await prisma.studentProfile.findMany({where:{status:{equals:'active',mode:'insensitive'},archive:{is:null}},select:{id:true,studentNumber:true,grade:true,section:true,user:{select:{firstName:true,middleName:true,lastName:true,email:true}}},orderBy:[{grade:'asc'},{user:{lastName:'asc'}}],take:10000})
+ res.setHeader('Cache-Control','private, no-store');return success(res,rows.map(row=>({...row,name:name(row.user),email:row.user.email,user:undefined})))
+}))
+seniorTeacherRouter.patch('/learner-emails/:studentId',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ await permitted(req)
+ const payload=z.object({email:z.string().trim().email().max(320).transform(v=>v.toLowerCase()),expectedEmail:z.string().max(320)}).strict().parse(req.body)
+ const student=await prisma.studentProfile.findUnique({where:{id:id.parse(req.params.studentId)},select:{id:true,studentNumber:true,status:true,archive:{select:{id:true}},user:{select:{id:true,email:true,orbitUserId:true}}}})
+ if(!student||student.archive||inactiveStudentStatus(student.status))throw new ApiError(404,'Élève actif introuvable. / Active learner not found.')
+ if(student.user.email.trim().toLowerCase()!==payload.expectedEmail.trim().toLowerCase())throw new ApiError(409,'L’adresse a changé. Actualisez avant de modifier. / Email changed. Refresh before editing.')
+ if(await prisma.user.findFirst({where:{id:{not:student.user.id},email:{equals:payload.email,mode:'insensitive'}},select:{id:true}}))throw new ApiError(409,'Cette adresse appartient déjà à un autre compte. / This email already belongs to another account.')
+ res.locals.learnerEmailOnly=true;res.locals.expectedLearnerEmail=payload.expectedEmail
+ req.params={entityType:'student',identifier:student.user.orbitUserId||student.studentNumber}
+ req.query.identifierType=student.user.orbitUserId?'orbitId':'externalId'
+ req.body={email:payload.email}
+ await updateRegistryEntity(req,res)
+}))
+
 // Only Root may delegate this additional workspace. Primary roles and credentials never change here.
 seniorTeacherRouter.get('/access',requireSuperAdmin(),asyncHandler(async(_req,res)=>{
  const rows=await prisma.user.findMany({where:{accountBlockedAt:null,teacherProfile:{isNot:null}},select:{id:true,firstName:true,middleName:true,lastName:true,permissions:true,role:true},orderBy:{lastName:'asc'}})

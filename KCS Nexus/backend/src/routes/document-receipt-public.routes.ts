@@ -1,3 +1,5 @@
+import {certificateDeliveryEvidence} from '../utils/certificateDeliveryEvidence.js'
+import {verifyCertificateReceipt} from '../utils/certificateReceipt.js'
 import {reportCardDeliveryEvidence} from '../utils/reportCardDeliveryEvidence.js'
 import {transcriptDeliveryEvidence} from '../utils/transcriptDeliveryEvidence.js'
 import {messageDeliveryEvidence} from '../utils/messageReceipt.js'
@@ -18,11 +20,11 @@ const idSchema=z.string().regex(/^[a-zA-Z0-9-]{8,100}$/),tokenSchema=z.string().
 function parse<T>(schema:z.ZodType<T>,input:unknown):T{const result=schema.safeParse(input);if(!result.success)throw new ApiError(400,'Invalid confirmation data. Reopen the link from your email. / Confirmation incomplète. Rouvrez le lien depuis votre mail.');return result.data}
 const confirmationSchema=z.object({token:tokenSchema,confirmed:z.literal('yes'),formVersion:z.literal('2').optional(),emailReceived:z.literal('yes'),pdfReceived:z.literal('yes').optional()}).strict()
 export function registerDocumentReceiptPublicRoutes(router:Router,kind:ReceiptKind){
- const prefix=kind==='report-card'?'reportCard':kind==='transcript'?'transcript':'message'
- const path='/api/'+(kind==='report-card'?'report-card-receipts':kind==='transcript'?'transcript-receipts':'message-receipts')
- const verify=kind==='report-card'?verifyReportCardReceipt:kind==='transcript'?verifyTranscriptReceipt:verifyMessageReceipt
+ const prefix=kind==='report-card'?'reportCard':kind==='transcript'?'transcript':kind==='certificate'?'certificate':'message'
+ const path='/api/'+(kind==='report-card'?'report-card-receipts':kind==='transcript'?'transcript-receipts':kind==='certificate'?'certificate-receipts':'message-receipts')
+ const verify=kind==='report-card'?verifyReportCardReceipt:kind==='transcript'?verifyTranscriptReceipt:kind==='certificate'?verifyCertificateReceipt:verifyMessageReceipt
  const attachment=(row:CorrespondenceLog)=>kind!=='message'||Boolean(receiptMetadata(row.metadata).messageAttachmentName)
- const view=(row:CorrespondenceLog)=>{const evidence=kind==='report-card'?reportCardDeliveryEvidence(row):kind==='transcript'?transcriptDeliveryEvidence(row):messageDeliveryEvidence(row);return{confirmedAt:evidence.confirmedAt,hasAttachment:attachment(row),inboxUrl:receiptMailbox(row.recipientEmail)}}
+ const view=(row:CorrespondenceLog)=>{const evidence=kind==='report-card'?reportCardDeliveryEvidence(row):kind==='transcript'?transcriptDeliveryEvidence(row):kind==='certificate'?certificateDeliveryEvidence(row):messageDeliveryEvidence(row);return{confirmedAt:evidence.confirmedAt,hasAttachment:attachment(row),inboxUrl:receiptMailbox(row.recipientEmail)}}
  const check=(row:CorrespondenceLog|null,token:string)=>{
   if(!row||row.channel!=='EMAIL'||!verify(row,token,env.JWT_SECRET))throw new ApiError(400,'This confirmation link is invalid or incomplete. / Ce lien de confirmation est invalide ou incomplet.')
   return row
@@ -51,7 +53,7 @@ export function registerDocumentReceiptPublicRoutes(router:Router,kind:ReceiptKi
    const metadata={...m,[prefix+'ReceiptConfirmedAt']:now.toISOString(),[prefix+'ReceiptEmailConfirmed']:true,...(kind==='message'?{messageReceiptAttachmentConfirmed:withAttachment,messageReceiptConfirmationMethod:withAttachment?'RECIPIENT_EMAIL_AND_ATTACHMENT_ACKNOWLEDGEMENT':'RECIPIENT_EMAIL_ACKNOWLEDGEMENT'}:{[prefix+'ReceiptPdfConfirmed']:true,[prefix+'ReceiptConfirmationMethod']:'PARENT_EMAIL_AND_PDF_ACKNOWLEDGEMENT'})} as Prisma.InputJsonValue
    const attachmentHash=m[prefix==='message'?'messageAttachmentSha256':prefix+'AttachmentSha256']
    const updated=await tx.correspondenceLog.update({where:{id},data:{status:'DELIVERED',deliveredAt:row.deliveredAt??now,failureReason:null,metadata}})
-   await tx.auditLog.create({data:{action:kind==='report-card'?'REPORT_CARD_RECEIPT_CONFIRMED':kind==='transcript'?'TRANSCRIPT_RECEIPT_CONFIRMED':'MESSAGE_RECEIPT_CONFIRMED',targetType:'CorrespondenceLog',targetId:id,metadata:{...(kind==='report-card'?{reportCardId:row.reportCardId}:{studentId:row.studentId}),recipientEmail:row.recipientEmail,documentId:typeof m.receiptDocumentId==='string'?m.receiptDocumentId:null,attachmentSha256:typeof attachmentHash==='string'?attachmentHash:null,method,previousFailureReason:row.failureReason??null,confirmedAt:now.toISOString()}}})
+   await tx.auditLog.create({data:{action:kind==='report-card'?'REPORT_CARD_RECEIPT_CONFIRMED':kind==='transcript'?'TRANSCRIPT_RECEIPT_CONFIRMED':kind==='certificate'?'CERTIFICATE_RECEIPT_CONFIRMED':'MESSAGE_RECEIPT_CONFIRMED',targetType:'CorrespondenceLog',targetId:id,metadata:{...(kind==='report-card'?{reportCardId:row.reportCardId}:{studentId:row.studentId}),recipientEmail:row.recipientEmail,documentId:typeof m.receiptDocumentId==='string'?m.receiptDocumentId:null,attachmentSha256:typeof attachmentHash==='string'?attachmentHash:null,method,previousFailureReason:row.failureReason??null,confirmedAt:now.toISOString()}}})
    return{...view(updated),alreadyConfirmed:false}
   },{maxWait:10000,timeout:15000})
   res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer')

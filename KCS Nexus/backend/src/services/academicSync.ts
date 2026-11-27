@@ -1,13 +1,11 @@
+import {gradePoints as kcsGradePoints,creditWeightedGpa}from '../utils/academicGpa.js'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { attendanceRateFromStatuses } from '../utils/attendancePolicy.js'
 
 type DbClient = PrismaClient | Prisma.TransactionClient
 export const attendanceRate = attendanceRateFromStatuses
-export const gradePoints = (percentage: number) => percentage >= 90 ? 4 : percentage >= 80 ? 3 : percentage >= 70 ? 2 : percentage >= 60 ? 1 : 0
-export const weightedGpa = (grades: Array<{ percentage: number; course: { credits: number } }>) => {
-  const credits = grades.reduce((sum, grade) => sum + Math.max(grade.course.credits || 1, 1), 0)
-  return credits ? Number((grades.reduce((sum, grade) => sum + gradePoints(grade.percentage) * Math.max(grade.course.credits || 1, 1), 0) / credits).toFixed(2)) : null
-}
+export const gradePoints = kcsGradePoints
+export const weightedGpa = (grades:Array<{percentage:number;course:{credits:number}}>)=>creditWeightedGpa(grades.map(g=>({percentage:g.percentage,credits:Math.max(g.course.credits||1,1)}))).gpa
 export async function synchronizeStudentAcademicMetrics(db: DbClient, studentIds: string[]) {
   const ids = [...new Set(studentIds)].filter(Boolean)
   if (!ids.length) return []

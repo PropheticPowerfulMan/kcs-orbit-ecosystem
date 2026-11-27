@@ -1,4 +1,4 @@
-import { verifyGraduationApproval, type GraduationApproval } from "./graduation-approval";
+import { verifyGraduationApproval,officialAnnualAverage, type GraduationApproval } from "./graduation-approval";
 import { AppSlug, Prisma } from "@prisma/client";
 import {
   AcademicProgressionOverride,
@@ -32,12 +32,7 @@ async function loadRolloverCatalog(organizationId: string) {
         classId: true,
         className: true,
         status: true,
-        grades: {
-          select: {
-            score: true,
-            maxScore: true
-          }
-        }
+
       },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }]
     }),
@@ -55,8 +50,6 @@ async function loadRolloverCatalog(organizationId: string) {
 
   return {
     students: students.map((student) => {
-      const totalScore = student.grades.reduce((sum, grade) => sum + grade.score, 0);
-      const totalMaxScore = student.grades.reduce((sum, grade) => sum + grade.maxScore, 0);
       return {
         id: student.id,
         firstName: student.firstName,
@@ -64,7 +57,7 @@ async function loadRolloverCatalog(organizationId: string) {
         classId: student.classId,
         className: student.className,
         status: student.status,
-        averagePercent: totalMaxScore > 0 ? Number(((totalScore / totalMaxScore) * 100).toFixed(2)) : null
+        averagePercent: null as number|null
       };
     }),
     classes
@@ -75,29 +68,37 @@ export async function previewAcademicYearRollover(input: AcademicYearRolloverInp
   const { students, classes } = await loadRolloverCatalog(input.organizationId);
   const approval = verifyGraduationApproval(input.graduationApproval, input.organizationId);
   const approved = new Map((approval?.students ?? []).map(student => [student.id, student.average]));
-  for (const student of students) {
-    if (/^grade\s*12(?:\s|$)/i.test(student.className ?? '')) student.averagePercent = approved.get(student.id) ?? null;
-  }
+  for (const student of students) student.averagePercent=officialAnnualAverage(approval,student.id,student.className)
   for (const override of input.overrides ?? []) {
+    const student=students.find(s=>s.id===override.studentId);
+    if(student&&/^(?:k|kg|kindergarten)\s*[3-5](?:\s|$)/i.test(student.className||'')&&override.decision!=='AUTO'){
+      const authorized=approval?.earlyYearsDecisions?.find(d=>d.studentId===override.studentId);
+      if(!authorized||!(['studentId','decision','targetClassId','targetClassName','reason'] as const).every(key=>String(authorized[key]??'').trim()===String(override[key]??'').trim()))throw new Error('Kindergarten decisions require an explicit signed SuperAdmin decision.');
+    }
     if (override.decision === 'GRADUATE' && (!approved.has(override.studentId) || !students.some(s => s.id === override.studentId && /^grade\s*12(?:\s|$)/i.test(s.className ?? '')))) throw new Error('Graduation requires an approved Grade 12 annual report with an average of at least 70%.');
   }
 
-  return buildAcademicProgressionPlan({
-    students,
+  const plan=buildAcademicProgressionPlan({
+    students:students.filter(student=>!/(?:graduat|archiv|delet|dismiss|inactive|expell)/i.test(student.status||'')),
     classes,
     overrides: input.overrides,
     effectiveDate: normalizeDate(input.effectiveDate),
-    passThreshold: input.passThreshold
+    passThreshold: KCS_ACADEMIC_PASSING_SCORE_PERCENT
   });
+  if(approval){const start=Number(approval.academicYear.slice(0,4));plan.academicYear=approval.academicYear;plan.nextAcademicYear=(start+1)+'-'+(start+2);if(approval.endDate)plan.isRolloverWindow=normalizeDate(input.effectiveDate).toISOString().slice(0,10)>approval.endDate;}
+  const previous=approval?await prisma.auditLog.findFirst({where:{organizationId:input.organizationId,action:'academic_year.rollover.executed',entityType:'academicYear',entityId:plan.nextAcademicYear},select:{id:true}}):null;
+  return {...plan,alreadyExecuted:Boolean(previous)};
 }
 
 function assertRunnablePlan(plan: Awaited<ReturnType<typeof previewAcademicYearRollover>>, force?: boolean) {
+  if(plan.items.some(item=>item.action==='HOLD'))throw new Error('Resolve every pending annual result and every kindergarten decision before applying the year transition.');
+
   if (!force && !plan.isRolloverWindow) {
     throw new Error("Academic rollover can run automatically only between July 1 and September 30. Use force for an administrator-approved correction.");
   }
 
   const blockingWarnings = plan.items
-    .filter((item) => item.warnings.includes("MANUAL_TRANSFER_REQUIRES_TARGET_CLASS"))
+    .filter((item) => item.warnings.includes("MANUAL_TRANSFER_REQUIRES_TARGET_CLASS")||item.warnings.includes("TARGET_CLASS_NOT_IN_CATALOG"))
     .map((item) => `${item.studentName} (${item.studentId})`);
 
   if (blockingWarnings.length > 0) {
@@ -122,7 +123,7 @@ function buildStudentUpdate(item: Awaited<ReturnType<typeof previewAcademicYearR
 
 export async function executeAcademicYearRollover(input: AcademicYearRolloverInput) {
   const plan = await previewAcademicYearRollover(input);
-  assertRunnablePlan(plan, input.force);
+  if(!plan.alreadyExecuted)assertRunnablePlan(plan, input.force);
   const approval = verifyGraduationApproval(input.graduationApproval, input.organizationId);
   if (!approval?.closed || approval.academicYear !== plan.academicYear) throw new Error('Academic rollover requires explicit SuperAdmin annual closure and current Nexus authorization.');
   const approved = new Set(approval.students.map(student => student.id));

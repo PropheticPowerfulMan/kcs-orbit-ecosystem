@@ -1,3 +1,4 @@
+import {prepareAnnualPromotionReviews} from './services/annualPromotionReview.service.js'
 import {startJuryWorkers} from './jury/worker.js'
 import {startMediaUploadCleanup} from './services/mediaUpload.service.js'
 import { startAcademicAutoClosureWorker } from './services/academicAutoClosure.service.js'
@@ -23,6 +24,7 @@ const start = async () => {
     startOutboundSmsQueue()
     startEventReminderWorker()
     startAcademicAutoClosureWorker()
+    void prepareAnnualPromotionReviews().catch(error=>console.error('[annual-review]',error instanceof Error?error.message:'Review unavailable'))
     startMediaUploadCleanup()
     startSentinelStaffAttendanceSync()
     startRegistryMirrorReconciliation()
@@ -43,3 +45,5 @@ start().catch(async (error) => {
   await prisma.$disconnect()
   process.exit(1)
 })
+
+const annualReviewTimer=setInterval(()=>{void prepareAnnualPromotionReviews().catch(error=>console.error('[annual-review]',error instanceof Error?error.message:'Review unavailable'))},3600000);annualReviewTimer.unref();

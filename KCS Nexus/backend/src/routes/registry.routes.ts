@@ -1,5 +1,5 @@
 import { applyConfirmedRegistryDeletions } from '../services/registryMirror.service.js'
-import { Router } from 'express'
+import { Router, type Response } from 'express'
 import bcrypt from 'bcryptjs'
 import { randomInt } from 'node:crypto'
 import { z } from 'zod'
@@ -499,14 +499,15 @@ registryRouter.post('/entities/:entityType', authenticate, requireSuperAdmin(), 
   return success(res, { ...(created as object), notificationDelivery }, 'Shared entity created through Orbit', 201)
 }))
 
-registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+export async function updateRegistryEntity(req:AuthenticatedRequest,res:Response){
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
   const identifier = String(req.params.identifier)
-  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit() : null
+  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit(Boolean(res.locals.learnerEmailOnly),Boolean(res.locals.learnerEmailOnly)) : null
 
   if (orbitRegistryIsEnabled()) {
     const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, identifier) : undefined
+    if(res.locals.learnerEmailOnly&&(!before||String(before.email||'').trim().toLowerCase()!==String(res.locals.expectedLearnerEmail||'').trim().toLowerCase()))throw new ApiError(409,'L’adresse a changé dans le registre central. Actualisez avant de modifier. / The central registry email changed. Refresh before editing.')
     if (entityType === 'parent' && Array.isArray(req.body?.studentIds)) {
       const requestedStudentIds = [...new Set(req.body.studentIds.map((value: unknown) => String(value || '').trim()).filter(Boolean))]
       if (requestedStudentIds.length !== req.body.studentIds.length) throw new ApiError(400, 'Every selected child must have one unique Orbit student identifier.')
@@ -607,7 +608,10 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireS
     return { email: [], sms: [], dashboard: false, degraded: true as const, reason }
   })
   return success(res, { ...updated, notificationDelivery }, 'Parent updated in local registry')
-}))
+
+}
+registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireSuperAdmin(), asyncHandler(updateRegistryEntity))
+
 registryRouter.post('/entities/:entityType/:identifier/reset-access', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType)
   const identifier = String(req.params.identifier)

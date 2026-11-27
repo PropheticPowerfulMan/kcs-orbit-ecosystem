@@ -49,6 +49,7 @@ test("progression plan promotes only students who meet the 70 percent KCS succes
       { id: "student-final", firstName: "Elie", lastName: "S.", classId: "grade-12-a", className: "Grade 12 A", status: "ACTIVE", averagePercent: 88 }
     ],
     overrides: [
+      {studentId:"student-k5",decision:"PROMOTE",reason:"SuperAdmin approved kindergarten readiness"},
       { studentId: "student-repeat", decision: "REPEAT", reason: "Needs another year" },
       { studentId: "student-transfer", decision: "MANUAL_TRANSFER", targetClassId: "grade-7-a", reason: "Administrator correction" }
     ]
@@ -69,7 +70,7 @@ test("progression plan promotes only students who meet the 70 percent KCS succes
   assert.equal(byStudent.get("student-unknown")?.action, "HOLD");
   assert.deepEqual(byStudent.get("student-unknown")?.warnings, ["CLASS_LEVEL_COULD_NOT_BE_PARSED"]);
   assert.equal(byStudent.get("student-missing-average")?.action, "HOLD");
-  assert.deepEqual(byStudent.get("student-missing-average")?.warnings, ["PASS_AVERAGE_MISSING"]);
+  assert.deepEqual(byStudent.get("student-missing-average")?.warnings, ["EARLY_YEARS_SUPERADMIN_DECISION_REQUIRED"]);
   assert.equal(byStudent.get("student-final")?.action, "GRADUATE");
   assert.equal(byStudent.get("student-final")?.status, "GRADUATED");
   assert.deepEqual(plan.counts, {
@@ -79,4 +80,15 @@ test("progression plan promotes only students who meet the 70 percent KCS succes
     HOLD: 2,
     GRADUATE: 1
   });
+});
+
+test("K3-K5 never progress automatically, even with a numeric score of 100",()=>{
+ const plan=buildAcademicProgressionPlan({effectiveDate:new Date('2027-07-15'),classes,students:[{id:'k3',firstName:'Synthetic',lastName:'K3',className:'K3 A',averagePercent:100},{id:'k4',firstName:'Synthetic',lastName:'K4',className:'K4 A',averagePercent:100},{id:'k5',firstName:'Synthetic',lastName:'K5',className:'K5 A',averagePercent:100}]});assert.equal(plan.counts.HOLD,3);for(const row of plan.items)assert.deepEqual(row.warnings,['EARLY_YEARS_SUPERADMIN_DECISION_REQUIRED'])
+})
+test("an explicit kindergarten promotion requires a recorded reason and does not use percentage marks",()=>{
+ const plan=buildAcademicProgressionPlan({classes,students:[{id:'k5',firstName:'Synthetic',lastName:'K5',className:'K5 A',averagePercent:null}],overrides:[{studentId:'k5',decision:'PROMOTE',reason:'Approved school readiness assessment'}]});assert.equal(plan.items[0].action,'PROMOTE');assert.equal(plan.items[0].toClassId,'grade-1-a')
+})
+
+test("numeric grades require official results, enforce 70% even in Grade12 and advance exactly one academic year",()=>{
+ const plan=buildAcademicProgressionPlan({students:[{id:'missing',firstName:'Synthetic',lastName:'Missing',className:'Grade 4 B',averagePercent:null},{id:'final',firstName:'Synthetic',lastName:'Final',className:'Grade 12 A',averagePercent:69.99}],classes,effectiveDate:new Date('2027-07-15'),passThreshold:0});assert.equal(plan.nextAcademicYear,'2027-2028');assert.deepEqual(plan.items[0].warnings,['PASS_AVERAGE_MISSING']);assert.equal(plan.items[1].action,'REPEAT');assert.equal(plan.items[1].passThreshold,70)
 });

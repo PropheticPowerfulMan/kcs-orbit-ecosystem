@@ -1,3 +1,4 @@
+import {reportPlacements} from '../services/annualPlacementSnapshot.service.js'
 import {officialDocumentAuthorities,officialDocumentAuthorityName,resolveDocumentAuthority,documentAuthorityTypes,type DocumentAuthorityType} from '../services/officialDocumentAuthority.service.js'
 import {hasPrincipalWorkspaceAccess,hasSeniorWorkspaceAccess} from '../utils/staffWorkspace.js'
 import { reportCardVisibility } from '../utils/reportCardVisibility.js'
@@ -872,6 +873,7 @@ async function prepareReportCardPdfs(cards: PdfReportCard[], language: 'fr' | 'e
  const mainTeachers=await prisma.teacherProfile.findMany({where:{status:'HOMEROOM_TEACHER'},select:{status:true,homeroomGrade:true,homeroomSection:true,user:{select:{firstName:true,middleName:true,lastName:true,signatureImage:true}}}})
  const missingAttendance = await reportCardAttendanceSummaries(cards)
  const calendars = await academicCalendars()
+ const placements=await reportPlacements(cards)
  const pdfByCard=new Map<string,Awaited<ReturnType<typeof officialReportCardPdf>>>()
  for(const card of cards){
   const parsed=splitReportCardTerm(card.term)
@@ -894,9 +896,10 @@ async function prepareReportCardPdfs(cards: PdfReportCard[], language: 'fr' | 'e
   })
   subjects.sort((left,right)=>(left.code||left.name).localeCompare(right.code||right.name,'en',{numeric:true,sensitivity:'base'}))
   const learner=[card.student.user.lastName,card.student.user.middleName,card.student.user.firstName].filter(Boolean).join(' ')
-  const mainTeacher=mainTeachers.find(teacher=>isTeacherHomeroomForStudent(teacher,card.student))
+  const placement=placements.get('academic-placement:'+parsed.academicYear+':'+card.studentId)??card.student
+  const mainTeacher=mainTeachers.find(teacher=>isTeacherHomeroomForStudent(teacher,placement))
   const render = htmlOnly ? async (input: Parameters<typeof officialReportCardPdf>[0]) => ({...await officialReportCardDocument(input), buffer: Buffer.alloc(0)}) : officialReportCardPdf
-  const pdf=await render({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,periodEndDate:reportCardPeriodEndDate(parsed.academicYear,parsed.term,calendars),average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(missingAttendance.get(card.id)??card.attendanceSummary) as any,language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
+  const pdf=await render({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[placement.grade,placement.section].filter(Boolean).join(' '),term:card.term,periodEndDate:reportCardPeriodEndDate(parsed.academicYear,parsed.term,calendars),average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(missingAttendance.get(card.id)??card.attendanceSummary) as any,language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
   pdfByCard.set(card.id,pdf)
  }
  return pdfByCard

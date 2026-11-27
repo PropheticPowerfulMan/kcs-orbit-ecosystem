@@ -21,6 +21,17 @@
 {$NEXUS_DOMAIN} {
   import security_headers
 
+  # School-owned media admission: no token in referrers or public management ports.
+  @kcs_classroom path /remote-rtc /remote-rtc/*
+  handle @kcs_classroom {
+    uri strip_prefix /remote-rtc
+    forward_auth nexus_api:5000 {
+      uri /api/learning/media-authorize
+      header_up X-KCS-Classroom-Token {query.access_token}
+    }
+    reverse_proxy {$KCS_CLASSROOM_UPSTREAM:172.19.0.1:7880}
+  }
+
   redir /jury /jury/ 308
   handle_path /jury/api/* {
     rewrite * /api/jury{path}

@@ -836,12 +836,19 @@ teachersRouter.post('/me/attendance/bulk', authenticate, requireRoles('teacher')
 }))
 
 teachersRouter.post('/me/assignments', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const payload = assignmentCreateSchema.parse(req.body)
+  const payload = assignmentCreateSchema.extend({clientRequestId:z.string().uuid().optional()}).parse(req.body)
   const course = await ownedCourse(req.user!.sub, payload.courseId)
   const assignment = await prisma.$transaction(async (tx) => {
+    const publicationKey=payload.clientRequestId?req.user!.sub+':'+payload.clientRequestId:null
+    if(publicationKey){
+      await tx.$queryRaw(Prisma.sql`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${publicationKey}))`)
+      const previous=await tx.assignment.findUnique({where:{publicationKey},include:{questions:{orderBy:{order:'asc'}},submissions:{include:{student:{include:{user:true}}}}}})
+      if(previous){if(previous.courseId!==course.id)throw new ApiError(409,'Publication key belongs to another course');return previous}
+    }
     const interactiveScore = payload.questions.reduce((sum, question) => sum + question.points, 0)
     const created = await tx.assignment.create({ data: {
       courseId: course.id,
+      publicationKey,
       title: payload.title,
       description: payload.description,
       dueDate: payload.dueDate,
@@ -873,7 +880,7 @@ teachersRouter.post('/me/assignments', authenticate, requireRoles('teacher'), as
     const parentUserIds = [...new Set(course.enrollments.flatMap(({ student }) => student.parentLinks.map(({ parentId }) => parentId)))]
     const notificationRows = [
       ...studentUserIds.map((userId) => ({ userId, title: `New ${payload.type.toLowerCase()}: ${payload.title}`, message: `${course.name} - due ${payload.dueDate.toLocaleDateString()}. Open Assignments for the teacher's full instructions.`, type: 'INFO' as const, link: '/portal/student/assignments' })),
-      ...parentUserIds.map((userId) => ({ userId, title: `New work published: ${payload.title}`, message: `A ${payload.type.toLowerCase()} for ${course.name} is due ${payload.dueDate.toLocaleDateString()}. Open your child's Performance page for details.`, type: 'INFO' as const, link: '/portal/parent/performance' })),
+      ...parentUserIds.map((userId) => ({ userId, title: `New work published: ${payload.title}`, message: `A ${payload.type.toLowerCase()} for ${course.name} is due ${payload.dueDate.toLocaleDateString()}. Open Assignments in your parent dashboard for instructions and completion tracking.`, type: 'INFO' as const, link: '/portal/parent/assignments' })),
     ]
     if (notificationRows.length) await tx.notification.createMany({ data: notificationRows })
     await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ASSIGNMENT_CREATED', targetType: 'Assignment', targetId: created.id, metadata: { courseId: course.id, students: studentUserIds.length, parents: parentUserIds.length, cadence: payload.cadence, interactive: payload.questions.length > 0, questionCount: payload.questions.length, aiGenerated: payload.aiGenerated } } })
@@ -992,7 +999,7 @@ teachersRouter.post('/me/assignments/:assignmentId/sync-gradebook', authenticate
       const percentage = Number((((submission.score ?? 0) / assignment.maxScore) * 100).toFixed(1))
       return [
         { userId: submission.student.user.id, title: `Result published: ${assignment.title}`, message: `${assignment.course.name}: ${submission.score}/${assignment.maxScore} (${percentage}%). The verified result is now in your Gradebook.`, type: 'SUCCESS' as const, link: '/portal/student/assignments' },
-        ...submission.student.parentLinks.map(({ parentId }) => ({ userId: parentId, title: `Result published: ${assignment.title}`, message: `${submission.student.user.firstName} received ${submission.score}/${assignment.maxScore} (${percentage}%) in ${assignment.course.name}.`, type: 'SUCCESS' as const, link: '/portal/parent/performance' })),
+        ...submission.student.parentLinks.map(({ parentId }) => ({ userId: parentId, title: `Result published: ${assignment.title}`, message: `${submission.student.user.firstName} received ${submission.score}/${assignment.maxScore} (${percentage}%) in ${assignment.course.name}.`, type: 'SUCCESS' as const, link: '/portal/parent/assignments' })),
       ]
     })
     if (notificationRows.length) await tx.notification.createMany({ data: notificationRows })

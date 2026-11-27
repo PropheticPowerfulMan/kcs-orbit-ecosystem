@@ -19,3 +19,12 @@ test('the canonical document places the official period end after the reporting 
  assert.ok(fr.includes('<p>Date · <b>6 novembre 2026</b></p>'))
  assert.ok(en.indexOf('Reporting period') < en.indexOf('<p>Date ·'))
 })
+
+test('Grade 1-12 official report card exposes credit-weighted GPA without changing the percentage; early years never receive GPA',async()=>{
+ const {renderReportCardHtml}=await import('./officialReportCardHtml.js')
+ const base={id:'qa-gpa',studentName:'Synthetic Learner',studentNumber:'QA-GPA',grade:'Grade 9',term:'2026-2027 · Semester 1 · Quarter 2',periodEndDate:'2027-01-22',average:91.67,publicationStatus:'DRAFT',subjects:[{name:'Algebra',code:'QA-A',credits:2,percentage:95,letterGrade:'A'},{name:'Writing',code:'QA-W',credits:1,percentage:85,letterGrade:'B'}],principal:{name:'QA Principal'},language:'en' as const}
+ const html=await renderReportCardHtml(base,'QA-DOC','HASH','data:image/png;base64,AA==',new Date('2026-11-27'))
+ assert.match(html,/91.67%/);assert.match(html,/3.67 \/ 4.00/);assert.match(html,/GPA · scale 4.00/)
+ const early=await renderReportCardHtml({...base,grade:'K4'},'QA-DOC','HASH','data:image/png;base64,AA==',new Date('2026-11-27'))
+ assert.doesNotMatch(early,/GPA · scale/)
+})

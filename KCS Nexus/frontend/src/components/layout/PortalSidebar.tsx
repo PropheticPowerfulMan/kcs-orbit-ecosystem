@@ -1,3 +1,4 @@
+import { Video, Mail } from 'lucide-react'
 import JuryWorkspaceLauncher from '@/components/shared/JuryWorkspaceLauncher'
 import './portalSidebar.css'
 import {useEarlyYearsContext} from '@/hooks/useEarlyYearsContext'
@@ -43,6 +44,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
   switch (role) {
     case 'student':
       return [
+        { to: '/portal/student/distance-learning', label: language === 'fr' ? 'Enseignement à distance' : 'Distance learning', icon: Video },
         ...base,
         { to: '/portal/student/grades', label: t('portalNav.myGrades'), icon: BarChart3 },
         { to: '/portal/student/assignments', label: t('portalNav.assignments'), icon: FileText },
@@ -57,7 +59,9 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
       ]
     case 'parent':
       return [
+        { to: '/portal/parent/distance-learning', label: language === 'fr' ? 'Enseignement à distance' : 'Distance learning', icon: Video },
         ...base,
+        {to:'/portal/parent/assignments',label:language==='fr'?'Devoirs et travaux':'Assignments and classwork',icon:FileText},
         { to: '/portal/parent/performance', label: t('portalNav.performance'), icon: BarChart3 },
         { to: '/portal/parent/forum', label: t('portalNav.parentForum'), icon: MessageSquare },
         { to: '/portal/parent/notifications', label: t('portalNav.notifications'), icon: Bell },
@@ -69,6 +73,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
       ]
     case 'teacher':
       return [
+        { to: '/portal/teacher/distance-learning', label: language === 'fr' ? 'Enseignement à distance' : 'Distance learning', icon: Video },
         ...base,
         { to: '/portal/teacher/courses', label: t('portalNav.myCourses'), icon: BookOpen },
         { to: '/portal/teacher/students', label: t('portalNav.students'), icon: Users },
@@ -98,6 +103,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
       ]
     case 'admin':
       return [
+        { to: '/admin/distance-learning', label: language === 'fr' ? 'Enseignement à distance' : 'Distance learning', icon: Video },
         ...base,
         { to: '/admin/account-access', label: language === 'fr' ? 'Accès à l’écosystème' : 'Ecosystem access', icon: Ban },
         { to: '/admin/students', label: t('portalNav.students'), icon: GraduationCap },
@@ -303,7 +309,9 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
    {to:'/portal/senior/roadmap',label:language==='fr'?'Échéances et rendez-vous':'Deadlines & meetings',icon:Calendar},
    {to:'/portal/senior/reports',label:language==='fr'?'Rapports d’accompagnement':'Guidance reports',icon:BarChart3},
    {to:'/portal/senior/report-cards',label:language==='fr'?'Bulletins · lecture':'Report cards · view',icon:FileSpreadsheet},
-   {to:'/portal/senior/transcripts',label:language==='fr'?'Transcripts · lecture':'Transcripts · view',icon:FileText},
+   {to:'/portal/senior/learner-emails',label:language==='fr'?'E-mails des élèves':'Learner emails',icon:Mail},
+    {to:'/portal/senior/distance-learning',label:language==='fr'?'Enseignement à distance':'Distance learning',icon:Video},
+    {to:'/portal/senior/transcripts',label:language==='fr'?'Transcripts · lecture':'Transcripts · view',icon:FileText},
    {to:'/portal/senior/handbook',label:language==='fr'?'Manuel de l’école':'School Handbook',icon:BookOpen},
    {to:'/portal/senior/settings',label:t('portalNav.settings'),icon:Settings},
   ]:mediaAccount?[
@@ -319,6 +327,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     { to: '/admin/electives', label: t('portalNav.electives'), icon: BookOpenCheck },
     { to: '/admin/main-teachers', label: t('portalNav.mainTeacherAssignment'), icon: UserCheck },
     { to: '/admin/report-cards', label: language === 'fr' ? 'Bulletins · lecture' : 'Report cards · view', icon: FileSpreadsheet },
+    {to:'/portal/staff/distance-learning',label:language==='fr'?'Enseignement à distance':'Distance learning',icon:Video},
     { to: '/admin/transcripts', label: language === 'fr' ? 'Transcripts · lecture' : 'Transcripts · view', icon: FileSpreadsheet },
     { to: '/admin/teaching-attendance', label: language === 'fr' ? 'Présences aux cours' : 'Teaching attendance', icon: Clock3 },
     { to: '/admin/students', label: t('portalNav.students'), icon: LibraryBig },

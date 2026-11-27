@@ -28,7 +28,7 @@ messagesRouter.use(authenticate)
 
 const messageSchema = z.object({ recipientId: z.string().min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), language: z.enum(['fr','en']).optional() })
 const jsonArray = (value: unknown) => typeof value === 'string' ? JSON.parse(value) : value
-const parentDeliverySchema = z.object({ recipientIds: z.preprocess(jsonArray, z.array(z.string().min(1)).min(1).max(10000)), channels: z.preprocess(jsonArray, z.array(z.enum(['email','sms'])).min(1)), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), requestId: z.string().min(8).max(128).optional(), language: z.enum(['fr','en']).optional() })
+const parentDeliverySchema = z.object({ recipientIds: z.preprocess(jsonArray, z.array(z.string().min(1)).min(1).max(10000)), channels: z.preprocess(jsonArray, z.array(z.enum(['email','sms','nexus'])).min(1)), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), requestId: z.string().min(8).max(128).optional(), language: z.enum(['fr','en']).optional() })
 const attachmentTypes = new Set(['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/plain','text/csv','image/jpeg','image/png','image/webp','audio/mpeg','audio/mp4','audio/ogg','audio/webm','audio/wav','audio/x-wav','video/mp4','video/webm','video/quicktime','video/ogg'])
 const attachmentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 26214400, files: 1 }, fileFilter: (_req, file, cb) => attachmentTypes.has(file.mimetype) ? cb(null, true) : cb(new ApiError(400, 'Unsupported attachment type')) })
 const broadcastSchema = z.object({ requestId: z.string().min(8).max(128).optional(), audience: z.enum(['ALL','PARENTS','STUDENTS','TEACHERS','STAFF','GRADE_9_12_FAMILIES']), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), language: z.enum(['fr','en']).optional() })
@@ -51,6 +51,14 @@ const resolveMessageActorId = async (req: AuthenticatedRequest) => {
 }
 const canManageParentCommunications = (req: AuthenticatedRequest) =>
   req.user!.sub === 'configured-superadmin' || req.user!.role === 'teacher'
+
+/** Resolve a teacher's active learners by enrollment or explicit homeroom assignment. */
+async function teacherCommunicationScope(userId:string):Promise<Prisma.UserWhereInput>{
+ const teacher=await prisma.teacherProfile.findUnique({where:{userId},select:{id:true,status:true,homeroomGrade:true,homeroomSection:true}})
+ if(!teacher)return{id:'not-authorized'}
+ const learners=await prisma.studentProfile.findMany({where:{status:{equals:'active',mode:'insensitive'},OR:[{enrollments:{some:{course:{teacherId:teacher.id}}}},...(teacher.status==='HOMEROOM_TEACHER'&&teacher.homeroomGrade?[{grade:teacher.homeroomGrade,...(teacher.homeroomSection?{section:teacher.homeroomSection}:{})}]:[])]},select:{id:true,userId:true}})
+ return{OR:[{role:{notIn:['STUDENT','PARENT']}},{role:'STUDENT',id:{in:learners.map(s=>s.userId)}},{role:'PARENT',parentLinks:{some:{studentId:{in:learners.map(s=>s.id)}}}}]}
+}
 
 type OrbitContact = { additionalEmails?: string[]; id: string; fullName?: string; firstName?: string; middleName?: string | null; lastName?: string; email?: string | null; phone?: string | null; accessCode?: string | null; studentIds?: string[]; parentId?: string | null; className?: string | null; familyContacts?: Array<{ kind?: string; firstName?: string; middleName?: string; lastName?: string; email?: string | null; phone?: string | null }> }
 type OrbitDirectory = { parents?: OrbitContact[]; students?: OrbitContact[]; teachers?: OrbitContact[] }
@@ -166,9 +174,10 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
   if (!canManageParentCommunications(req)) throw new ApiError(403, 'Super Administrator or Teacher permissions required')
   const actorId = await resolveMessageActorId(req)
   const superAdmin = req.user!.sub === 'configured-superadmin'
+  const teacherScope=superAdmin?{}:await teacherCommunicationScope(actorId)
   const [recipients, directory] = await Promise.all([
     prisma.user.findMany({
-    where: { accountBlockedAt: null, id: { not: actorId } },
+    where: { accountBlockedAt: null, id: { not: actorId },...teacherScope },
     select: {
       id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, accessCode: true, role: true,
       studentProfile: { select: { grade: true, section: true } },
@@ -225,15 +234,18 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
   const data = parentDeliverySchema.parse(req.body)
   const senderId = await resolveMessageActorId(req)
   const recipientIds = [...new Set(data.recipientIds)]
+  const externalChannels=data.channels.filter((channel):channel is 'email'|'sms'=>channel!=='nexus')
+  const nexusOnly=externalChannels.length===0
+  const teacherScope=req.user!.sub==='configured-superadmin'?{}:await teacherCommunicationScope(senderId)
   const [parents, directory] = await Promise.all([
     prisma.user.findMany({
-      where: { accountBlockedAt: null, id: { in: recipientIds }, ...(req.user!.sub === 'configured-superadmin' ? {} : { role: 'PARENT' as const }) },
+      where: { accountBlockedAt: null, id: { in: recipientIds }, ...teacherScope },
       select: { id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, role: true },
     }),
-    getOrbitDirectory(),
+    nexusOnly?Promise.resolve({} as OrbitDirectory):getOrbitDirectory(),
   ])
   const skippedRecipientIds = recipientIds.filter((id) => !parents.some((parent) => parent.id === id))
-  if (!parents.length) throw new ApiError(400, 'No selected recipient is a valid communication account.')
+  if (!parents.length) throw new ApiError(400, 'Aucun destinataire sélectionné n’est autorisé. Choisissez un élève inscrit à vos cours ou une famille liée. / No selected recipient is authorized. Choose an enrolled learner or linked family.')
   const deliveryParents = parents.map((parent) => {
     const official = findOfficialContact(directory, parent)
     const officialEmail = official?.email?.trim()
@@ -250,18 +262,18 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
 
   // Resolve families by their verified Nexus/Orbit linkage, never by name alone.
   // The shared resolver includes the primary, additional and family-contact emails.
-  const families = await familyEmailRecipients(parents.filter(parent => parent.role === 'PARENT'))
-  const allTargets = deliveryParents.flatMap(parent => parent.role === 'PARENT'
+  const families:Awaited<ReturnType<typeof familyEmailRecipients>> = nexusOnly?new Map():await familyEmailRecipients(parents.filter(parent => parent.role === 'PARENT'))
+  const allTargets = nexusOnly?deliveryParents.map(person=>({userId:person.id,name:[person.lastName,person.middleName,person.firstName].filter(Boolean).join(' '),email:null,phone:null,relationship:'NEXUS_ACCOUNT'})):deliveryParents.flatMap(parent => parent.role === 'PARENT'
     ? (families.get(parent.id) ?? []).map(target => ({ userId: parent.id, name: target.name, email: target.email, phone: target.phone, relationship: target.relationship }))
     : [{ userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' '), email: parent.email, phone: parent.phone, relationship: 'PRIMARY' }])
   // Retain phone-only family contacts for SMS; email fan-out is validated above.
-  for (const parent of deliveryParents.filter(person => person.role === 'PARENT')) {
+  for (const parent of (nexusOnly?[]:deliveryParents.filter(person => person.role === 'PARENT'))) {
     const official = findOfficialContact(directory, parent)
     if (parent.phone) allTargets.push({ userId: parent.id, name: contactName(parent), email: null, phone: parent.phone, relationship: 'PARENT' })
     for (const contact of official?.familyContacts ?? []) if (contact.phone) allTargets.push({ userId: parent.id, name: contactName(contact) || contactName(parent), email: null, phone: contact.phone, relationship: contact.kind || 'FAMILY_CONTACT' })
   }
-  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients: deliveryParents.map((parent) => ({ id: parent.id, role: parent.role, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') })), targets: allTargets, channels: data.channels, attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: false, intent: { recipientIds: [...recipientIds].sort() } })
-  return success(res, { ...result, requestedRecipients: recipientIds.length, skippedRecipients: skippedRecipientIds.length }, 'Parent communication recorded for every valid recipient; external delivery safely queued', 201)
+  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients: deliveryParents.map((parent) => ({ id: parent.id, role: parent.role, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') })), targets: allTargets, channels: externalChannels, attachment: req.file, requestId: data.requestId, language: data.language, personalizeParents: false, intent: { recipientIds: [...recipientIds].sort() } })
+  return success(res, { ...result, channels:data.channels, delivery:result.delivery.map(row=>({...row,...(data.channels.includes('nexus')?{nexus:{sent:true,reason:'NEXUS_INBOX_STORED'}}:{})})), requestedRecipients: recipientIds.length, skippedRecipients: skippedRecipientIds.length }, nexusOnly?'Message enregistré dans les comptes Nexus des destinataires ; aucun e-mail ni SMS envoyé. / Message stored in recipient Nexus accounts; no email or SMS sent.':'Communication recorded for every valid recipient; selected external delivery safely queued', 201)
 }))
 
 messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {

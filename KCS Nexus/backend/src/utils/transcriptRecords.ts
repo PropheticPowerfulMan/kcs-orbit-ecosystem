@@ -1,3 +1,4 @@
+import {gradePoints as points}from './academicGpa.js'
 import {aggregateReportCardResults} from '../services/annualReportCard.service.js'
 type Course={id:string;code:string;name:string;credits:number;grade?:string}
 type Grade={archived?:boolean;id:string;studentId:string;courseId:string;percentage:number;letterGrade:string;period:string;createdAt:Date;course:Course}
@@ -5,7 +6,6 @@ type Legacy={id:string;studentId:string;academicYear:string;gradeLevel:string;te
 export type TranscriptRow={id:string;studentId:string;gradeLevel:string;percentage:number;letterGrade:string;credits:number;qualityPoints:number;cycle:{academicYear:string;term:string;status:string};course:Course;source:string;sourceSchool?:string;sourceDocument?:string}
 const level=(value:string|undefined)=>{const match=/^(?:grade\s*)?(9|10|11|12)(?:\s*[a-z])?$/i.exec((value||'').trim());return match?'Grade '+match[1]:null}
 const term=(value:string)=>value.replace(/Trimester/gi,'Quarter').trim()
-const points=(percentage:number)=>percentage>=90?4:percentage>=80?3:percentage>=70?2:percentage>=60?1:0
 const periodOrder=(value:string)=>({'Semester 1 · Quarter 1':1,'Semester 1 · Quarter 2':2,'Semester 1':3,'Semester 2 · Quarter 3':4,'Semester 2 · Quarter 4':5,'Semester 2':6,'Annual final':7}[value]??8)
 export function buildTranscriptRecords(input:{studentGrade:string;activeAcademicYear:string|null;grades:Grade[];legacy:Legacy[];gradeSnapshots?:Record<string,string>}){
  const legacy=input.legacy.filter(row=>row.verificationStatus==='VERIFIED'&&level(row.gradeLevel))

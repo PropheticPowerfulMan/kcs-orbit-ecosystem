@@ -107,7 +107,7 @@ services:
     <<: *service-defaults
     image: kcs/nexus-api:${NEXUS_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge, kcs_private]
-    env_file: [/etc/kcs-orbit/nexus-api.env, /etc/kcs-orbit/jury.env]
+    env_file: [/etc/kcs-orbit/nexus-api.env, /etc/kcs-orbit/jury.env, /etc/kcs-orbit/classroom.env]
     environment:
       NEXUS_UPLOADS_DIR: /app/uploads
       SAVANEX_API_URL: http://savanex-api:8000
@@ -115,6 +115,19 @@ services:
     volumes: [nexus_uploads:/app/uploads, nexus_report_socket:/run/kcs-report:ro, jury_private_files:/jury-private]
     depends_on: { nexus_db: { condition: service_healthy }, orbit_api: { condition: service_started }, nexus_report_renderer: { condition: service_healthy } }
     healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
+
+  kcs_classroom:
+    image: livekit/livekit-server@sha256:25cd902de7cacbd5f1f779f6a6ac1eae20ba8f56b0935934ce6b0ab80d1e3d20
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 1536m
+    cpus: 1.5
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes: [/etc/kcs-orbit/classroom.yaml:/etc/livekit.yaml:ro]
 
   nexus_report_renderer:
     image: kcs/nexus-report-renderer:${NEXUS_REPORT_RENDERER_RELEASE:-${NEXUS_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}}

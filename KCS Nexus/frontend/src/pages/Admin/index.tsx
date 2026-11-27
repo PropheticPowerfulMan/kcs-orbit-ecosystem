@@ -1,3 +1,4 @@
+import RemoteLearningWorkspace from '@/components/shared/RemoteLearningWorkspace'
 import {OfficialDocumentAuthoritiesSettings} from '@/components/admin/OfficialDocumentAuthoritiesSettings'
 import{rememberOfficialPortraits,cachedOfficialPortraits}from'@/utils/officialPortraitCache'
 import AcademicHomeWelcome from '@/components/shared/AcademicHomeWelcome'
@@ -3212,6 +3213,7 @@ const AdminSectionView = ({
   if (segment === 'transcripts') return <AcademicRecordsControlCenter view="transcripts" />
   if (segment === 'academic-visibility') return <AcademicVisibilityControlCenter />
   if (segment === 'report-cards') return <AcademicRecordsControlCenter view="report-cards" />
+  if (segment === 'distance-learning') return <RemoteLearningWorkspace />
   if (segment === 'certificates') return <CertificateControlCenter />
   if (segment === 'student-archives') return <StudentArchivesCenter />
 
