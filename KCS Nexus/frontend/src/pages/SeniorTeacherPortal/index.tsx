@@ -1,3 +1,5 @@
+import SeniorLearnerEmails from '@/components/shared/SeniorLearnerEmails'
+import RemoteLearningWorkspace from '@/components/shared/RemoteLearningWorkspace'
 import NexusPedagogy from '@/components/shared/NexusPedagogy'
 import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenterV2'
 import {useEffect,useMemo,useRef,useState} from 'react'
@@ -52,7 +54,7 @@ export default function SeniorTeacherPortal(){
  const editApplication=(index:number,patch:Partial<Application>)=>setDraft(p=>p?{...p,applications:p.applications.map((a,i)=>i===index?{...a,...patch}:a)}:p)
  return <div className="portal-shell flex"><PortalSidebar/><main ref={main} className="st-workspace min-h-0 min-w-0 flex-1 overflow-y-auto"><div data-portal-workspace className="st-container">{page==='pedagogy'?<NexusPedagogy/>:<>
  <header className="st-hero"><div className="st-hero-icon"><GraduationCap size={30}/></div><div className="min-w-0 flex-1"><span className="st-kicker">KCS NEXUS AI · SENIOR TEACHER</span><h1>{title}</h1><p>{tr('Bonjour','Welcome')}, {[user?.firstName,user?.lastName].filter(Boolean).join(' ')}. {tr('Un accompagnement structuré vers les études supérieures.','A clear path from Grade 12 to higher education.')}</p></div>{!academicPage&&<button className="st-btn secondary" onClick={()=>void load()} disabled={loading}><RefreshCw size={16} className={loading?'animate-spin':''}/>{tr('Actualiser','Refresh')}</button>}</header>
- {page==='settings'?<AccountSettingsPanel roleLabel="Senior Teacher · ST"/>:academicPage?<AcademicRecordsControlCenter key={page} view={page as 'report-cards'|'transcripts'} readOnly consultationRole="ST"/>:<>
+ {page==='learner-emails'?<SeniorLearnerEmails/>:page==='distance-learning'?<RemoteLearningWorkspace/>:page==='settings'?<AccountSettingsPanel roleLabel="Senior Teacher · ST"/>:academicPage?<AcademicRecordsControlCenter key={page} view={page as 'report-cards'|'transcripts'} readOnly consultationRole="ST"/>:<>
  <div className="st-toolbar"><label>{tr('Année scolaire','Academic year')}<select value={year||board?.academicYear||''} onChange={e=>setYear(e.target.value)} disabled={loading}>{!board&&<option value="">—</option>}{board?.years.map(v=><option key={v}>{v}</option>)}</select></label><span className="st-pill">Grade 12 · {board?.readOnly?tr('Historique / lecture seule','History / read only'):tr('Suivi annuel','Year-long guidance')}</span><span className="st-muted">{tr('Date école','School date')}: {dateLabel(board?.schoolDate||'')}</span></div>
  {error&&<div role="alert" className="st-alert">{error}<button className="st-btn" onClick={()=>void load()}>{tr('Réessayer','Retry')}</button></div>}{loading&&!board&&<div role="status" className="st-card flex items-center gap-3"><Loader2 className="animate-spin"/>{tr('Chargement des dossiers réels…','Loading actual school records…')}</div>}
  {board&&<>

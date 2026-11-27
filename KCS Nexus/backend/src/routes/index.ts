@@ -1,3 +1,6 @@
+import {schoolAnnouncementsRouter} from './school-announcements.routes.js'
+import {learningRouter} from './learning.routes.js'
+import {certificateReceiptsRouter} from './certificate-receipts.routes.js'
 import{personalPortraitsRouter}from'./personal-portraits.routes.js'
 import {messageReceiptsRouter} from './message-receipts.routes.js'
 import {disciplineDirectorRouter} from './discipline-director.routes.js'
@@ -56,7 +59,10 @@ export const router = Router()
 router.use('/message-receipts',messageReceiptsRouter)
 router.use('/report-card-receipts', reportCardReceiptsRouter)
 router.use('/transcript-receipts',transcriptReceiptsRouter)
+router.use('/certificate-receipts',certificateReceiptsRouter)
 router.use('/personal-portraits',personalPortraitsRouter)
+router.use('/learning',learningRouter)
+router.use('/school-announcements',schoolAnnouncementsRouter)
 router.use(academicVisibilityResponseGuard)
 router.use('/academic-visibility',academicVisibilityRouter)
 

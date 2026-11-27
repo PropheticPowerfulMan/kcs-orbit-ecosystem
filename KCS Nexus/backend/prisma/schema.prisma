@@ -300,6 +300,10 @@ enum DisciplineResolutionStatus {
 }
 
 model User {
+  remoteLessons RemoteLesson[] @relation("RemoteLessonOwner")
+  remoteConnections RemoteConnection[]
+  assignmentDrafts AssignmentDraft[]
+
   id                             String                   @id @default(cuid())
   email                          String                   @unique
   accessCode                     String                   @unique
@@ -563,6 +567,9 @@ model TeacherProfile {
 }
 
 model Course {
+  remoteLessons RemoteLesson[]
+  assignmentDrafts AssignmentDraft[]
+
   id          String           @id @default(cuid())
   name        String
   code        String           @unique
@@ -629,6 +636,7 @@ model Enrollment {
 }
 
 model Assignment {
+  publicationKey String? @unique
   id                 String                 @id @default(cuid())
   courseId           String
   title              String
@@ -2524,4 +2532,70 @@ role String
   @@unique([userId,role])
   userId String
   user User @relation("JuryRoleGrant_user", fields:[userId], references:[id], onDelete:Cascade)
+}
+
+// Remote learning records are separate from campus attendance and gradebook storage.
+model RemoteLesson {
+ blockedUserIds String[] @default([])
+ id String @id @default(uuid())
+ ownerReference String
+ ownerId String?
+ owner User? @relation("RemoteLessonOwner",fields:[ownerId],references:[id],onDelete:SetNull)
+ courseId String?
+ course Course? @relation(fields:[courseId],references:[id],onDelete:SetNull)
+ courseSnapshot Json
+ academicYear String
+ term String
+ title String
+ instructions String @default("")
+ startsAt DateTime
+ endsAt DateTime
+ status String @default("SCHEDULED")
+ roomName String @unique
+ revision Int @default(1)
+ startedAt DateTime?
+ endedAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ connections RemoteConnection[]
+ resources RemoteResource[]
+ @@index([courseId,academicYear,startsAt])
+ @@index([ownerReference,startsAt])
+}
+model RemoteConnection {
+ id String @id @default(uuid())
+ connectionSid String @unique
+ lessonId String
+ lesson RemoteLesson @relation(fields:[lessonId],references:[id],onDelete:Restrict)
+ userReference String
+ userId String?
+ user User? @relation(fields:[userId],references:[id],onDelete:SetNull)
+ joinedAt DateTime?
+ leftAt DateTime?
+ @@index([lessonId,userReference])
+}
+model RemoteResource {
+ id String @id @default(uuid())
+ lessonId String
+ lesson RemoteLesson @relation(fields:[lessonId],references:[id],onDelete:Restrict)
+ name String
+ mime String
+ bytes Bytes
+ createdAt DateTime @default(now())
+}
+model RemoteWebhookEvent {
+ id String @id
+ createdAt DateTime @default(now())
+}
+model AssignmentDraft {
+ id String @id @default(uuid())
+ ownerId String
+ owner User @relation(fields:[ownerId],references:[id],onDelete:Cascade)
+ courseId String
+ course Course @relation(fields:[courseId],references:[id],onDelete:Cascade)
+ payload Json
+ revision Int @default(1)
+ updatedAt DateTime @updatedAt
+ createdAt DateTime @default(now())
+ @@index([ownerId,courseId,updatedAt])
 }

@@ -1,3 +1,5 @@
+import {renewJudgeInvitation} from './projects.js'
+import {familyProjects} from './family.js'
 import {juryDashboard} from './dashboard.js'
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z, ZodError } from 'zod';
@@ -26,12 +28,14 @@ juryRouter.get('/display', h(req => presentationDisplay(req.header('x-jury-displ
 juryRouter.get('/verify/:reference', h(req => certificateVerification(param(req, 'reference'))));
 juryRouter.use(authenticateJury);
 privateAuthRoutes(juryRouter);
+juryRouter.get('/family/projects',h(req=>familyProjects(actor(req))));
 juryRouter.get('/dashboard',h(req=>juryDashboard(actor(req),req.query)));
 juryRouter.get('/bootstrap', h(async (req) => { const a = actor(req), where = a.academic ? {} : a.teacher ? { teacher: { userId: a.userId! } } : a.studentId ? { enrollments: { some: { studentId: a.studentId } } } : { id: 'not-authorized' }; const [courses, calendar, periods] = await Promise.all([prisma.course.findMany({ where, select: { id: true, name: true, code: true, grade: true, teacher: { select: { userId: true, user: { select: { firstName: true, lastName: true, middleName: true } } } } }, orderBy: [{ grade: 'asc' }, { name: 'asc' }], take: 500 }), academicCalendars(), academicPeriodAccess(prisma, a.root ? 'configured-superadmin' : a.userId || undefined)]); return { courses, calendars: calendar, periodAccess: periods, calendarConnected: calendar.length > 0, reportTypes: reportTitles, ai: { enabled: false, reason: 'AI suggestions require a configured provider and explicit institutional approval. No student data is sent to an AI service.' } }; }));
 juryRouter.get('/directory/judges', h(async (req) => { const a = actor(req); if (!a.teacher && !a.academic)
-    throw new JuryError('DIRECTORY_DENIED', 'Only organizers may select institutional judges.', 403); const q = String(req.query.q || '').trim().slice(0, 120); return prisma.user.findMany({ where: { accountBlockedAt: null, role: { not:'STUDENT' }, studentProfile:{is:null}, ...(q ? { OR: ['firstName', 'middleName', 'lastName'].map(field => ({ [field]: { contains: q, mode: 'insensitive' } })) } : {}) }, select: { id: true, role:true, firstName: true, middleName: true, lastName: true, avatar: true }, orderBy: [{lastName:'asc'},{firstName:'asc'}], take: 100 }); }));
+    throw new JuryError('DIRECTORY_DENIED', 'Only organizers may select institutional judges.', 403); const q = String(req.query.q || '').trim().slice(0, 120); return prisma.user.findMany({ where: { accountBlockedAt: null, role: { not:'STUDENT' }, studentProfile:{is:null}, ...(q ? { AND:q.split(/\s+/).filter(Boolean).map(word=>({OR:['firstName','middleName','lastName'].map(field=>({[field]:{contains:word,mode:'insensitive' as const}}))})) } : {}) }, select: { id: true, role:true, firstName: true, middleName: true, lastName: true, avatar: true }, orderBy: [{lastName:'asc'},{firstName:'asc'}], take: 100 }); }));
 juryRouter.get('/courses/:courseId/roster', h(async (req) => { const a = actor(req), courseId = param(req, 'courseId'), course = await prisma.course.findUnique({ where: { id: courseId }, include: { teacher: { select: { userId: true } } } }); if (!course || !a.academic && course.teacher.userId !== a.userId)
     throw new JuryError('COURSE_ACCESS_DENIED', 'This course is outside your assignments.', 403); return prisma.enrollment.findMany({ where: { courseId, student: { status: { equals: 'active', mode: 'insensitive' } } }, select: { student: { select: { id: true, studentNumber: true, grade: true, section: true, user: { select: { firstName: true, middleName: true, lastName: true, avatar: true } } } } }, orderBy: { student: { user: { lastName: 'asc' } } } }); }));
+juryRouter.post('/projects/:projectId/members/:memberId/renew-invitation',h(req=>{const body=z.object({revision:z.number().int().min(1),language:z.enum(['fr','en']),reason:z.string().min(8).max(2000)}).strict().parse(req.body);return renewJudgeInvitation(actor(req),param(req),param(req,'memberId'),body.revision,body.language,body.reason)}));
 juryRouter.get('/projects', h(req => projectList(actor(req), req.query)));
 juryRouter.post('/projects', h(req => createProject(actor(req), req.body)));
 juryRouter.get('/projects/:projectId', h(req => projectDetail(actor(req), param(req))));

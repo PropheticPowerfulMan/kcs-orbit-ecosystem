@@ -317,9 +317,10 @@ export function buildAcademicProgressionPlan(input: {
   const classes = z.array(AcademicProgressionClassSchema).parse(input.classes);
   const overrides = z.array(AcademicProgressionOverrideSchema).parse(input.overrides || []);
   const effectiveDate = input.effectiveDate || new Date();
-  const passThreshold = input.passThreshold ?? 70;
+  const passThreshold = 70; // The public parameter is retained for compatibility; policy is fixed.
   const window = getAcademicYearWindow(effectiveDate);
-  const nextWindow = getAcademicYearWindow(new Date(Date.UTC(effectiveDate.getUTCFullYear() + 1, 8, 1)));
+  const startYear=Number(window.academicYear.slice(0,4));
+  const nextWindow={academicYear:`${startYear+1}-${startYear+2}`};
   const overridesByStudent = new Map(overrides.map((override) => [override.studentId, override]));
   const warnings: string[] = [];
   const counts: Record<AcademicProgressionAction, number> = {
@@ -339,7 +340,13 @@ export function buildAcademicProgressionPlan(input: {
     let target = { classId: null as string | null, className: null as string | null };
     let status = student.status || null;
 
-    if (decision === "HOLD") {
+    const earlyYears=parseAcademicClassName(current.className)?.stage==='K';
+    if (earlyYears && decision === "AUTO") {
+      action="HOLD";target={classId:current.classId,className:current.className};itemWarnings.push("EARLY_YEARS_SUPERADMIN_DECISION_REQUIRED");
+    } else if (earlyYears && decision === "PROMOTE") {
+      if((override?.reason||'').trim().length<8){action="HOLD";target={classId:current.classId,className:current.className};itemWarnings.push("EARLY_YEARS_DECISION_REASON_REQUIRED");}
+      else {action="PROMOTE";target=resolveTargetClass(classes,getNextAcademicClassName(current.className));if(!target.classId)itemWarnings.push("TARGET_CLASS_NOT_IN_CATALOG");}
+    } else if (decision === "HOLD") {
       action = "HOLD";
       target = { classId: current.classId, className: current.className };
     } else if (decision === "REPEAT") {
