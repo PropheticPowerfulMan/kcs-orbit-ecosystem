@@ -1,3 +1,4 @@
+import {officialDocumentAuthorityName} from './officialDocumentAuthority.service.js'
 import {createHash} from 'node:crypto'
 import {prisma} from '../config/prisma.js'
 import {Prisma} from '@prisma/client'
@@ -29,6 +30,6 @@ export async function transcriptSource(studentId:string,activeAcademicYear:strin
 export async function loadOfficialTranscript(studentId:string){
  const source=await transcriptSource(studentId,await activeTranscriptYear())
  const profile=await prisma.studentProfile.findUniqueOrThrow({where:{id:studentId},include:{user:true}})
- return{...source,student:{...source.student,photoUrl:await officialStudentPortrait(profile)}}
+ return{...source,principalName:await officialDocumentAuthorityName('transcript'),student:{...source.student,photoUrl:await officialStudentPortrait(profile)}}
 }
-export type OfficialTranscript=Awaited<ReturnType<typeof loadOfficialTranscript>>
+export type OfficialTranscript=Omit<Awaited<ReturnType<typeof loadOfficialTranscript>>,'principalName'> & {principalName?:string}

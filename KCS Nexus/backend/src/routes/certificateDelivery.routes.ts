@@ -1,3 +1,4 @@
+import {officialDocumentAuthorityName} from '../services/officialDocumentAuthority.service.js';
 import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
 import {loadOfficialTranscript, transcriptSource} from '../services/officialTranscript.service.js'
 import {officialTranscriptPdf} from '../utils/officialTranscriptPdf.js'
@@ -24,6 +25,7 @@ const identity = { firstName: true, middleName: true, lastName: true } as const;
 const selection = {
   id: true,
   studentNumber: true,
+  dateOfBirth:true,
   grade: true,
   section: true,
   user: { select: { id: true, ...identity } },
@@ -71,13 +73,13 @@ async function buildDocuments(
     }),
     prisma.user.findMany({
       where: {
-        signatureImage: { not: null },
-        OR: [{ role: "STAFF" }, { role: "ADMIN" }],
+        OR: [{ role: "STAFF" }, { role: "ADMIN" }, {role:"TEACHER"}],
       },
       select: {
         ...identity,
         signatureImage: true,
         staffFunction: true,
+        permissions:true,
         staffProfile: { select: { function: true } },
       },
     }),
@@ -98,9 +100,10 @@ async function buildDocuments(
       | null
       | undefined,
   ) => (user ? { name: fullName(user), image: user.signatureImage } : null);
-  const principal = signature(
-    leadership.find((user) => /principal|prefet/.test(title(user))) ?? account,
+  const principalIdentity = signature(
+    leadership.find(user=>user.permissions.includes("nexus:principal-workspace")) ?? leadership.find((user) => /principal|prefet/.test(title(user))) ?? null,
   );
+  const principal={...principalIdentity,name:await officialDocumentAuthorityName(options.documentType==='attendance'?'attendance_certificate':'completion_certificate')};
   const headOfSchool = signature(
     leadership.find((user) =>
       /head of school|school head|directeur|direction/.test(title(user)),
@@ -116,6 +119,7 @@ async function buildDocuments(
       await officialCertificatePdf({
         studentId: student.id,
         studentNumber: student.studentNumber,
+        dateOfBirth:student.dateOfBirth,
         studentName: fullName(student.user),
         grade: [student.grade, student.section].filter(Boolean).join(" "),
         academicYear: options.academicYear,

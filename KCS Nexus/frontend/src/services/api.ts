@@ -634,7 +634,9 @@ export const shiningStudentsAPI = {
 }
 
 export const academicRecordsAPI = {
-  officialSignatures: (studentId?: string) => api.get('/academic-records/official-signatures', { params: studentId ? { studentId } : undefined }),
+  officialSignatures: (studentId?: string,documentType?:string) => api.get('/academic-records/official-signatures', { params: {studentId,documentType} }),
+  documentAuthorities:()=>api.get('/academic-records/document-authorities'),
+  saveDocumentAuthorities:(data:{defaultName:string;overrides:Record<string,string>})=>api.put('/academic-records/document-authorities',data),
   studentRegistry: () => api.get('/academic-records/student-registry', { timeout: 60_000 }),
   submitFinalGrades: (data: object) => api.post('/academic-records/final-grades/submit', data),
   myFinalGrades: () => api.get('/academic-records/final-grades/me'),

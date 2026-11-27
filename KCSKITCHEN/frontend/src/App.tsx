@@ -1,3 +1,4 @@
+import {useDashboardPortrait} from './useDashboardPortrait'
 import TransactionManagement from './TransactionManagement'
 import { createPortal } from 'react-dom'
 import MenuImage from './MenuImage'
@@ -430,23 +431,10 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [dark, setDark] = useState(() => localStorage.getItem('kcs-kitchen-theme') === 'dark')
   useEffect(() => { document.body.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kcs-kitchen-theme', dark ? 'dark' : 'light') }, [dark])
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('kcs-kitchen-sidebar') === 'collapsed')
-  const [officialAvatar, setOfficialAvatar] = useState('')
+  const personalAvatar=useDashboardPortrait(user.userId,async()=>{const blob=await apiBlob('/me/avatar');if(!blob.size)return{image:null};const image=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=reject;reader.readAsDataURL(blob)});return{image}})
   const [liveOrderAlert, setLiveOrderAlert] = useState<LiveOrderAlert | null>(null)
   const orderSnapshotRef = useRef<Map<string, string> | null>(null)
-  useEffect(() => {
-    if (!user.hasOfficialPhoto) return
-    let active = true
-    let objectUrl = ''
-    void apiBlob('/me/avatar').then(blob => {
-      if (!active || !blob.size) return
-      objectUrl = URL.createObjectURL(blob)
-      setOfficialAvatar(objectUrl)
-    }).catch(() => setOfficialAvatar(''))
-    return () => {
-      active = false
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [user.hasOfficialPhoto, user.userId])
+
   const isPrivileged = privileged.includes(user.role)
   useEffect(() => { localStorage.setItem('kcs-kitchen-sidebar', collapsed ? 'collapsed' : 'expanded') }, [collapsed])
   useEffect(() => {
@@ -589,7 +577,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     {open && drawerViewport && <button className="sidebar-scrim" aria-label={lang === 'fr' ? 'Fermer le menu' : 'Close navigation'} onClick={() => setOpen(false)} />}
     <aside id="kitchen-navigation" ref={sidebarRef} aria-label={lang === 'fr' ? 'Navigation principale' : 'Main navigation'} className={(open ? 'sidebar open' : 'sidebar') + (collapsed ? ' collapsed' : '')}>
       <div className="sidebar-brand"><img className="sidebar-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)} aria-label={lang === 'fr' ? 'Fermer le menu' : 'Close navigation'}><X /></button></div>
-      <div className="identity"><span>{officialAvatar ? <img src={officialAvatar} alt={user.fullName}/> : user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{translatedRole(user.role, lang)}</small></div></div>
+      <div className="identity"><span>{personalAvatar ? <img src={personalAvatar} alt={user.fullName}/> : user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{translatedRole(user.role, lang)}</small></div></div>
       <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} title={item[1]} aria-label={item[1]} className={page === item[0] ? 'active' : ''} onClick={() => navigateToPage(item[0])}>{item[2]}<span>{item[1]}</span></button>)}</nav>
       <div className="sidebar-footer">
         <button onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}><Languages /> {lang.toUpperCase()}</button>
@@ -720,6 +708,7 @@ function Dashboard({ user, t, lang }: { user: User; t: Record<string, string>; l
   const [data, setData] = useState<any>(null)
   const [error, setError] = useState('')
   const [notificationQuery, setNotificationQuery] = useState('')
+  const [consumerSection,setConsumerSection]=useState<'menu'|'activity'>('menu')
   const loadDashboard = useCallback(async () => {
     try { setData(await api<any>('/dashboard')); setError('') }
     catch (err) { setError((err as Error).message) }
@@ -760,18 +749,19 @@ function Dashboard({ user, t, lang }: { user: User; t: Record<string, string>; l
   if (error && !data) return <div className="empty error">{error}</div>
   if (!data) return <Loading />
   if (data.mode === 'personal') return <>
-    <section className="hero"><div><span className="eyebrow">{t.personalAccount}</span><h2>{t.welcome}, {user.fullName.split(' ').at(-1)}</h2><p>{t.consumptionLive}</p></div><ChefHat size={70} /></section>
-    <PersonalDailyMenu user={user} lang={lang} onOrdered={() => { void loadDashboard() }} />
-    <div className="stats">
+    <section className="hero personal-account-hero"><div><span className="eyebrow">{t.personalAccount}</span><h2>{t.welcome}, {user.fullName.split(' ').at(-1)}</h2><p>{t.consumptionLive}</p></div><ChefHat size={70} /></section>
+    <div className="stats personal-account-stats" data-personal-account-summary>
       <Stat icon={<ShoppingCart />} label={t.today} value={<DisplayMoney value={data.today._sum.total} />} />
       <Stat icon={<ClipboardList />} label={t.thisMonth} value={<DisplayMoney value={data.month._sum.total} />} />
       <Stat icon={<Wallet />} label={Number(data.balance)<0?(lang==='fr'?'Avoir disponible':'Available credit'):t.outstanding} value={<DisplayMoney value={Math.abs(Number(data.balance))} />} tone={Number(data.balance) > 0 ? 'warn' : 'good'} />
       <Stat icon={<AlertTriangle />} label={t.openDisputes} value={data.disputes} />
     </div>
-    <section className="panel"><div className="section-heading"><div><span className="eyebrow">{t.recentActivity}</span><h2>{t.kitchenNotifications}</h2></div></div><label className="notification-search"><Search/><input value={notificationQuery} onChange={event => setNotificationQuery(event.target.value)} placeholder={lang === 'fr' ? 'Rechercher par opération, référence, personne, date ou statut…' : 'Search by operation, reference, person, date or status…'}/>{notificationQuery && <button type="button" onClick={() => setNotificationQuery('')} aria-label={lang === 'fr' ? 'Effacer la recherche' : 'Clear search'}><X/></button>}</label>
+    <nav className="consumer-workspace-tabs" aria-label={lang==='fr'?'Mon espace Kitchen':'My Kitchen workspace'}><button type="button" aria-pressed={consumerSection==='menu'} onClick={()=>setConsumerSection('menu')}><ChefHat/>{lang==='fr'?'Commander · menu':'Order · menu'}</button><button type="button" aria-pressed={consumerSection==='activity'} onClick={()=>setConsumerSection('activity')}><BellRing/>{lang==='fr'?'Mes notifications':'My notifications'}<b>{data.notifications?.length||0}</b></button></nav>
+    {consumerSection==='menu'&&<PersonalDailyMenu user={user} lang={lang} onOrdered={() => { void loadDashboard() }} />}
+    {consumerSection==='activity'&&<section className="panel consumer-activity-panel"><div className="section-heading"><div><span className="eyebrow">{t.recentActivity}</span><h2>{t.kitchenNotifications}</h2></div></div><label className="notification-search"><Search/><input value={notificationQuery} onChange={event => setNotificationQuery(event.target.value)} placeholder={lang === 'fr' ? 'Rechercher par opération, référence, personne, date ou statut…' : 'Search by operation, reference, person, date or status…'}/>{notificationQuery && <button type="button" onClick={() => setNotificationQuery('')} aria-label={lang === 'fr' ? 'Effacer la recherche' : 'Clear search'}><X/></button>}</label>
       {error && <small className="dashboard-sync-warning">{lang === 'fr' ? 'Connexion instable : dernières données fiables conservées, nouvelle tentative automatique.' : 'Unstable connection: last reliable data kept, automatic retry in progress.'}</small>}
       {filteredNotifications.length ? <div className="activity-list">{filteredNotifications.map((item: any) => <div key={item.id}><ShieldCheck /><span><b>{notificationLabel(item)}</b><small>{dateTime(item.createdAt)}</small></span></div>)}</div> : <Empty text={t.noData} />}
-    </section>
+    </section>}
   </>
   return <>
     <section className="hero"><div><span className="eyebrow">{t.controlCenter}</span><h2>{t.controlHeadline}</h2><p>{t.controlSummary}</p></div><ChefHat size={70} /></section>

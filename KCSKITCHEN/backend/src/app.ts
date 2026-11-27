@@ -318,14 +318,16 @@ app.post('/api/access/:orbitPersonId/reset-kitchen-credentials',authenticate,asy
 }))
 
 app.get('/api/me/avatar', authenticate, asyncRoute(async (req: AuthRequest, res) => {
-
-  const people = await loadDirectory()
-  const photoData = people.find(person => person.id === req.kitchenUser!.orbitPersonId)?.photoData
-  const match = photoData?.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s)
-  if (!match) return res.status(404).json({ message: 'Official profile photo not found' })
-  const image = Buffer.from(match[2], 'base64')
-  res.type(match[1]).set('Content-Length', String(image.length)).set('Cache-Control', 'private, max-age=3600').set('X-Content-Type-Options', 'nosniff')
-  return res.send(image)
+  const identity=req.kitchenUser!;res.setHeader('Cache-Control','private, no-store');res.setHeader('X-Content-Type-Options','nosniff')
+  if(identity.userId.startsWith('kitchen-cashier:'))return res.status(204).end()
+  const key=env.NEXUS_INTEGRATION_KEY||env.ORBIT_API_KEY
+  const linked=identity.orbitPersonId&&identity.orbitPersonId!==identity.userId&&identity.userId!=='configured-superadmin'?{id:identity.orbitPersonId,kind:'orbit'}:{id:identity.userId,kind:'nexus'};const url=new URL('/api/personal-portraits/'+encodeURIComponent(linked.id),env.NEXUS_API_URL);url.searchParams.set('kind',linked.kind)
+  const response=await fetch(url,{headers:{'x-api-key':key,'x-app-slug':'KCS_KITCHEN'},signal:AbortSignal.timeout(8000)})
+  if(response.status===204)return res.status(204).end()
+  if(!response.ok)throw new Error('Personal portrait temporarily unavailable')
+  const type=response.headers.get('content-type')||'';if(!/^image\/(?:jpeg|png|webp)/.test(type))throw new Error('Invalid personal portrait')
+  const image=Buffer.from(await response.arrayBuffer());if(image.length>1500000)throw new Error('Personal portrait too large')
+  return res.type(type).send(image)
 }))
 
 app.get('/api/exchange-rate', authenticate, asyncRoute(async (req, res) => {

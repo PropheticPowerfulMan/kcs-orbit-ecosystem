@@ -1,6 +1,6 @@
 import { seniorAcademicPresentation } from './seniorAcademicPresentation'
 import { showOfficialDocument } from './officialDocumentPreview'
-import { academicRecordsAPI } from '@/services/api'
+import { academicRecordsAPI,academicPortalAPI } from '@/services/api'
 type ReportSubject = {
   id: string
   courseId?: string
@@ -58,13 +58,17 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
     return
   }
   try {
-    const response = await academicRecordsAPI.reportCardPrintDocument(card.id, language, review)
-    // Only trusted, server-generated report HTML is accepted. All personal fields are escaped there.
-    const html = response.data.data.html as string
-    if (!html.startsWith('<!doctype html>')) throw new Error('Invalid official report document')
-    await showOfficialDocument(printWindow, presentation === 'senior' ? seniorAcademicPresentation(html) : html, { filename: response.data.data.filename || `KCS-report-card-${card.id}`, language, onError: onBlocked })
+    await displayOfficialReportCardDocument(card.id,printWindow,language,onBlocked,{review,presentation})
   } catch {
     printWindow.close()
     onBlocked(language === 'fr' ? 'Impossible de préparer le bulletin officiel. Réessayez.' : 'Unable to prepare the official report card. Please retry.')
   }
+}
+
+/** Parents and school leadership share the exact official renderer and preview controls. */
+export async function displayOfficialReportCardDocument(id:string,win:Window,language:'fr'|'en',onError:(message:string)=>void,options:{portal?:boolean;review?:{teacherComment:string;conduct:string};presentation?:'senior'}={}){
+ const response=options.portal?await academicPortalAPI.reportDocument(id):await academicRecordsAPI.reportCardPrintDocument(id,language,options.review)
+ const document=response.data.data,html=document.html as string
+ if(!html.startsWith('<!doctype html>'))throw Error('Invalid official report document')
+ await showOfficialDocument(win,options.presentation==='senior'?seniorAcademicPresentation(html):html,{filename:document.filename||`KCS-report-card-${id}`,language,onError,autoPrint:!options.portal})
 }

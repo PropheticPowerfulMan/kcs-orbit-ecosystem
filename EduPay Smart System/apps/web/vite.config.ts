@@ -1,3 +1,4 @@
+import {mandatoryUpdatePlugin} from './client-runtime/vite.mjs'
 import {createHash} from "node:crypto";
 import {readdirSync,readFileSync} from "node:fs";
 import {join} from "node:path";
@@ -20,7 +21,7 @@ export default defineConfig({
   base: appBasePath,
   plugins: [
     react(),
-    {name:"edupay-public-version",generateBundle(){this.emitFile({type:"asset",fileName:"app-version.json",source:JSON.stringify({app:"KCS_EDUPAY",id:buildId})});}},
+    mandatoryUpdatePlugin('KCS_EDUPAY'),
     !disablePwa && VitePWA({
       registerType: "autoUpdate",
       injectRegister:false,

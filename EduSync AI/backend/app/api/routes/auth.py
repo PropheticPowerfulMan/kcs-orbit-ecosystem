@@ -327,3 +327,26 @@ def change_password(
     db.add(ActivityLog(actor_id=current_user.id, event_type="password_changed", department=current_user.department))
     db.commit()
     return {"message": "Password changed successfully"}
+
+
+@router.get('/personal-portrait')
+def personal_portrait(current_user: User = Depends(get_current_user)):
+    # Access codes are unique institutional identifiers; names/emails are never guessed.
+    import base64
+    from fastapi.responses import JSONResponse
+    identity = parse.quote(current_user.access_code or '', safe='')
+    if not identity:
+        return JSONResponse({'image': None}, headers={'Cache-Control': 'private, no-store'})
+    url = settings.kcs_nexus_api_url.rstrip('/').removesuffix('/api') + '/api/personal-portraits/' + identity + '?kind=accessCode'
+    query = request.Request(url, headers={'x-api-key': settings.kcs_orbit_api_key, 'x-app-slug': 'EDUSYNCAI'})
+    try:
+        with request.urlopen(query, timeout=8) as response:
+            if response.status == 204:
+                return JSONResponse({'image': None}, headers={'Cache-Control': 'private, no-store'})
+            mime = response.headers.get_content_type()
+            data = response.read(1_500_001)
+            if mime not in ('image/jpeg', 'image/png', 'image/webp') or len(data) > 1_500_000:
+                raise ValueError('Invalid personal portrait')
+            return JSONResponse({'image': 'data:' + mime + ';base64,' + base64.b64encode(data).decode('ascii')}, headers={'Cache-Control': 'private, no-store'})
+    except (error.URLError, ValueError, TimeoutError):
+        raise HTTPException(status_code=503, detail='Personal portrait temporarily unavailable')

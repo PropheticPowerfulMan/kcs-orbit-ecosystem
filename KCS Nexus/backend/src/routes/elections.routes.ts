@@ -75,6 +75,7 @@ async function launchUser(subject:string,db:any=prisma){
  if(!user||user.accountBlockedAt)throw new ApiError(403,'ELECTION_ACCOUNT_INACTIVE')
  return user
 }
+electionsRouter.get('/personal-portrait',authenticate,asyncHandler(async(req:AuthenticatedRequest,res)=>{const actorId=await databaseActorId(req.user!.sub),user=await prisma.user.findUnique({where:{id:actorId},select:{avatar:true,accountBlockedAt:true}});res.setHeader('Cache-Control','private, no-store');return success(res,{image:user&&!user.accountBlockedAt&&user.avatar&&/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(user.avatar)?user.avatar:null})}))
 electionsRouter.post('/launch',authenticate,asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const input=z.object({audience:launchAudience,language:z.enum(['fr','en']).default('fr'),theme:z.enum(['light','dark']).default('light'),returnPath:z.string().max(500).optional()}).strict().parse(req.body)
  const subject=req.user!.sub,user=await launchUser(subject)
