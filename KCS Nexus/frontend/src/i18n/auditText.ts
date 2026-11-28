@@ -573,7 +573,11 @@ export const auditedFrenchText: Record<string, string> = {
   "Semester 2 · Quarter 3": "Semestre 2 · Trimestre 3",
   "Quarter 3": "Trimestre 3",
   "Semester 2 · Quarter 4": "Semestre 2 · Trimestre 4",
-  "Quarter 4": "Trimestre 4"
+  "Quarter 4": "Trimestre 4",
+  "Success": "Opération réussie",
+  "Operation failed": "Opération échouée",
+  "Error": "Erreur",
+  "Failed": "Échec"
 }
 
 export const auditedEnglishAliases: Record<string, string> = {
