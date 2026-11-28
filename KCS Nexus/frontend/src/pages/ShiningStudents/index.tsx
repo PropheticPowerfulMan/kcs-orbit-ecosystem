@@ -5,7 +5,7 @@ import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, CheckCircle2, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
-import { shiningStudentsAPI } from '@/services/api'
+import { api, shiningStudentsAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import PortalSidebar from '@/components/layout/PortalSidebar'
@@ -19,6 +19,9 @@ type Schedule = {
   topicNotes?: string | null
   status: 'SCHEDULED' | 'TOPIC_SUBMITTED' | 'PRESENTED' | 'EXCUSED'
   notifiedAt?: string | null
+  canEditTopic?:boolean
+  canAssignSupervisor?:boolean
+  supervision?:{supervisor?:{id:string;firstName:string;lastName:string;middleName?:string}|null;mainTeacher?:{id:string;firstName:string;lastName:string;middleName?:string}|null;overrideTeacherId?:string|null;revision:string}
   student: {
     id: string
     grade: string
@@ -40,6 +43,9 @@ export default function ShiningStudentsPage() {
   const activeRole=workspaceRole(user,useLocation().pathname)
   const admin = activeRole === 'admin'
   const ordinaryAdministrator = (activeRole === 'admin'||activeRole === 'staff') && user?.id !== 'configured-superadmin'
+  const [supervisors,setSupervisors]=useState<any[]>([])
+  useEffect(()=>{if(activeRole!=='parent')void api.get('/shining-students/supervisors').then(r=>setSupervisors(r.data.data||[])).catch(()=>{})},[activeRole])
+  const assignSupervisor=async(item:Schedule,teacherUserId:string)=>{setActionId('supervisor:'+item.id);try{await api.patch('/shining-students/'+item.id+'/supervisor',{teacherUserId:teacherUserId||null,revision:item.supervision?.revision||'DEFAULT'});await load();setNotice(tr('La supervision est enregistrée.','Supervision saved.'))}catch(e:any){setNotice(e.response?.data?.message||tr('Supervision non enregistrée.','Supervision was not saved.'))}finally{setActionId('')}}
   const [items, setItems] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(true)
   const [actionId, setActionId] = useState('')
@@ -108,7 +114,7 @@ export default function ShiningStudentsPage() {
     } finally { setActionId('') }
   }
   const upcoming = useMemo(() => items.filter((item) => new Date(item.date) >= new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z')), [items])
-  const canEditTopic = (item: Schedule) => admin || item.student.user.id === user?.id
+  const canEditTopic = (item: Schedule) => admin || item.canEditTopic===true || item.student.user.id === user?.id
   const statusLabel = (status: Schedule['status']) => ({
     SCHEDULED: tr('Programmé', 'Scheduled'),
     TOPIC_SUBMITTED: tr('Sujet soumis', 'Topic submitted'),
@@ -155,7 +161,7 @@ export default function ShiningStudentsPage() {
         <div className="shining-schedule-grid mt-5 grid gap-4 xl:grid-cols-2">
           {items.map((item) => <article data-shining-presentation key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-950/50">
             <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wider text-sky-700 dark:text-sky-300">{item.division === 'LOWER' ? 'Lower School' : 'Middle & Upper School'}</p><h3 className="mt-1 text-lg font-bold text-kcs-blue-950 dark:text-white">{fullName(item.student.user)}</h3><p className="text-sm text-slate-500 dark:text-slate-300">{item.student.grade}{item.student.section ? ' · ' + item.student.section : ''}</p></div><div className="text-right"><p className="font-bold text-kcs-blue-800 dark:text-sky-200">{new Intl.DateTimeFormat(language === 'fr' ? 'fr-FR' : 'en-US', { dateStyle: 'full', timeZone: 'UTC' }).format(new Date(item.date))}</p><span className="mt-2 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">{statusLabel(item.status)}</span></div></div>
-            <div className="mt-4 grid gap-3"><input value={topics[item.id]?.topic || ''} onChange={(event) => setTopics((current) => ({ ...current, [item.id]: { topic: event.target.value, topicNotes: current[item.id]?.topicNotes || '' } }))} readOnly={!canEditTopic(item)} maxLength={180} aria-label={tr('Sujet de la présentation','Presentation topic')} placeholder={tr('Sujet libre de la présentation', 'Free-choice presentation topic')} className="rounded-xl border bg-white p-3 text-slate-900 read-only:opacity-70 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white"/><textarea value={topics[item.id]?.topicNotes || ''} onChange={(event) => setTopics((current) => ({ ...current, [item.id]: { topic: current[item.id]?.topic || '', topicNotes: event.target.value } }))} readOnly={!canEditTopic(item)} maxLength={1200} rows={3} aria-label={tr('Notes de préparation','Preparation notes')} placeholder={tr('Quelques notes de préparation (facultatif)', 'Preparation notes (optional)')} className="rounded-xl border bg-white p-3 text-slate-900 read-only:opacity-70 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white"/></div>
+            <div className="shining-supervision-panel mt-4 rounded-xl border p-4"><h4 className="text-sm font-bold dark:text-white">{tr('Enseignant superviseur','Supervising teacher')}</h4><p className="mt-2 text-xs dark:text-slate-200">{item.supervision?.supervisor?[item.supervision.supervisor.lastName,item.supervision.supervisor.middleName,item.supervision.supervisor.firstName].filter(Boolean).join(' '):tr('À désigner avec la direction','To be assigned with school leadership')}</p>{item.canAssignSupervisor&&<label className="mt-3 block text-xs font-bold dark:text-white">{tr('Main teacher ou enseignant choisi','Main teacher or chosen teacher')}<select className="mt-2 w-full min-w-0 rounded-xl border p-3 dark:bg-kcs-blue-900 dark:text-white" value={item.supervision?.overrideTeacherId||''} disabled={Boolean(actionId)} onChange={e=>void assignSupervisor(item,e.target.value)}><option value="">{tr('Main teacher par défaut','Default main teacher')}</option>{supervisors.map(t=><option key={t.id} value={t.id}>{[t.lastName,t.middleName,t.firstName].filter(Boolean).join(' ')}</option>)}</select></label>}<p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{tr('Le superviseur peut accompagner la préparation et mettre à jour le sujet. Les statuts officiels restent gérés par l’administration.','The supervisor can support preparation and update the topic. Official statuses remain managed by administration.')}</p></div><div className="mt-4 grid gap-3"><input value={topics[item.id]?.topic || ''} onChange={(event) => setTopics((current) => ({ ...current, [item.id]: { topic: event.target.value, topicNotes: current[item.id]?.topicNotes || '' } }))} readOnly={!canEditTopic(item)} maxLength={180} aria-label={tr('Sujet de la présentation','Presentation topic')} placeholder={tr('Sujet libre de la présentation', 'Free-choice presentation topic')} className="rounded-xl border bg-white p-3 text-slate-900 read-only:opacity-70 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white"/><textarea value={topics[item.id]?.topicNotes || ''} onChange={(event) => setTopics((current) => ({ ...current, [item.id]: { topic: current[item.id]?.topic || '', topicNotes: event.target.value } }))} readOnly={!canEditTopic(item)} maxLength={1200} rows={3} aria-label={tr('Notes de préparation','Preparation notes')} placeholder={tr('Quelques notes de préparation (facultatif)', 'Preparation notes (optional)')} className="rounded-xl border bg-white p-3 text-slate-900 read-only:opacity-70 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white"/></div>
             <div className="mt-4 flex flex-wrap gap-2">{canEditTopic(item) && <button type="button" onClick={() => void saveTopic(item)} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white"><CheckCircle2 className="mr-2 inline" size={16}/>{tr('Enregistrer le sujet', 'Save topic')}</button>}{admin && <><select value={item.status} onChange={(event) => void changeStatus(item, event.target.value as Schedule['status'])} className="rounded-xl border px-3 py-2 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white">{(['SCHEDULED','TOPIC_SUBMITTED','PRESENTED','EXCUSED'] as const).map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select><button type="button" onClick={() => void remove(item)} className="rounded-xl border border-rose-200 px-3 py-2 text-rose-700"><Trash2 size={16}/></button></>}</div>
           </article>)}
           {!loading && items.length === 0 && <p className="rounded-xl bg-slate-50 p-8 text-center text-slate-500 dark:bg-kcs-blue-950/40 dark:text-slate-300">{tr('Aucun passage n’est encore programmé.', 'No presentation has been scheduled yet.')}</p>}

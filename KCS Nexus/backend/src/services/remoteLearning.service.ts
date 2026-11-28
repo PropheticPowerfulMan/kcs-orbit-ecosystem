@@ -10,7 +10,7 @@ import {academicPeriodAccess,assertAcademicPeriodOpen} from './academicPeriodAcc
 export async function remoteActor(req:AuthenticatedRequest){
  const id=await databaseActorId(req.user!.sub);if(!id)throw new ApiError(403,'Institutional account unavailable / Compte institutionnel indisponible')
  const user=await prisma.user.findUniqueOrThrow({where:{id},select:{id:true,role:true,firstName:true,lastName:true,middleName:true,permissions:true,teacherProfile:{select:{id:true}},studentProfile:{select:{id:true,status:true}}}})
- const root=req.user!.sub==='configured-superadmin',principal=req.user!.role!=='teacher'&&user.permissions.includes('nexus:principal-workspace'),senior=req.user!.role!=='teacher'&&user.permissions.includes('nexus:senior-teacher-workspace')
+ const root=req.user!.sub==='configured-superadmin',principal=req.user!.role!=='teacher'&&(user.role==='ADMIN'||user.permissions.includes('nexus:principal-workspace')),senior=req.user!.role!=='teacher'&&user.permissions.includes('nexus:senior-teacher-workspace')
  return{...user,root,principal,academic:root||principal||senior,reference:req.user!.sub,name:[user.lastName,user.middleName,user.firstName].filter(Boolean).join(' ')}
 }
 export type RemoteActor=Awaited<ReturnType<typeof remoteActor>>

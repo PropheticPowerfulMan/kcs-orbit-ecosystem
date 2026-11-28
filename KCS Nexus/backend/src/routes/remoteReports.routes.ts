@@ -1,0 +1,33 @@
+import type {Router}from'express'
+import type {Prisma}from'@prisma/client'
+import {z}from'zod'
+import {prisma}from'../config/prisma.js'
+import type {AuthenticatedRequest}from'../middleware/auth.js'
+import {ApiError,asyncHandler,success}from'../utils/api.js'
+import {remoteActor,roomClient,videoConfigured}from'../services/remoteLearning.service.js'
+async function livePeople(lessons:Array<{id:string;status:string;roomName:string;endsAt:Date}>){
+ const rows=await Promise.all(lessons.filter(l=>l.status==='LIVE'&&l.endsAt.getTime()+900000>Date.now()).map(async l=>{try{if(!videoConfigured())throw Error();const people=await Promise.race([roomClient().listParticipants(l.roomName),new Promise<never>((_,reject)=>setTimeout(()=>reject(Error('Video status timeout')),3000))]);return[l.id,new Set(people.map(p=>p.identity))]as const}catch{return[l.id,null]as const}}))
+ return new Map(rows)
+}
+export function registerRemoteReportRoutes(router:Router){
+ router.get('/family-presence',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+  if(req.user!.role!=='parent')throw new ApiError(403,'Parent access required')
+  const a=await remoteActor(req),studentId=typeof req.query.studentId==='string'?req.query.studentId:undefined
+  const links=await prisma.parentStudentLink.findMany({where:{parentId:a.id,student:{status:{equals:'active',mode:'insensitive'}}},select:{student:{select:{id:true,userId:true,grade:true,user:{select:{firstName:true,middleName:true,lastName:true}}}}}})
+  if(studentId&&!links.some(l=>l.student.id===studentId))throw new ApiError(403,'Linked child required')
+  const children=links.filter(l=>!studentId||l.student.id===studentId).map(l=>l.student),ids=children.map(c=>c.id)
+  const lessons=ids.length?await prisma.remoteLesson.findMany({where:{startsAt:{gte:new Date(Date.now()-7*86400000),lte:new Date(Date.now()+7*86400000)},course:{enrollments:{some:{studentId:{in:ids}}}}},select:{id:true,title:true,courseSnapshot:true,status:true,startsAt:true,endsAt:true,roomName:true,course:{select:{enrollments:{where:{studentId:{in:ids}},select:{studentId:true}}}}},orderBy:{startsAt:'desc'},take:200}):[]
+  const live=await livePeople(lessons)
+  return success(res,{checkedAt:new Date().toISOString(),policy:'READ_ONLY_LINKED_CHILD_LIVE_MEDIA_STATUS',rows:lessons.flatMap(l=>children.filter(c=>l.course?.enrollments.some(e=>e.studentId===c.id)).map(c=>({lessonId:l.id,title:l.title,course:l.courseSnapshot,status:l.status,startsAt:l.startsAt,endsAt:l.endsAt,child:{id:c.id,name:[c.user.lastName,c.user.middleName,c.user.firstName].filter(Boolean).join(' '),grade:c.grade},presence:live.has(l.id)?live.get(l.id)===null?'UNKNOWN':live.get(l.id)!.has(c.userId)?'CONNECTED':'NOT_CONNECTED':'NOT_LIVE'})))})
+ }))
+ router.get('/monitoring',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+  const a=await remoteActor(req);if(!a.root)throw new ApiError(403,'Super Administration monitoring required')
+  const input=z.object({academicYear:z.string().regex(/^\d{4}-\d{4}$/).optional(),grade:z.string().max(80).optional(),status:z.enum(['SCHEDULED','LIVE','ENDED','CANCELLED']).optional(),q:z.string().max(180).default(''),page:z.coerce.number().int().min(1).max(10000).default(1)}).parse(req.query)
+  const tokens=input.q.trim().split(/\s+/).filter(Boolean)
+  const where:Prisma.RemoteLessonWhereInput={...(input.academicYear?{academicYear:input.academicYear}:{}),...(input.status?{status:input.status}:{}),AND:[...(input.grade?[{OR:[{course:{grade:input.grade}},{courseSnapshot:{path:['grade'],equals:input.grade}}]}]:[]),...tokens.map(t=>({OR:[{title:{contains:t,mode:'insensitive' as const}},{owner:{OR:[{firstName:{contains:t,mode:'insensitive' as const}},{lastName:{contains:t,mode:'insensitive' as const}},{middleName:{contains:t,mode:'insensitive' as const}}]}},{course:{OR:[{name:{contains:t,mode:'insensitive' as const}},{grade:{contains:t,mode:'insensitive' as const}}]}}]}))]}
+  const [total,groups,connectionCount,lessons]=await Promise.all([prisma.remoteLesson.count({where}),prisma.remoteLesson.groupBy({by:['status'],where,_count:{_all:true}}),prisma.remoteConnection.count({where:{lesson:where}}),prisma.remoteLesson.findMany({where,include:{owner:{select:{id:true,firstName:true,middleName:true,lastName:true}},course:{select:{enrollments:{where:{student:{status:{equals:'active',mode:'insensitive'}}},select:{student:{select:{id:true,userId:true,user:{select:{firstName:true,middleName:true,lastName:true}}}}}}}},_count:{select:{resources:true,connections:true}},connections:{select:{id:true,userReference:true,joinedAt:true,leftAt:true,user:{select:{id:true,firstName:true,middleName:true,lastName:true,role:true}}},orderBy:{joinedAt:'asc'},take:1000}},orderBy:[{startsAt:'desc'},{id:'asc'}],skip:(input.page-1)*25,take:25})])
+  const live=await livePeople(lessons)
+  const rows=lessons.map(l=>{const observed=live.get(l.id),hasLive=live.has(l.id),people=new Map<string,any>();for(const e of l.course?.enrollments||[])people.set(e.student.userId,{id:e.student.userId,name:[e.student.user.lastName,e.student.user.middleName,e.student.user.firstName].filter(Boolean).join(' '),role:'STUDENT',enrolled:true});for(const c of l.connections)if(!people.has(c.userReference))people.set(c.userReference,{id:c.userReference,name:c.user?[c.user.lastName,c.user.middleName,c.user.firstName].filter(Boolean).join(' '):'Archived account',role:c.user?.role||'ARCHIVED',enrolled:false});if(l.owner&&!people.has(l.owner.id))people.set(l.owner.id,{id:l.owner.id,name:[l.owner.lastName,l.owner.middleName,l.owner.firstName].filter(Boolean).join(' '),role:'TEACHER',enrolled:false});return{id:l.id,title:l.title,course:l.courseSnapshot,academicYear:l.academicYear,term:l.term,status:l.status,startsAt:l.startsAt,endsAt:l.endsAt,startedAt:l.startedAt,endedAt:l.endedAt,owner:l.owner,resourceCount:l._count.resources,connectionCount:l._count.connections,historyTruncated:l._count.connections>1000,liveCheck:hasLive?(observed===null?'UNKNOWN':'VERIFIED'):'NOT_LIVE',participants:[...people.values()].map(p=>{const records=l.connections.filter(c=>c.userReference===p.id);return{...p,connectedNow:hasLive&&observed!==null?observed!.has(p.id):null,completedConnectionMinutes:Math.round(records.reduce((sum,c)=>sum+(c.joinedAt&&c.leftAt?Math.max(0,c.leftAt.getTime()-c.joinedAt.getTime()):0),0)/600)/100,connections:records.map(c=>({id:c.id,joinedAt:c.joinedAt,leftAt:c.leftAt}))}})}})
+  return success(res,{checkedAt:new Date().toISOString(),total,page:input.page,pages:Math.max(1,Math.ceil(total/25)),summary:{lessons:total,connectionEvents:connectionCount,...Object.fromEntries(groups.map(g=>[g.status,g._count._all]))},rows,policy:'VERIFIED_MEDIA_CONNECTIONS_NOT_OFFICIAL_ATTENDANCE_OR_PROOF_OF_ATTENTION'})
+ }))
+}

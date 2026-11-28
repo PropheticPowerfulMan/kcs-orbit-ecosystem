@@ -1,0 +1,10 @@
+import {Prisma}from'@prisma/client'
+import {prisma}from'../config/prisma.js'
+import {normalizeClassParts}from'../utils/className.js'
+type Client=Prisma.TransactionClient|typeof prisma
+export async function shiningSupervision(schedules:any[],actorId:string,role:string,client:Client=prisma){
+ const [teachers,history]=await Promise.all([client.teacherProfile.findMany({where:{user:{accountBlockedAt:null}},select:{userId:true,status:true,homeroomGrade:true,homeroomSection:true,user:{select:{id:true,firstName:true,middleName:true,lastName:true}}}}),schedules.length?client.auditLog.findMany({where:{action:'SHINING_SUPERVISOR_ASSIGNED',targetType:'ShiningStudentSchedule',targetId:{in:schedules.map(s=>s.id)}},select:{id:true,targetId:true,metadata:true,createdAt:true},orderBy:[{createdAt:'desc'},{id:'desc'}]}):Promise.resolve([])])
+ const byId=new Map(teachers.map(t=>[t.userId,t])),latest=new Map<string,typeof history[number]>()
+ for(const record of history)if(record.targetId&&!latest.has(record.targetId))latest.set(record.targetId,record)
+ return schedules.map(schedule=>{const placement=normalizeClassParts(schedule.student.grade,schedule.student.section),main=teachers.find(t=>{if(t.status!=='HOMEROOM_TEACHER'||!t.homeroomGrade)return false;const c=normalizeClassParts(t.homeroomGrade,t.homeroomSection);return c.grade===placement.grade&&(!c.section||c.section===placement.section)}),record=latest.get(schedule.id),override=(record?.metadata as any)?.teacherUserId as string|null|undefined,supervisor=override?byId.get(override)||main:main,own=schedule.student.user.id===actorId,isMain=role==='teacher'&&main?.userId===actorId,isSupervisor=role==='teacher'&&supervisor?.userId===actorId;return{...schedule,supervision:{supervisor:supervisor?.user||null,mainTeacher:main?.user||null,overrideTeacherId:override||null,revision:record?.id||'DEFAULT',updatedAt:record?.createdAt.toISOString()||null},canEditTopic:role==='admin'||own||isSupervisor,canAssignSupervisor:role==='admin'||own||isMain,teacherVisible:isMain||isSupervisor}})
+}

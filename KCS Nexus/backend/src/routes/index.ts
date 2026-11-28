@@ -1,3 +1,4 @@
+import{classroomPassesRouter}from'./classroom-passes.routes.js'
 import {schoolAnnouncementsRouter} from './school-announcements.routes.js'
 import {learningRouter} from './learning.routes.js'
 import {certificateReceiptsRouter} from './certificate-receipts.routes.js'
@@ -62,6 +63,7 @@ router.use('/transcript-receipts',transcriptReceiptsRouter)
 router.use('/certificate-receipts',certificateReceiptsRouter)
 router.use('/personal-portraits',personalPortraitsRouter)
 router.use('/learning',learningRouter)
+router.use('/classroom-passes',classroomPassesRouter)
 router.use('/school-announcements',schoolAnnouncementsRouter)
 router.use(academicVisibilityResponseGuard)
 router.use('/academic-visibility',academicVisibilityRouter)

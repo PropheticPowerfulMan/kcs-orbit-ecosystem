@@ -53,6 +53,7 @@ const SeniorTeacherPortal = lazyWithRecovery(() => import('@/pages/SeniorTeacher
 const StaffPortal = lazyWithRecovery(() => import('@/pages/StaffPortal'))
 const IncidentReportsPage = lazyWithRecovery(() => import('@/pages/IncidentReports'))
 const ElectivesPage = lazyWithRecovery(() => import('@/pages/Electives'))
+const ClassroomPassesPage = lazyWithRecovery(() => import('@/pages/ClassroomPasses'))
 const ShiningStudentsPage = lazyWithRecovery(() => import('@/pages/ShiningStudents'))
 const CourseSyllabiPage = lazyWithRecovery(() => import('@/pages/CourseSyllabi'))
 const AdminDashboard = lazyWithRecovery(() => import('@/pages/Admin'))
@@ -203,11 +204,12 @@ const App = () => {
       <RouteErrorBoundary routeKey={location.pathname}>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
+{['/portal/teacher/classroom-passes','/portal/student/classroom-passes','/portal/parent/classroom-passes','/admin/classroom-passes','/portal/senior/classroom-passes','/portal/discipline/classroom-passes'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={['admin','staff','teacher','student','parent']}><ClassroomPassesPage/></ProtectedRoute>}/>)}
           {['/portal/staff/incident-reports','/admin/incident-reports'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={path.startsWith('/admin')?['admin']:['staff']}><IncidentReportsPage/></ProtectedRoute>}/>)}
           {['/portal/staff/shining-students','/admin/shining-students'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={path.startsWith('/admin')?['admin']:['staff']}><ShiningStudentsPage/></ProtectedRoute>}/>)}
           {['/portal/teacher/electives','/admin/electives'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={path.startsWith('/admin')?['admin']:['teacher']}><ElectivesPage/></ProtectedRoute>}/>)}
           <Route path="/portal/teacher/course-syllabi" element={<ProtectedRoute allowedRoles={['teacher']}><CourseSyllabiPage/></ProtectedRoute>}/>
-          <Route path="/shining-students" element={<ProtectedRoute allowedRoles={['admin','staff','student','parent']}><ShiningStudentsPage /></ProtectedRoute>} />
+          <Route path="/shining-students" element={<ProtectedRoute allowedRoles={['admin','staff','teacher','student','parent']}><ShiningStudentsPage /></ProtectedRoute>} />
           <Route path="/course-syllabi" element={<ProtectedRoute allowedRoles={['admin','staff','teacher','student']}><CourseSyllabiPage /></ProtectedRoute>} />
           <Route path="/electives" element={<ProtectedRoute allowedRoles={['admin','teacher','student']}><ElectivesPage /></ProtectedRoute>} />
           <Route

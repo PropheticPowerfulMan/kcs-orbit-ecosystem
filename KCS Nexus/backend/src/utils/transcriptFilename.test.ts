@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import{transcriptFilename}from'./transcriptFilename.js'
+test('transcript filename follows official document, class, coverage, years, learner order',()=>assert.equal(transcriptFilename({grade:'Grade 12',academicYears:['2026-2027','2023-2024','2026-2027'],studentName:'Élève Test'}),'TR - Grade 12 - Grades 9-12 - 2023-2024 to 2026-2027 - Élève Test.pdf'))
+test('filename keeps accents, rejects path separators and always retains PDF extension',()=>{const n=transcriptFilename({grade:'Grade/12',academicYears:['invalid','2026-2027'],studentName:'Élève: '+('A'.repeat(300))});assert.ok(!/[\\/:*?"<>|]/.test(n));assert.ok(n.endsWith('.pdf'));assert.ok(n.length<=204)})

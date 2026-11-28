@@ -462,7 +462,7 @@ export const deliverOfficialDocuments = asyncHandler(async (req: AuthenticatedRe
                 ),
               );
             const pdf = documents.get(student.id)!;
-            const attachmentFilename = payload.documentType === "transcript" ? pdf.documentId + ".pdf" : certificateFilename({ documentType: payload.documentType, grade: [student.grade, student.section].filter(Boolean).join(" "), academicYear: payload.academicYear, studentName: fullName(student.user) });
+            const attachmentFilename = payload.documentType === "transcript" ? ("filename" in pdf ? String(pdf.filename) : pdf.documentId + ".pdf") : certificateFilename({ documentType: payload.documentType, grade: [student.grade, student.section].filter(Boolean).join(" "), academicYear: payload.academicYear, studentName: fullName(student.user) });
             if (payload.documentType === 'transcript' && pdf.sourceVersion) {
               const currentSource = await transcriptSource(student.id, pdf.activeAcademicYear ?? null, tx)
               if (currentSource.sourceVersion !== pdf.sourceVersion) throw new ApiError(409, tr('Le dossier académique a changé pendant la préparation. Actualisez puis réessayez.', 'The academic record changed during preparation. Reload and retry.'))

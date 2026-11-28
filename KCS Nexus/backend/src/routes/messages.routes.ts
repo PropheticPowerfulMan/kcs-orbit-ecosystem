@@ -1,3 +1,4 @@
+import { mailboxDirection } from '../utils/messageMailbox.js'
 import {hasDisciplineWorkspaceAccess,DISCIPLINE_WORKSPACE_PERMISSION} from '../utils/staffWorkspace.js'
 import {Prisma} from '@prisma/client'
 import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
@@ -26,7 +27,7 @@ messagesRouter.get('/tracking/email/:id.gif', asyncHandler(async (req, res) => {
 }))
 messagesRouter.use(authenticate)
 
-const messageSchema = z.object({ recipientId: z.string().min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), language: z.enum(['fr','en']).optional() })
+const messageSchema = z.object({ recipientId: z.string().min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), language: z.enum(['fr','en']).optional(), deliveryMode: z.enum(['NEXUS_ONLY','NEXUS_EMAIL']).optional(), requestId: z.string().min(8).max(128).optional() })
 const jsonArray = (value: unknown) => typeof value === 'string' ? JSON.parse(value) : value
 const parentDeliverySchema = z.object({ recipientIds: z.preprocess(jsonArray, z.array(z.string().min(1)).min(1).max(10000)), channels: z.preprocess(jsonArray, z.array(z.enum(['email','sms','nexus'])).min(1)), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), requestId: z.string().min(8).max(128).optional(), language: z.enum(['fr','en']).optional() })
 const attachmentTypes = new Set(['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/plain','text/csv','image/jpeg','image/png','image/webp','audio/mpeg','audio/mp4','audio/ogg','audio/webm','audio/wav','audio/x-wav','video/mp4','video/webm','video/quicktime','video/ogg'])
@@ -97,15 +98,7 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const to = String(req.query.to ?? '').trim()
   const userId = await resolveMessageActorId(req)
   const targetRole = req.user!.role.toUpperCase() as 'ADMIN' | 'STAFF' | 'TEACHER' | 'STUDENT' | 'PARENT'
-  const direction = box === 'sent'
-    ? { senderId: userId, senderArchivedAt: null }
-    : box === 'inbox'
-      ? { recipientId: userId, recipientArchivedAt: null }
-      : { OR: [
-          { senderId: userId, senderArchivedAt: null },
-          { recipientId: userId, recipientArchivedAt: null },
-          { targetRole },
-        ] }
+  const direction = mailboxDirection(userId, targetRole, box)
   const queryTokens = query.split(/\s+/).filter(Boolean)
   const search = queryTokens.length ? {
     AND: queryTokens.map((token) => {
@@ -166,8 +159,8 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
 messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const allowedRoles = req.user!.role === 'parent' || req.user!.role === 'student' ? ['ADMIN', 'STAFF', 'TEACHER'] as const : undefined
   const actorId = await resolveMessageActorId(req)
-  const contacts = await prisma.user.findMany({ where: { accountBlockedAt: null, id: { not: actorId }, ...(allowedRoles ? { OR:[{role:{in:[...allowedRoles]}},{AND:[{permissions:{has:DISCIPLINE_WORKSPACE_PERMISSION}},{NOT:{permissions:{has:'nexus:media-only'}}}]}] } : {}) }, select: { id: true, firstName: true, middleName: true, lastName: true, role: true, accessCode: true, staffProfile: { select: { function: true, department: true } }, teacherProfile: { select: { department: true } } }, orderBy: [{ role: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }] })
-  return success(res, contacts)
+  const contacts = await prisma.user.findMany({ where: { accountBlockedAt: null, id: { not: actorId }, ...(allowedRoles ? { OR:[{role:{in:[...allowedRoles]}},{AND:[{permissions:{has:DISCIPLINE_WORKSPACE_PERMISSION}},{NOT:{permissions:{has:'nexus:media-only'}}}]}] } : {}) }, select: { id: true, firstName: true, middleName: true, lastName: true, role: true, accessCode: true, email: true, staffProfile: { select: { function: true, department: true } }, teacherProfile: { select: { department: true, courses: { select: { grade: true } } } }, studentProfile: { select: { grade: true, section: true } }, parentLinks: { select: { student: { select: { grade: true, section: true } } } } }, orderBy: [{ role: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }] })
+  return success(res, contacts.map(({ email, studentProfile, parentLinks, teacherProfile, ...contact }) => ({ ...contact, teacherProfile:teacherProfile?{department:teacherProfile.department}:null, emailAvailable: Boolean(email && !/@(?:[^@]+\.)?invalid$/i.test(email)), ...(!['student','parent'].includes(req.user!.role)?{classes:[...new Set([...(studentProfile?[[studentProfile.grade,studentProfile.section].filter(Boolean).join(' ')]:[]),...parentLinks.map(l=>[l.student.grade,l.student.section].filter(Boolean).join(' ')),...(teacherProfile?.courses.map(c=>c.grade)||[])])]}:{}) })))
 }))
 
 messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -284,7 +277,28 @@ messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(asy
   if ((req.user!.role === 'parent' || req.user!.role === 'student') && !['ADMIN', 'STAFF', 'TEACHER'].includes(recipient.role)&&!hasDisciplineWorkspaceAccess(recipient)) {
     throw new ApiError(403, 'Parents and students may only contact authorized school staff.')
   }
-  const { language = 'fr', ...messageData } = data
+  const { language = 'fr', deliveryMode, requestId, ...messageData } = data
+  // A learner chooses external delivery explicitly; the durable outbox remains
+  // separate from the private Nexus message and never expands to family contacts.
+  if (req.user!.role === 'student') {
+    const email = recipient.email?.trim() || ''
+    if (deliveryMode === 'NEXUS_EMAIL' && (!email || /@(?:[^@]+\.)?invalid$/i.test(email)))
+      throw new ApiError(409, language === 'fr' ? 'Ce contact ne possède pas d’adresse e-mail scolaire disponible. Choisissez Nexus uniquement.' : 'This contact has no available school email address. Choose Nexus only.')
+    const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body,
+      recipients: [{ id: recipient.id, role: recipient.role, name: contactName(recipient) }],
+      targets: deliveryMode === 'NEXUS_EMAIL' ? [{ userId: recipient.id, name: contactName(recipient), email, phone: null }] : [],
+      channels: deliveryMode === 'NEXUS_EMAIL' ? ['email'] : [], attachment: req.file, requestId, language,
+      intent: { recipientIds: [recipient.id], deliveryMode: deliveryMode || 'NEXUS_ONLY' } })
+    const messageIdLog = result.batchId
+    const log = await prisma.auditLog.findUnique({where:{id:messageIdLog},select:{metadata:true}})
+    // The batch is idempotent. Its message id is stored with the result, including
+    // Nexus-only batches which do not have a correspondence row.
+    const metadata = log?.metadata as Record<string,any>|null
+    const storedId = metadata?.messageIds?.[recipient.id]
+    const created = storedId ? await prisma.internalMessage.findUnique({where:{id:storedId},select:{id:true,senderId:true,recipientId:true,subject:true,body:true,createdAt:true,readAt:true,attachmentName:true,attachmentMime:true,attachmentSize:true,sender:{select:{id:true,firstName:true,middleName:true,lastName:true,role:true}},recipient:{select:{id:true,firstName:true,middleName:true,lastName:true,role:true}}}}) : null
+    if(!created) throw new ApiError(500,'The saved message could not be loaded. Retry the same request.')
+    return success(res,{...created,hasAttachment:Boolean(created.attachmentName),emailQueued:result.emailQueued,deliveryMode:deliveryMode||'NEXUS_ONLY'},language==='fr'?(result.emailQueued?'Message Nexus enregistré ; e-mail mis en file d’envoi.':'Message enregistré dans Nexus uniquement. Aucun e-mail envoyé.'):(result.emailQueued?'Nexus message saved; email queued for delivery.':'Message saved in Nexus only. No email sent.'),201)
+  }
   const emailBody = data.body
   const familyTargets = req.user!.sub === 'configured-superadmin' && recipient.role === 'PARENT'
     ? (await familyEmailRecipients([recipient])).get(recipient.id) ?? []

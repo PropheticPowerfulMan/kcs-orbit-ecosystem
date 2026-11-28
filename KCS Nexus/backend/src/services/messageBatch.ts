@@ -72,7 +72,7 @@ export async function queueMessageBatch(input: {
     await prisma.$transaction(async (tx) => {
       // This unique claim and every delivery row commit together. A retried click
       // returns the original batch instead of creating duplicate communications.
-      await tx.auditLog.create({ data: { id: batchId, actorId: input.senderId, action: 'MESSAGE_BATCH_QUEUED', targetType: 'MessageBatch', targetId: batchId, metadata: { requestHash, personalizationVersion: 1, result } as unknown as Prisma.InputJsonValue } })
+      await tx.auditLog.create({ data: { id: batchId, actorId: input.senderId, action: 'MESSAGE_BATCH_QUEUED', targetType: 'MessageBatch', targetId: batchId, metadata: { requestHash, personalizationVersion: 1, result, messageIds: Object.fromEntries(ids) } as unknown as Prisma.InputJsonValue } })
       const attachment = input.attachment ? await tx.messageAttachment.create({ data: { name: input.attachment.originalname, mime: input.attachment.mimetype, size: input.attachment.size, data: input.attachment.buffer }, select: { id: true } }) : null
       for (let start = 0; start < input.recipients.length; start += 400) {
         const recipients = input.recipients.slice(start, start + 400)
