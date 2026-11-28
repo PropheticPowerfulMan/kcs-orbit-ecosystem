@@ -1,3 +1,4 @@
+import {startValueWordWorker} from './services/valueWord.service.js'
 import {prepareAnnualPromotionReviews} from './services/annualPromotionReview.service.js'
 import {startJuryWorkers} from './jury/worker.js'
 import {startMediaUploadCleanup} from './services/mediaUpload.service.js'
@@ -23,6 +24,7 @@ const start = async () => {
     startOutboundMailQueue()
     startOutboundSmsQueue()
     startEventReminderWorker()
+    startValueWordWorker()
     startAcademicAutoClosureWorker()
     void prepareAnnualPromotionReviews().catch(error=>console.error('[annual-review]',error instanceof Error?error.message:'Review unavailable'))
     startMediaUploadCleanup()

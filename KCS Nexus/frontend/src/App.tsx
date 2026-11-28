@@ -53,6 +53,7 @@ const SeniorTeacherPortal = lazyWithRecovery(() => import('@/pages/SeniorTeacher
 const StaffPortal = lazyWithRecovery(() => import('@/pages/StaffPortal'))
 const IncidentReportsPage = lazyWithRecovery(() => import('@/pages/IncidentReports'))
 const ElectivesPage = lazyWithRecovery(() => import('@/pages/Electives'))
+const ValueWordPage = lazyWithRecovery(() => import('@/pages/ValueWord'))
 const ClassroomPassesPage = lazyWithRecovery(() => import('@/pages/ClassroomPasses'))
 const ShiningStudentsPage = lazyWithRecovery(() => import('@/pages/ShiningStudents'))
 const CourseSyllabiPage = lazyWithRecovery(() => import('@/pages/CourseSyllabi'))
@@ -204,6 +205,7 @@ const App = () => {
       <RouteErrorBoundary routeKey={location.pathname}>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
+{['/admin/value-word','/portal/teacher/value-word','/portal/student/value-word','/portal/parent/value-word','/portal/staff/value-word','/portal/senior/value-word','/portal/discipline/value-word','/portal/media/value-word'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={['admin','staff','teacher','student','parent']}><ValueWordPage/></ProtectedRoute>}/>)}
 {['/portal/teacher/classroom-passes','/portal/student/classroom-passes','/portal/parent/classroom-passes','/admin/classroom-passes','/portal/senior/classroom-passes','/portal/discipline/classroom-passes'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={['admin','staff','teacher','student','parent']}><ClassroomPassesPage/></ProtectedRoute>}/>)}
           {['/portal/staff/incident-reports','/admin/incident-reports'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={path.startsWith('/admin')?['admin']:['staff']}><IncidentReportsPage/></ProtectedRoute>}/>)}
           {['/portal/staff/shining-students','/admin/shining-students'].map(path=><Route key={path} path={path} element={<ProtectedRoute allowedRoles={path.startsWith('/admin')?['admin']:['staff']}><ShiningStudentsPage/></ProtectedRoute>}/>)}

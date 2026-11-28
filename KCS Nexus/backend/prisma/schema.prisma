@@ -380,6 +380,8 @@ model User {
   juryLaunchTicket_user JuryLaunchTicket[] @relation("JuryLaunchTicket_user")
   juryDraftKey_user JuryDraftKey[] @relation("JuryDraftKey_user")
   juryRoleGrant_user JuryRoleGrant[] @relation("JuryRoleGrant_user")
+  valueWordAssignments ValueWordAssignment[]
+
 }
 
 model TeacherWorkspace {
@@ -2629,4 +2631,60 @@ model ClassroomPassSession {
  @@index([teacherReference,issuedAt])
  @@index([studentReference,issuedAt])
  @@index([academicYear,period])
+}
+
+
+model ValueWordAssignment {
+ id String @id @default(uuid())
+ academicYear String
+ schoolDate String
+ startsAt DateTime
+ endsAt DateTime
+ location String
+ speakerReference String
+ speakerId String?
+ speaker User? @relation(fields:[speakerId],references:[id],onDelete:SetNull)
+ speakerName String
+ speakerGroup String
+ topic String @default("")
+ scripture String @default("")
+ status String @default("PUBLISHED")
+ cancellationReason String?
+ version Int @default(1)
+ notificationRevision Int @default(1)
+ createdByReference String?
+ publishedAt DateTime @default(now())
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ deliveries ValueWordDelivery[]
+ @@unique([academicYear,schoolDate])
+ @@index([startsAt,status])
+ @@index([speakerReference,schoolDate])
+}
+model ValueWordDelivery {
+ id String @id @default(uuid())
+ assignmentId String
+ assignment ValueWordAssignment @relation(fields:[assignmentId],references:[id],onDelete:Cascade)
+ revision Int
+ kind String
+ recipientReference String
+ inAppSentAt DateTime?
+ emailLogReference String?
+ emailFailure String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@unique([assignmentId,revision,kind,recipientReference],map:"ValueWordDelivery_unique_notice")
+ @@index([assignmentId,revision])
+}
+
+model ValueWordSettings {
+ id String @id @default("main")
+ enabled Boolean @default(true)
+ startTime String @default("08:00")
+ endTime String @default("08:30")
+ location String @default("KCS · General assembly")
+ staffWeekday Int @default(5)
+ excludedIds String[] @default([])
+ revision Int @default(1)
+ updatedAt DateTime @updatedAt
 }

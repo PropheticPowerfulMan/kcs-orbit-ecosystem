@@ -1,3 +1,6 @@
+import TeacherPerformancePanel,{CourseCredits} from '@/components/teacher/TeacherPerformancePanel'
+import TeacherAssistantPanel,{TeacherAssistantDialog}from '@/components/teacher/TeacherAssistantPanel'
+import{PerformanceBar}from '@/components/shared/AcademicPerformance'
 import RemoteLearningWorkspace from '@/components/shared/RemoteLearningWorkspace'
 import AcademicHomeWelcome from '@/components/shared/AcademicHomeWelcome'
 import EarlyYearsWorkspace from '@/components/teacher/EarlyYearsWorkspace'
@@ -2701,7 +2704,7 @@ const TeacherDashboardHome = () => {
   const gradebookCategories = assignedCourses.slice(0, 4).map((course: any) => {
     const courseGrades = assignedGrades.filter((grade: any) => grade.courseId === course.id)
     const average = courseGrades.length ? Math.round(courseGrades.reduce((sum: number, grade: any) => sum + Number(grade.percentage || 0), 0) / courseGrades.length) : 0
-    return { name: course.name, weight: course.credits ?? 1, average, visibility: courseGrades.length ? courseGrades.length + ' grades' : 'No grades' }
+    return { name: course.name, weight: course.credits ?? 1, average, count:courseGrades.length, visibility: courseGrades.length ? courseGrades.length + ' grades' : 'No grades' }
   })
   const messages = dashboardMessages.map((message: any) => ({ id: message.id, from: ((message.sender?.firstName ?? '') + ' ' + (message.sender?.lastName ?? '')).trim() || 'KCS Nexus', subject: message.subject, time: new Date(message.createdAt).toLocaleString() }))
   const metricCards = [
@@ -2718,13 +2721,14 @@ const TeacherDashboardHome = () => {
     { to: '/portal/teacher/messages', label: 'Notify Parents', icon: MessageSquare },
   ]
 
+  const dashboardTr=(fr:string,en:string)=>dashboardLanguage==='fr'?fr:en
   const aiTools: TeacherAiTool[] = [
-    { task: 'dashboard-insights', title: 'Live teaching insights', detail: 'Prioritize the most important actions from your verified courses, learners, grades, attendance, and assignments.' },
-    { task: 'lesson-plan', title: 'Lesson plan', detail: 'Create a differentiated 45-minute lesson from today’s schedule.' },
-    { task: 'quiz', title: 'Quiz builder', detail: 'Generate questions from the current subject and class level.' },
-    { task: 'feedback', title: 'Smart feedback', detail: 'Improve comments for report cards and parent meetings.' },
-    { task: 'intervention', title: 'Risk intervention', detail: 'Suggest support plans for struggling students.' },
-    { task: 'meeting-summary', title: 'Meeting summary', detail: 'Prepare parent-teacher conference notes.' },
+    { task: 'dashboard-insights', title: dashboardTr('Analyse pédagogique','Live teaching insights'), detail: dashboardTr('Identifiez les priorités à partir de vos cours, élèves, notes, présences et travaux vérifiés.','Prioritize the most important actions from your verified courses, learners, grades, attendance, and assignments.') },
+    { task: 'lesson-plan', title: dashboardTr('Plan de leçon','Lesson plan'), detail: dashboardTr('Préparez une leçon différenciée de 45 minutes adaptée à votre horaire.','Create a differentiated 45-minute lesson from today’s schedule.') },
+    { task: 'quiz', title: dashboardTr('Créateur de quiz','Quiz builder'), detail: dashboardTr('Préparez des questions adaptées au cours et au niveau de la classe.','Generate questions from the current subject and class level.') },
+    { task: 'feedback', title: dashboardTr('Commentaires pédagogiques','Smart feedback'), detail: dashboardTr('Affinez les commentaires de bulletin et les rencontres avec les parents.','Improve comments for report cards and parent meetings.') },
+    { task: 'intervention', title: dashboardTr('Accompagnement ciblé','Risk intervention'), detail: dashboardTr('Préparez un accompagnement pour les élèves qui en ont besoin.','Suggest support plans for struggling students.') },
+    { task: 'meeting-summary', title: dashboardTr('Synthèse de rencontre','Meeting summary'), detail: dashboardTr('Structurez les notes de vos rencontres avec les parents.','Prepare parent-teacher conference notes.') },
   ]
 
   const generateTeacherAi = async (tool: TeacherAiTool, context = '') => {
@@ -2740,7 +2744,7 @@ const TeacherDashboardHome = () => {
       if (!result) throw new Error('The AI assistant returned no draft.')
       setAiResult(result)
     } catch {
-      setAiError('The AI assistant could not generate a draft. Check your connection and try again.')
+      setAiError(dashboardTr('L’assistant ne peut pas préparer le brouillon. Vérifiez votre connexion puis réessayez.','The AI assistant could not generate a draft. Check your connection and try again.'))
     } finally {
       setIsAiGenerating(false)
     }
@@ -2897,74 +2901,7 @@ const TeacherDashboardHome = () => {
       </div>
 
 </>},
-{key:'teaching',label:dashboardLanguage==='fr'?'Enseignement et IA':'Teaching and AI',content:<>      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="font-bold text-kcs-blue-900 dark:text-white">Live Class Performance</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Distribution by grading category with parent/student sync status.</p>
-            </div>
-            <Link to="/portal/teacher/grades" className="btn-primary flex items-center gap-2 py-2 text-sm">
-              Gradebook <ChevronRight size={15} />
-            </Link>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {gradebookCategories.map((category: any) => (
-              <div key={category.name} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{category.name}</p>
-                  <span className="text-xs font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{category.weight}% weight</span>
-                </div>
-                <div className="mt-3 h-3 overflow-hidden rounded-full bg-white dark:bg-kcs-blue-950">
-                  <div className="h-full rounded-full bg-kcs-blue-600" style={{ width: `${category.average}%` }} />
-                </div>
-                <div className="mt-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                  <span>{category.average}% class average</span>
-                  <span>{category.visibility}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h2 id="teacher-ai-insights" className="scroll-mt-28 font-bold text-kcs-blue-900 dark:text-white">AI Teacher Assistant</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Generate and improve teaching work instantly.</p>
-            </div>
-            <Brain size={20} className="text-kcs-gold-500" />
-          </div>
-          <div className="grid gap-2">
-            {aiTools.map((tool) => (
-              <button type="button" onClick={() => void generateTeacherAi(tool)} key={tool.task} className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-left transition-colors hover:border-kcs-blue-200 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800">
-                <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{tool.title}</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{tool.detail}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      {activeAiTool && (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center overflow-y-auto bg-kcs-blue-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="teacher-ai-dialog-title">
-          <div className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-kcs-blue-100 bg-[#f7fbff] shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:max-w-2xl sm:rounded-3xl">
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-kcs-blue-100 bg-white/90 px-4 py-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/70 sm:px-6">
-              <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wide text-kcs-gold-600 sm:text-xs">AI Teacher Assistant</p><h3 id="teacher-ai-dialog-title" className="mt-1 truncate text-lg font-bold text-kcs-blue-900 dark:text-white sm:text-xl">{activeAiTool.title}</h3></div>
-              <button type="button" onClick={() => setActiveAiTool(null)} aria-label="Close AI teacher assistant" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-kcs-blue-100 bg-kcs-blue-50 text-kcs-blue-800 transition hover:bg-kcs-blue-100 dark:border-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-white"><X size={20}/></button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-              <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-300">{activeAiTool.detail}</p>
-              <div className="mt-4 max-h-[36dvh] min-h-28 overflow-y-auto rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 text-sm leading-relaxed text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-800/40 dark:text-kcs-blue-100 sm:max-h-72" style={{ whiteSpace: 'pre-line' }}>{isAiGenerating ? 'Generating a teacher-review draft...' : aiError || aiResult}</div>
-              <textarea value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} className="input-kcs mt-4 min-h-28 resize-y text-sm" placeholder="Add class context or instructions to refine this output..." disabled={isAiGenerating}/>
-              <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">Review the draft before sharing it with students or families.</p>
-            </div>
-            <div className="shrink-0 border-t border-kcs-blue-100 bg-white/90 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/70 sm:px-6">
-              <button type="button" disabled={isAiGenerating} onClick={() => void generateTeacherAi(activeAiTool, aiInstruction)} className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-kcs-blue-800 disabled:cursor-wait disabled:opacity-60 sm:w-auto sm:min-w-56">{isAiGenerating ? 'Generating...' : 'Regenerate and improve'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
+{key:'teaching',label:dashboardLanguage==='fr'?'Enseignement et IA':'Teaching and AI',content:<><div className="grid min-w-0 items-start gap-5 xl:grid-cols-[1.15fr_0.85fr]"><TeacherPerformancePanel courses={gradebookCategories}/><TeacherAssistantPanel tools={aiTools} busy={isAiGenerating} onChoose={tool=>void generateTeacherAi(tool)}/></div><TeacherAssistantDialog tool={activeAiTool} instruction={aiInstruction} onInstruction={setAiInstruction} result={aiResult} error={aiError} busy={isAiGenerating} onClose={()=>setActiveAiTool(null)} onRegenerate={()=>{if(activeAiTool)void generateTeacherAi(activeAiTool,aiInstruction)}}/>
       <div className="rounded-2xl border border-gray-100 bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-6 text-white dark:border-kcs-blue-800">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -3203,11 +3140,9 @@ const TeacherPortal = () => {
                   <div key={category.name} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{category.name}</p>
-                      <span className="text-xs font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{category.weight}%</span>
+                      <span className="text-xs font-bold text-kcs-blue-700 dark:text-kcs-blue-300"><CourseCredits value={category.weight}/></span>
                     </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-kcs-blue-900">
-                      <div className="h-full rounded-full bg-kcs-blue-600" style={{ width: `${category.average}%` }} />
-                    </div>
+                    <PerformanceBar value={category.count?category.average:null} label={category.name} showValue/>
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{category.visibility}</p>
                   </div>
                 ))}
