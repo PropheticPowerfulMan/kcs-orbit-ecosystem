@@ -20,7 +20,7 @@ Use an isolated synthetic QA database only. `workflow.mjs` and `extended.mjs` ex
 - 14 unit tests: direct-recipient mailbox isolation, elective allocation, official transcript renderer and safe filename.
 - 28 workflow API checks: student confidentiality, delivery channel/idempotence, elective proposal/approval/preference/allocation/publication cycle.
 - 29 extended API checks: pass concurrency, permissions, return/audit/history/statistics, legacy Principal, supervision concurrency, family isolation and true LiveKit presence.
-- 106 responsive/language/theme browser cases, plus direct parent transcript and save/reload tests.
+- 106 responsive/language/theme browser cases, 32 additional administrative-staff page checks and 8 discipline/report cases, plus direct parent transcript and save/reload tests.
 - Mandatory update behavior verified on the 11 published applications, plus work/in-flight-write/offline-queue protection. An up-to-date client correctly shows no update prompt.
 
 ## Deployment and recovery
@@ -34,3 +34,11 @@ Use an isolated synthetic QA database only. `workflow.mjs` and `extended.mjs` ex
 7. Verify migration state, academic data and public HTTPS; check every other service keeps its existing container and image. Retain the previous two image pins for rollback. The new additive table can remain if application images are rolled back.
 
 External backup replication remains prepared but unconfigured until the school supplies its destination. This release does not claim off-server recovery is configured.
+
+## Discipline Director integration
+
+The Discipline Director has a Classroom passes menu entry, a school-year movement summary on Overview and Reports, and schoolwide supervision of every teacher’s issued/returned pass. Exact grade (K3–Grade 12), learner/teacher/course search, purpose, status and date filters apply to both the history and its PDF. Authorized leadership can confirm a return on a teacher’s behalf only with an audited reason.
+
+The PDF endpoint uses a consistent database snapshot and exports all matching rows, not merely the visible page. Exports over 5,000 exits require narrower filters rather than silently losing rows. The document embeds the KCS logo and watermark, includes individual/purpose/date statistics, complete chronological details, page numbering, school contacts and a footer QR carrying the server snapshot fingerprint without learner personal data. The QR is an integrity reference, not an electronic signature or proof of official attendance.
+
+Additional checks: 10 discipline API cases (including 65-row export completeness, exact grade matching, role restrictions and fingerprint correctness), 8 FR/EN responsive/light/dark browser cases, actual PDF download and rendered-page review.

@@ -1,4 +1,5 @@
 import {Router}from'express'
+import{createHash}from'node:crypto'
 import {Prisma}from'@prisma/client'
 import {z}from'zod'
 import {prisma}from'../config/prisma.js'
@@ -25,8 +26,8 @@ classroomPassesRouter.post('/',asyncHandler(async(req:AuthenticatedRequest,res)=
 classroomPassesRouter.post('/:id/return',asyncHandler(async(req:AuthenticatedRequest,res)=>{const a=await actor(req),body=z.object({revision:z.number().int().min(1),note:z.string().trim().max(1000).default('')}).strict().parse(req.body),id=String(req.params.id)
  const row=await prisma.$transaction(async tx=>{await tx.$queryRaw(Prisma.sql`SELECT id FROM "ClassroomPassSession" WHERE id=${id} FOR UPDATE`);const p=await tx.classroomPassSession.findUnique({where:{id}});if(!p||!a.canMonitor&&(!a.canIssue||p.teacherReference!==a.id))throw new ApiError(403,'Pass return not authorized / Retour non autorisé');if(p.returnedAt)return p;if(p.revision!==body.revision)throw new ApiError(409,'Pass changed. Refresh / Badge modifié. Actualisez');if(p.teacherReference!==a.id&&body.note.length<5)throw new ApiError(400,'Enter a reason for recording another teacher’s badge return / Motivez le retour du badge d’un autre enseignant');const returned=await tx.classroomPassSession.update({where:{id},data:{returnedAt:new Date(),returnedByReference:a.id,returnNote:body.note||null,revision:{increment:1}}});await tx.auditLog.create({data:{actorId:a.id,action:'CLASSROOM_PASS_RETURNED',targetType:'ClassroomPassSession',targetId:id,metadata:{studentReference:p.studentReference,badgeType:p.badgeType,override:p.teacherReference!==a.id,note:body.note}}});return returned});return success(res,{...row,serverNow:new Date().toISOString()},'Pass returned / Badge restitué')
 }))
-classroomPassesRouter.get('/',asyncHandler(async(req:AuthenticatedRequest,res)=>{
- const a=await actor(req),input=z.object({from:z.string().date().optional(),to:z.string().date().optional(),academicYear:z.string().regex(/^\d{4}-\d{4}$/).optional(),q:z.string().max(180).default(''),badgeType:z.enum(types).optional(),active:z.enum(['true','false']).optional(),page:z.coerce.number().int().min(1).max(100000).default(1)}).parse(req.query)
+async function historyScope(req:AuthenticatedRequest){
+ const a=await actor(req),input=z.object({from:z.string().date().optional(),to:z.string().date().optional(),academicYear:z.string().regex(/^\d{4}-\d{4}$/).optional(),q:z.string().max(180).default(''),badgeType:z.enum(types).optional(),active:z.enum(['true','false']).optional(),overdue:z.enum(['true']).optional(),grade:z.string().regex(/^(K[3-5]|Grade (?:[1-9]|1[0-2]))$/).optional(),page:z.coerce.number().int().min(1).max(100000).default(1)}).parse(req.query)
  const conditions:Prisma.Sql[]=[]
  if(!a.canMonitor){if(a.canIssue)conditions.push(Prisma.sql`"teacherReference"=${a.id}`);else if(a.role==='student'&&a.studentProfile)conditions.push(Prisma.sql`"studentReference"=${a.studentProfile.id}`);else if(a.role==='parent')conditions.push(Prisma.sql`"studentReference" IN (${a.parentLinks.length?Prisma.join(a.parentLinks.map(l=>l.studentId)):Prisma.sql`NULL`})`);else throw new ApiError(403,'Classroom pass history not authorized')}
  if(input.from)conditions.push(Prisma.sql`"issuedAt">=${new Date(input.from+'T00:00:00+01:00')}`)
@@ -35,8 +36,20 @@ classroomPassesRouter.get('/',asyncHandler(async(req:AuthenticatedRequest,res)=>
  if(input.academicYear)conditions.push(Prisma.sql`"academicYear"=${input.academicYear}`)
  if(input.badgeType)conditions.push(Prisma.sql`"badgeType"=${input.badgeType}`)
  if(input.active==='true')conditions.push(Prisma.sql`"returnedAt" IS NULL`)
+ if(input.active==='false')conditions.push(Prisma.sql`"returnedAt" IS NOT NULL`)
+ if(input.overdue==='true')conditions.push(Prisma.sql`"returnedAt" IS NULL AND "expectedReturnAt"<now()`)
+ if(input.grade)conditions.push(Prisma.sql`("className"=${input.grade} OR "className" LIKE ${input.grade+' %'})`)
  for(const token of input.q.trim().split(/\s+/).filter(Boolean)){const text='%'+token+'%';conditions.push(Prisma.sql`("studentName" ILIKE ${text} OR "teacherName" ILIKE ${text} OR "className" ILIKE ${text} OR "courseName" ILIKE ${text})`)}
  const where=conditions.length?Prisma.sql`WHERE ${Prisma.join(conditions,' AND ')}`:Prisma.empty
+ return{a,input,where}
+}
+classroomPassesRouter.get('/report',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const{a,input,where}=await historyScope(req);if(!a.canMonitor&&!a.canIssue)throw new ApiError(403,'Staff report access required / Rapport réservé au personnel autorisé')
+ const rows=await prisma.$transaction(async tx=>{const counts=await tx.$queryRaw<Array<{count:number}>>(Prisma.sql`SELECT count(*)::int AS count FROM "ClassroomPassSession" ${where}`);if(counts[0].count>5000)throw new ApiError(409,'Narrow the class, learner or date filters: this report exceeds 5000 exits. / Précisez la classe, l’élève ou les dates : plus de 5000 sorties.');return tx.$queryRaw<any[]>(Prisma.sql`SELECT * FROM "ClassroomPassSession" ${where} ORDER BY "issuedAt" ASC,id ASC`)},{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead,timeout:15000})
+ const generatedAt=new Date().toISOString(),scope={...input,page:undefined},snapshot={generatedAt,scope,rows},fingerprint=createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');return success(res,{...snapshot,fingerprint,reference:'KCS-PASS-'+generatedAt.slice(0,10).replace(/-/g,'')+'-'+fingerprint.slice(0,12).toUpperCase(),preparedBy:person(a),policy:'AUTHORIZED_EXIT_HISTORY_NOT_OFFICIAL_ATTENDANCE_OR_AUTOMATIC_SANCTION'})
+}))
+classroomPassesRouter.get('/',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const{a,input,where}=await historyScope(req)
  const [totals,badges,days,rows]=await Promise.all([
  prisma.$queryRaw<any[]>(Prisma.sql`SELECT count(*)::int AS total,count(*) FILTER(WHERE "returnedAt" IS NULL)::int AS active,count(*) FILTER(WHERE coalesce("returnedAt",now())>"expectedReturnAt")::int AS overdue,round(avg(extract(epoch FROM ("returnedAt"-"issuedAt"))/60) FILTER(WHERE "returnedAt" IS NOT NULL)::numeric,2) AS "averageMinutes" FROM "ClassroomPassSession" ${where}`),
  prisma.$queryRaw<any[]>(Prisma.sql`SELECT "badgeType",count(*)::int AS count FROM "ClassroomPassSession" ${where} GROUP BY "badgeType"`),
