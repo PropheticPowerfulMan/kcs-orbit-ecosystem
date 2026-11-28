@@ -1,6 +1,7 @@
 import { prisma } from '../config/prisma.js'
 export async function deliveryRecipientUnavailable(row:{studentId?:string|null;recipientEmail?:string|null;metadata:unknown}) {
  const m=(row.metadata&&typeof row.metadata==='object'?row.metadata:{}) as Record<string,unknown>
+ if(typeof m.valueWordAssignmentId==='string'){const a=await prisma.valueWordAssignment.findUnique({where:{id:m.valueWordAssignmentId},select:{status:true,notificationRevision:true,startsAt:true,speakerReference:true}});if(!a||a.status!=='PUBLISHED'||a.notificationRevision!==m.valueWordRevision||a.startsAt<=new Date()||a.speakerReference!==m.recipientId)return true}
  if(typeof m.recipientId==='string') {
   const u=await prisma.user.findUnique({where:{id:m.recipientId},select:{accountBlockedAt:true}})
   if(!u||u.accountBlockedAt)return true

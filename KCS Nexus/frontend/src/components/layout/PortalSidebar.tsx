@@ -1,4 +1,4 @@
-import { Video, Mail } from 'lucide-react'
+import { Video, Mail, Sunrise } from 'lucide-react'
 import JuryWorkspaceLauncher from '@/components/shared/JuryWorkspaceLauncher'
 import './portalSidebar.css'
 import {useEarlyYearsContext} from '@/hooks/useEarlyYearsContext'
@@ -35,6 +35,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
   const base: NavItem[] = [
     { to: dashboardPath, label: t("portalNav.dashboard"), icon: LayoutDashboard },
+    {to:dashboardPath+'/value-word',label:language==='fr'?'Assemblée · Value Word':'Assembly · Value Word',icon:Sunrise},
     { to: `${dashboardPath}/handbook`, label: language === 'fr' ? 'Manuel de l’école' : 'School Handbook', icon: BookOpen },
     ...(["teacher", "admin"].includes(role) ? [] : [{ to: role === "staff" ? "/portal/staff/incident-reports" : "/incident-reports", label: t("portalNav.incidentReport"), icon: ClipboardList }]),
     ...(["student", "parent", "admin", "teacher"].includes(role) ? [{ to: "/shining-students", label: "Shining Student", icon: GraduationCap }] : []),
@@ -299,7 +300,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
    {to:'/portal/discipline/followups',label:language==='fr'?'Rencontres et suivis':'Meetings & follow-up',icon:ListChecks},
    {to:'/portal/discipline/plans',label:language==='fr'?'Soutien éducatif':'Positive behavior',icon:HeartHandshake},
    {to:'/portal/discipline/communications',label:language==='fr'?'Communication familles':'Family communications',icon:MessageSquare},
-   {to:'/portal/discipline/classroom-passes',label:language==='fr'?'Badges de sortie':'Classroom passes',icon:Clock3},
+   {to:'/portal/discipline/value-word',label:language==='fr'?'Assemblée · Value Word':'Assembly · Value Word',icon:Sunrise},
+    {to:'/portal/discipline/classroom-passes',label:language==='fr'?'Badges de sortie':'Classroom passes',icon:Clock3},
     {to:'/portal/discipline/reports',label:language==='fr'?'Analyses et rapports':'Analysis & reports',icon:BarChart3},
    {to:'/portal/discipline/handbook',label:language==='fr'?'Manuel de l’école':'School Handbook',icon:BookOpen},
    {to:'/portal/discipline/settings',label:t('portalNav.settings'),icon:Settings},
@@ -309,7 +311,8 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
    {to:'/portal/senior/cohort',label:language==='fr'?'Cohorte Grade 12':'Grade 12 cohort',icon:Users},
    {to:'/portal/senior/applications',label:language==='fr'?'Candidatures universitaires':'University applications',icon:GraduationCap},
    {to:'/portal/senior/roadmap',label:language==='fr'?'Échéances et rendez-vous':'Deadlines & meetings',icon:Calendar},
-   {to:'/portal/senior/classroom-passes',label:language==='fr'?'Badges de sortie':'Classroom passes',icon:Clock3},
+   {to:'/portal/senior/value-word',label:language==='fr'?'Assemblée · Value Word':'Assembly · Value Word',icon:Sunrise},
+    {to:'/portal/senior/classroom-passes',label:language==='fr'?'Badges de sortie':'Classroom passes',icon:Clock3},
     {to:'/portal/senior/reports',label:language==='fr'?'Rapports d’accompagnement':'Guidance reports',icon:BarChart3},
    {to:'/portal/senior/report-cards',label:language==='fr'?'Bulletins · lecture':'Report cards · view',icon:FileSpreadsheet},
    {to:'/portal/senior/learner-emails',label:language==='fr'?'E-mails des élèves':'Learner emails',icon:Mail},
@@ -321,13 +324,15 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
    {to:'/portal/media/site',label:language==='fr'?'Gestion du site web':'Website management',icon:FileText},
    {to:'/portal/media/news',label:language==='fr'?'Actualités et événements':'News & Events',icon:Megaphone},
    {to:'/portal/media/gallery',label:language==='fr'?'Galerie et vidéos':'Gallery & Videos',icon:LibraryBig},
-   {to:'/portal/media/settings',label:t('portalNav.settings'),icon:Settings},
+   {to:'/portal/media/value-word',label:language==='fr'?'Assemblée · Value Word':'Assembly · Value Word',icon:Sunrise},
+    {to:'/portal/media/settings',label:t('portalNav.settings'),icon:Settings},
   ]:activeRole === 'admin' && user.id !== 'configured-superadmin' ? [
     { to: '/admin', label: t('portalNav.dashboard'), icon: LayoutDashboard },
     { to: '/admin/handbook', label: language === 'fr' ? 'Manuel de l’école' : 'School Handbook', icon: BookOpen },
     { to: '/admin/shining-students', label: 'Shining Student', icon: GraduationCap },
     { to: '/admin/incident-reports', label: t('portalNav.incidentReport'), icon: ClipboardList },
     { to: '/admin/electives', label: t('portalNav.electives'), icon: BookOpenCheck },
+    {to:'/admin/value-word',label:language==='fr'?'Assemblée · Value Word':'Assembly · Value Word',icon:Sunrise},
     {to:'/admin/classroom-passes',label:language==='fr'?'Badges de sortie':'Classroom passes',icon:Clock3},
      { to: '/admin/main-teachers', label: t('portalNav.mainTeacherAssignment'), icon: UserCheck },
     { to: '/admin/report-cards', label: language === 'fr' ? 'Bulletins · lecture' : 'Report cards · view', icon: FileSpreadsheet },

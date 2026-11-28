@@ -1,3 +1,4 @@
+import {valueWordRouter} from './value-word.routes.js'
 import{classroomPassesRouter}from'./classroom-passes.routes.js'
 import {schoolAnnouncementsRouter} from './school-announcements.routes.js'
 import {learningRouter} from './learning.routes.js'
@@ -64,6 +65,7 @@ router.use('/certificate-receipts',certificateReceiptsRouter)
 router.use('/personal-portraits',personalPortraitsRouter)
 router.use('/learning',learningRouter)
 router.use('/classroom-passes',classroomPassesRouter)
+router.use('/value-word',valueWordRouter)
 router.use('/school-announcements',schoolAnnouncementsRouter)
 router.use(academicVisibilityResponseGuard)
 router.use('/academic-visibility',academicVisibilityRouter)

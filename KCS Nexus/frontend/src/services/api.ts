@@ -474,7 +474,7 @@ export const aiAPI = {
   teacherAssistant: (
     task: 'dashboard-insights' | 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary',
     context?: string,
-  ) => api.post('/ai/teacher-assistant', { task, context }, { timeout: 45000 }),
+  ) => api.post('/ai/teacher-assistant', { task, context }, { timeout: 45000, headers: { 'x-silent-feedback': 'true' } }),
   tutor: (subject: string, question: string, studentId?: string, options?: { language: 'fr' | 'en'; mode: 'coach' | 'practice' | 'review'; history: { role: 'user' | 'assistant'; content: string }[] }) =>
     api.post('/ai/tutor', { subject, question, studentId, ...options }, { timeout: 65000, headers: { 'x-silent-feedback': 'true' } }),
   generateQuiz: (subject: string, topic: string, difficulty: string) =>
