@@ -42,3 +42,7 @@ The Discipline Director has a Classroom passes menu entry, a school-year movemen
 The PDF endpoint uses a consistent database snapshot and exports all matching rows, not merely the visible page. Exports over 5,000 exits require narrower filters rather than silently losing rows. The document embeds the KCS logo and watermark, includes individual/purpose/date statistics, complete chronological details, page numbering, school contacts and a footer QR carrying the server snapshot fingerprint without learner personal data. The QR is an integrity reference, not an electronic signature or proof of official attendance.
 
 Additional checks: 10 discipline API cases (including 65-row export completeness, exact grade matching, role restrictions and fingerprint correctness), 8 FR/EN responsive/light/dark browser cases, actual PDF download and rendered-page review.
+
+## Teachers with discipline or Senior Teacher responsibilities
+
+Pass supervision uses an explicit request context limited to the pass API and verified against the current stored grant. Teacher retains its own passes by default. Discipline and Senior Teacher workspaces can supervise schoolwide movements only with their corresponding grant, and do not issue a teacher’s physical badges. Unknown or forged contexts are denied. Revoking the stored grant takes effect on the next request. Regression evidence adds 11 API cases and 12 real-browser workspace-switch cases, including audited exceptional returns.
