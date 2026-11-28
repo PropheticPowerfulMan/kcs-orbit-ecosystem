@@ -1,3 +1,4 @@
+import {uiLocale} from '@/utils/uiLocale'
 import {preserveReadOnlyGradebook} from '@/utils/gradebookSaveScope'
 import {initialGradebookPanel,gradebookPanelKey} from '@/utils/mobileWorkspace'
 import AcademicCycleNotice from '@/components/shared/AcademicCycleNotice'
@@ -367,7 +368,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               setRecoveredCells(0)
               if (!automatic) setAutosaveEnabled(true)
               setAutosaveRetryAt(0)
-              setSaveNotice(tr('Enregistré et vérifié sur le serveur à ', 'Saved and verified on the server at ') + new Date().toLocaleTimeString())
+              setSaveNotice(tr('Enregistré et vérifié sur le serveur à ', 'Saved and verified on the server at ') + new Date().toLocaleTimeString(uiLocale()))
             }
             if (!silent) onAction('Tasks, category weights, scores, and comments were synchronized with KCS Nexus successfully.')
             return true
@@ -1297,7 +1298,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                 <th className="sticky left-0 z-30 w-56 bg-gray-50 px-3 py-2 text-left dark:bg-kcs-blue-900">Student<span className="mt-1 block text-[10px] font-semibold normal-case text-kcs-blue-500 dark:text-kcs-blue-300">{canonicalClassLabel(selectedCourse?.className || selectedCourse?.gradeLevels?.[0])} - Official course enrollment</span></th>
                 {visibleAssignments.map((assignment) => (
                   <th key={assignment.id} draggable onDragStart={() => setDraggedAssignmentId(assignment.id)} onDragEnd={() => setDraggedAssignmentId('')} onDragOver={(event) => event.preventDefault()} onDrop={() => moveAssignment(assignment.id)} title={tr('Glissez pour ordonner les colonnes de même date', 'Drag to arrange columns sharing the same assessment date')} className={`min-w-32 cursor-move border-l border-gray-100 px-2 py-2 text-center dark:border-kcs-blue-800 ${draggedAssignmentId === assignment.id ? 'opacity-50' : ''}`}>
-                    <span className="block font-bold text-kcs-blue-900 dark:text-white">{assignment.title}</span>
+                    <span className="block font-bold text-kcs-blue-900 dark:text-white" data-no-translate>{assignment.title}</span>
                     <span className="block normal-case text-gray-400">{assignment.type} · {assignment.maxPoints} pts</span><span className="mt-0.5 block normal-case text-kcs-blue-500 dark:text-kcs-blue-300">{assignment.date ? new Date(`${assignment.date}T12:00:00`).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB') : tr('Date non définie', 'No date')}</span>
                     <span className="mt-1 flex items-center justify-center gap-2 normal-case"><button type="button" onClick={() => setEditingAssignment({ ...assignment })} className="inline-flex items-center gap-1 text-[11px] font-bold text-kcs-blue-600 hover:text-kcs-blue-800 dark:text-sky-300"><Pencil size={12} /> {tr('Modifier','Edit')}</button><button type="button" disabled={assignmentReadOnly(assignment)} onClick={() => deleteAssignment(assignment)} className="inline-flex items-center gap-1 text-[11px] font-bold text-red-500 hover:text-red-600"><Trash2 size={12} /> {tr('Supprimer','Delete')}</button></span>
                   </th>
@@ -1312,7 +1313,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               {studentAnalytics.map(({ student, average, missing, projected, risk },rowIndex) => (
                 <tr data-gradebook-score-row key={student.id} className="group">
                   <td className="sticky left-0 z-10 border-t border-gray-100 bg-white px-3 py-1.5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
+                    <p className="font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{student.name}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{canonicalClassLabel(student.grade, student.section)}</p>
                   </td>
                   {visibleAssignments.map((assignment,columnIndex) => {
@@ -1490,7 +1491,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <div key={student.id} className="rounded-xl border border-gray-100 p-4 dark:border-kcs-blue-800">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
+                    <p className="font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{student.name}</p>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Current {formatPercent(average)} - projected {formatPercent(projected)} - {missing} missing</p>
                   </div>
                   <TrendingDown size={18} className="text-red-500" />

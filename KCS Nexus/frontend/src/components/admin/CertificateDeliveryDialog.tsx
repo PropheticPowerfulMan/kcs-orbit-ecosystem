@@ -294,7 +294,7 @@ export default function CertificateDeliveryDialog({
                       ? ["K4", "Grade 4", "Grade 8"]
                       : SCHOOL_LEVELS
                     ).map((value) => (
-                      <option key={value}>{value}</option>
+                      <option key={value} value={value}>{value}</option>
                     ))}
                   </select>
                 </label>
@@ -313,7 +313,7 @@ export default function CertificateDeliveryDialog({
                     ]
                       .sort()
                       .map((value) => (
-                        <option key={value}>{value}</option>
+                        <option key={value} value={value}>{value}</option>
                       ))}
                   </select>
                 </label>

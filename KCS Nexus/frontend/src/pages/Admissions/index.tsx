@@ -634,10 +634,10 @@ const AdmissionsPage = () => {
                             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Relationship to Student *</label>
                             <select {...parentForm.register('relationship')} className="input-kcs">
                               <option value="">Select...</option>
-                              <option>Father</option>
-                              <option>Mother</option>
-                              <option>Guardian</option>
-                              <option>Other</option>
+                              <option value="Father">Father</option>
+                              <option value="Mother">Mother</option>
+                              <option value="Guardian">Guardian</option>
+                              <option value="Other">Other</option>
                             </select>
                           </div>
                           <div>

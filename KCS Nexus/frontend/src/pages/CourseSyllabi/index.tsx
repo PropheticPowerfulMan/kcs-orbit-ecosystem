@@ -322,7 +322,7 @@ export default function CourseSyllabi() {
                     <select className={field} value={targetClass} onChange={(e) => setTargetClass(e.target.value)}>
                       <option value="">{tr('Choisir', 'Choose')}</option>
                       {learnerClasses.map((value) => (
-                        <option key={value}>{value}</option>
+                        <option key={value} value={value}>{value}</option>
                       ))}
                     </select>
                   </label>

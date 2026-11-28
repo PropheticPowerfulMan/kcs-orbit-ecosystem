@@ -78,7 +78,7 @@ export default function AcademicPeriodClosurePanel({
           "The SuperAdmin can close each quarter, semester or year manually. Otherwise, it closes automatically after 7 full calendar days following its official end, using Kinshasa time. Records remain available. Teacher correction permissions remain valid until revoked.",
         )}
       </p>
-      <label className="mt-4 block max-w-sm text-xs font-bold text-kcs-blue-950 dark:text-white">{tr('Année à examiner ou clôturer', 'Year to review or close')}<select className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-kcs-blue-950 dark:border-amber-700 dark:bg-kcs-blue-950 dark:text-white" value={year} disabled={busy} onChange={event => { setYear(event.target.value); setSelected(''); setConfirmation('');setAcknowledged(false) }}>{years.map(value => <option key={value}>{value}</option>)}</select></label>
+      <label className="mt-4 block max-w-sm text-xs font-bold text-kcs-blue-950 dark:text-white">{tr('Année à examiner ou clôturer', 'Year to review or close')}<select className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-kcs-blue-950 dark:border-amber-700 dark:bg-kcs-blue-950 dark:text-white" value={year} disabled={busy} onChange={event => { setYear(event.target.value); setSelected(''); setConfirmation('');setAcknowledged(false) }}>{years.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
       {notice && (
         <p
           role="status"

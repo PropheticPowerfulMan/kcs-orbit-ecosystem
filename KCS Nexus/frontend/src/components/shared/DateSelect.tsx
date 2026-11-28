@@ -1,3 +1,4 @@
+import {useUIStore} from '@/store/uiStore'
 import { useState, type ChangeEvent, type InputHTMLAttributes } from 'react'
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> & {
@@ -5,9 +6,10 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onC
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void
 }
 
-const MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
+const MONTHS = {fr:['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'],en:['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']}
 
 export default function DateSelect({ value, onChange, className = '', required, disabled, min, max, ...props }: Props) {
+  const language=useUIStore(state=>state.language),tr=(fr:string,en:string)=>language==='fr'?fr:en
   const [internalValue, setInternalValue] = useState('')
   const [year = '', month = '', day = ''] = String(value || internalValue).slice(0, 10).split('-')
   const currentYear = new Date().getFullYear()
@@ -22,8 +24,8 @@ export default function DateSelect({ value, onChange, className = '', required, 
   }
   const selectClass = `${className} min-w-0 flex-1 bg-white dark:bg-kcs-blue-950`
   return <span className="flex w-full gap-2" data-date-select {...(props['aria-label'] ? { 'aria-label': props['aria-label'] } : {})}>
-    <select aria-label="Jour" value={day} required={required} disabled={disabled} className={selectClass} onChange={(event) => emit(year, month, event.target.value)}><option value="">Jour</option>{Array.from({ length: dayCount }, (_, index) => String(index + 1).padStart(2, '0')).map((item) => <option key={item} value={item}>{item}</option>)}</select>
-    <select aria-label="Mois" value={month} required={required} disabled={disabled} className={selectClass} onChange={(event) => emit(year, event.target.value, day)}><option value="">Mois</option>{MONTHS.map((label, index) => <option key={label} value={String(index + 1).padStart(2, '0')}>{label}</option>)}</select>
-    <select aria-label="Année" value={year} required={required} disabled={disabled} className={selectClass} onChange={(event) => emit(event.target.value, month, day)}><option value="">Année</option>{years.map((item) => <option key={item}>{item}</option>)}</select>
+    <select aria-label={tr('Jour','Day')} value={day} required={required} disabled={disabled} className={selectClass} onChange={(event) => emit(year, month, event.target.value)}><option value="">{tr('Jour','Day')}</option>{Array.from({ length: dayCount }, (_, index) => String(index + 1).padStart(2, '0')).map((item) => <option key={item} value={item}>{item}</option>)}</select>
+    <select aria-label={tr('Mois','Month')} value={month} required={required} disabled={disabled} className={selectClass} onChange={(event) => emit(year, event.target.value, day)}><option value="">{tr('Mois','Month')}</option>{MONTHS[language].map((label, index) => <option key={label} value={String(index + 1).padStart(2, '0')}>{label}</option>)}</select>
+    <select aria-label={tr('Année','Year')} value={year} required={required} disabled={disabled} className={selectClass} onChange={(event) => emit(event.target.value, month, day)}><option value="">{tr('Année','Year')}</option>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select>
   </span>
 }

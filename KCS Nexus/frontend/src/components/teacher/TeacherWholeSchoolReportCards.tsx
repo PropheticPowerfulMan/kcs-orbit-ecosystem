@@ -577,7 +577,7 @@ export default function TeacherWholeSchoolReportCards() {
             <select className={`${field} mt-1 normal-case`} value={classFilter} onChange={(event) => setClassFilter(event.target.value)} disabled={classes.length <= 1}>
               {!classes.length && <option value="">No main-teacher class assigned</option>}
               {classes.map((className) => (
-                <option key={className}>{className}</option>
+                <option key={className} value={className}>{className}</option>
               ))}
             </select>
           </label>
@@ -612,7 +612,7 @@ export default function TeacherWholeSchoolReportCards() {
               <button type="button" key={learner.id} onClick={() => {setSelectedId(learner.id);if(window.matchMedia('(max-width:1023px)').matches)setDirectoryExpanded(false)}} aria-current={selected?.id === learner.id ? 'true' : undefined} className={`w-full rounded-xl border p-3 text-left transition ${selected?.id === learner.id ? 'border-kcs-blue-500 bg-kcs-blue-50 ring-2 ring-kcs-blue-100 dark:bg-kcs-blue-950' : 'border-gray-100 hover:border-kcs-blue-200 dark:border-kcs-blue-800'}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-sm font-bold text-kcs-blue-950 dark:text-white">{learner.name}</p>
+                    <p className="text-sm font-bold text-kcs-blue-950 dark:text-white" data-no-translate>{learner.name}</p>
                     <p className="text-xs text-gray-500">
                       {learner.studentNumber} · {canonicalClassLabel(learner.grade, learner.section)}
                     </p>
@@ -640,7 +640,7 @@ export default function TeacherWholeSchoolReportCards() {
               <div className="flex flex-col gap-3 border-b border-gray-100 pb-4 sm:flex-row sm:items-start sm:justify-between dark:border-kcs-blue-800">
                 <div>
                   <p className="text-xs font-black uppercase tracking-wide text-kcs-gold-600">Complete learner record</p>
-                  <h3 className="mt-1 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white">{selected.name}</h3>
+                  <h3 className="mt-1 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white" data-no-translate>{selected.name}</h3>
                   <p className="text-sm text-gray-500">
                     {selected.studentNumber} · {canonicalClassLabel(selected.grade, selected.section)}
                   </p>

@@ -1,3 +1,4 @@
+import {uiLocale} from '@/utils/uiLocale'
 import RemoteLearningWorkspace from '@/components/shared/RemoteLearningWorkspace'
 import {OfficialDocumentAuthoritiesSettings} from '@/components/admin/OfficialDocumentAuthoritiesSettings'
 import{rememberOfficialPortraits,cachedOfficialPortraits}from'@/utils/officialPortraitCache'
@@ -615,7 +616,7 @@ const buildOfficialTranscript = (student: AdminStudentRecord) => {
     cumulativeGpa: 0,
     cumulativeAverage: 0,
     classRank: 'Aucune donnée officielle',
-    generatedAt: new Date().toLocaleDateString(),
+    generatedAt: new Date().toLocaleDateString(uiLocale()),
     graduationStatus: 'Aucune note approuvée : le transcript officiel ne peut pas encore être généré.',
   }
 }
@@ -801,7 +802,7 @@ const buildReportWindow = (cadence: AdminReportCadence) => {
   return {
     start,
     end,
-    label: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
+    label: `${start.toLocaleDateString(uiLocale())} - ${end.toLocaleDateString(uiLocale())}`,
   }
 }
 
@@ -1528,7 +1529,7 @@ const MainTeacherAssignmentPanel = () => {
           <div><p className="font-bold text-kcs-blue-950 dark:text-white">{name(item)}</p><p className="text-xs text-slate-500">{item.user?.email} · {item._count?.courses || 0} {tr('cours', 'courses')}</p></div>
           <label className="flex items-center gap-2 text-sm font-semibold dark:text-white"><input type="checkbox" checked={draft.status === 'HOMEROOM_TEACHER'} onChange={(event) => updateDraft(item.id, { status: event.target.checked ? 'HOMEROOM_TEACHER' : 'TEACHER' })} className="h-5 w-5 accent-kcs-blue-700"/>Main Teacher</label>
           <label className="flex items-center gap-2 text-sm font-semibold dark:text-white"><input type="checkbox" checked={draft.status === 'ASSISTANT_TEACHER'} onChange={(event) => updateDraft(item.id, { status: event.target.checked ? 'ASSISTANT_TEACHER' : 'TEACHER' })} className="h-5 w-5 accent-amber-600"/>{tr('Assistant', 'Assistant')}</label>
-          <select value={draft.grade} disabled={draft.status === 'TEACHER'} onChange={(event) => updateDraft(item.id, { grade: event.target.value })} className="rounded-xl border bg-white p-2.5 text-sm disabled:opacity-40 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((level) => <option key={level}>{level}</option>)}</select>
+          <select value={draft.grade} disabled={draft.status === 'TEACHER'} onChange={(event) => updateDraft(item.id, { grade: event.target.value })} className="rounded-xl border bg-white p-2.5 text-sm disabled:opacity-40 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select>
           <input list="main-teacher-section-options" value={draft.section} disabled={draft.status === 'TEACHER'} maxLength={40} onChange={(event) => updateDraft(item.id, { section: event.target.value })} placeholder={tr('Ex. A, B, Sciences 1&', 'E.g. A, B, Science 1&')} className="rounded-xl border bg-white p-2.5 text-sm disabled:opacity-40 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"/>
           <button type="button" disabled={busyId === item.id} onClick={() => void save(item)} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{busyId === item.id ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer', 'Save')}</button>
         </article>
@@ -1739,7 +1740,7 @@ const AdminSectionView = ({
         subject: message.subject,
         body: message.body,
         sender: message.sender ? [message.sender.lastName, message.sender.middleName, message.sender.firstName].filter(Boolean).join(' ') : 'Administration',
-        timestamp: new Date(message.createdAt).toLocaleString(),
+        timestamp: new Date(message.createdAt).toLocaleString(uiLocale()),
         status: message.readAt ? 'Read' : 'Delivered',
       })))
     }).catch(() => setSentNotice('Unable to load the traceable message history.'))
@@ -1757,7 +1758,7 @@ const AdminSectionView = ({
       setSentNotice(language === 'fr' ? 'Communication enregistrée pour ' + count + ' destinataire(s) ; ' + emailQueued + ' e-mail(s) mis en file (~' + estimatedMinutes + ' min).' : 'Communication recorded for ' + count + ' recipient(s); ' + emailQueued + ' email(s) queued (~' + estimatedMinutes + ' min).')
       const history = await messagesAPI.getHistory({ box: 'sent' })
       const rows = history.data?.data ?? []
-      setCommunicationHistory(rows.map((message: any) => ({ id: message.id, direction: 'Sent', audience: message.recipient ? [message.recipient.lastName,message.recipient.middleName,message.recipient.firstName].filter(Boolean).join(' ')+' ('+message.recipient.role+')' : message.targetRole??'Audience', subject: message.subject, body: message.body, sender: message.sender ? [message.sender.lastName,message.sender.middleName,message.sender.firstName].filter(Boolean).join(' ') : 'Administration', timestamp: new Date(message.createdAt).toLocaleString(), status: message.readAt ? 'Read' : 'Delivered' })))
+      setCommunicationHistory(rows.map((message: any) => ({ id: message.id, direction: 'Sent', audience: message.recipient ? [message.recipient.lastName,message.recipient.middleName,message.recipient.firstName].filter(Boolean).join(' ')+' ('+message.recipient.role+')' : message.targetRole??'Audience', subject: message.subject, body: message.body, sender: message.sender ? [message.sender.lastName,message.sender.middleName,message.sender.firstName].filter(Boolean).join(' ') : 'Administration', timestamp: new Date(message.createdAt).toLocaleString(uiLocale()), status: message.readAt ? 'Read' : 'Delivered' })))
     } catch (error: any) { setSentNotice(error?.response?.data?.message ?? 'The communication could not be delivered.') }
     finally { setCommunicationSending(false) }
   }
@@ -2678,7 +2679,7 @@ const AdminSectionView = ({
             </label>
             <select value={parentGradeFilter} onChange={(event) => { setParentGradeFilter(event.target.value); setParentClassSuffixFilter('All') }} aria-label="Filtrer les parents par niveau de l'enfant" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
               <option value="All">{tr('Tous les niveaux','All grades')}</option>
-              {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
+              {SCHOOL_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
             </select>
             <select value={parentClassSuffixFilter} onChange={(event) => setParentClassSuffixFilter(event.target.value as typeof SEARCH_CLASS_SUFFIXES[number])} aria-label="Filtrer les parents par suffixe de classe" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
               <option value="All">{tr('Tous les suffixes','All sections')}</option><option value="">{tr('Sans suffixe','No section')}</option>
@@ -2713,7 +2714,7 @@ const AdminSectionView = ({
                 {filteredParents.map((parent) => (
                   <tr key={parent.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-kcs-blue-800/20">
                     <td data-label={tr('Parent','Parent')} className="px-5 py-4">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{parent.name}</p>
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{parent.name}</p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{parent.status} {parentAccess[parent.id]?.accountBlockedAt ? '· Compte bloqué' : '· Compte actif'}</p>
                     </td>
                     <td data-label={tr('ID parent','Parent ID')} className="px-5 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{parent.displayId || parent.id}</td>
@@ -2828,7 +2829,7 @@ const AdminSectionView = ({
                       <p className="text-xs font-black uppercase tracking-wide text-violet-700 dark:text-violet-300">Rattacher un élève déjà inscrit</p>
                       <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Ajoutez ce parent comme responsable supplémentaire, sans recréer l’élève ni sa famille.</p>
                       <label className="relative mt-3 block"><Search className="absolute left-3 top-3 text-slate-400" size={17}/><input value={existingStudentLinkQuery} onChange={(event)=>setExistingStudentLinkQuery(event.target.value)} className="w-full rounded-xl border border-violet-200 bg-white py-2.5 pl-10 pr-3 text-sm dark:border-violet-800 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom complet, identifiant ou classe…"/></label>
-                      {existingStudentLinkQuery.trim() ? <div className="mt-3 grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">{officialRoster.filter(student=>!parentEditStudents.some(linked=>linked.id===student.id)).filter(student=>`${student.name} ${student.studentNumber} ${student.grade} ${student.section}`.toLowerCase().includes(existingStudentLinkQuery.trim().toLowerCase())).slice(0,20).map(student=><button type="button" key={student.id} onClick={()=>{setParentEditStudents(current=>[...current,{id:student.id,...createAdminStudentEditForm(student)}]);setExistingStudentLinkQuery('')}} className="rounded-xl border border-violet-200 bg-white p-3 text-left text-sm hover:bg-violet-100 dark:border-violet-800 dark:bg-kcs-blue-900 dark:hover:bg-violet-950"><strong className="block text-kcs-blue-950 dark:text-white">{student.name}</strong><span className="text-xs text-slate-500">{student.studentNumber} · {student.grade} {student.section}</span></button>)}</div>:null}
+                      {existingStudentLinkQuery.trim() ? <div className="mt-3 grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">{officialRoster.filter(student=>!parentEditStudents.some(linked=>linked.id===student.id)).filter(student=>`${student.name} ${student.studentNumber} ${student.grade} ${student.section}`.toLowerCase().includes(existingStudentLinkQuery.trim().toLowerCase())).slice(0,20).map(student=><button type="button" key={student.id} onClick={()=>{setParentEditStudents(current=>[...current,{id:student.id,...createAdminStudentEditForm(student)}]);setExistingStudentLinkQuery('')}} className="rounded-xl border border-violet-200 bg-white p-3 text-left text-sm hover:bg-violet-100 dark:border-violet-800 dark:bg-kcs-blue-900 dark:hover:bg-violet-950"><strong className="block text-kcs-blue-950 dark:text-white" data-no-translate>{student.name}</strong><span className="text-xs text-slate-500">{student.studentNumber} · {student.grade} {student.section}</span></button>)}</div>:null}
                     </div>
                     {parentEditStudents.map((student, index) => (
                       <article key={student.id} className="rounded-2xl border border-kcs-blue-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
@@ -2841,7 +2842,7 @@ const AdminSectionView = ({
                           <input value={student.studentNumber} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, studentNumber: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Identifiant élève *" required />
                           <input type="email" value={student.email} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, email: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder={tr('E-mail scolaire','School email')} />
                           <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">{tr('Date de naissance','Date of birth')}<DateSelect value={student.dateOfBirth} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" /></label>
-                          <select value={student.grade} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select>
+                          <select value={student.grade} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select>
                           <input value={student.section} maxLength={40} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, section: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Section libre : A, B, Sciences 1… ou vide" />
                         </div>
                       </article>
@@ -2858,7 +2859,7 @@ const AdminSectionView = ({
                           <div className="rounded-xl border border-dashed border-kcs-blue-200 bg-kcs-blue-50 px-4 py-3 text-sm text-kcs-blue-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-kcs-blue-200"><strong>ID :</strong> généré automatiquement</div>
                           <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance *<DateSelect value={student.dateOfBirth} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
                           <input value={schoolEmailPreview(student)} readOnly className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-gray-300" placeholder="E-mail scolaire généré automatiquement" />
-                          <select value={student.grade} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select>
+                          <select value={student.grade} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select>
                           <input value={student.section} maxLength={40} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, section: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Section libre : A, B, Sciences 1… ou vide" />
                         </div>
                       </article>)}</div>
@@ -2921,8 +2922,8 @@ const AdminSectionView = ({
               {CLASS_SECTIONS.filter(Boolean).map((section) => <option key={section} value={section}>Suffixe {section}</option>)}
             </select>
             <select value={familyFilter} onChange={(event) => setFamilyFilter(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option>All</option>
-              {familyDirectory.map((familyName) => <option key={familyName}>{familyName}</option>)}
+              <option value="All">All</option>
+              {familyDirectory.map((familyName) => <option key={familyName} value={familyName}>{familyName}</option>)}
             </select>
           </div>
           {familyCredentials&&<InstitutionalCredentialsDialog loading={familyCredentials.loading} error={familyCredentials.error?familyCredentials.message:undefined} reset={Boolean(familyCredentials.reset)} entries={[familyCredentials.parent,...(familyCredentials.students||[])].filter(Boolean)} onClose={()=>setFamilyCredentials(null)}/>}
@@ -2975,7 +2976,7 @@ const AdminSectionView = ({
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">{tr('Date de naissance','Date of birth')}<DateSelect value={student.dateOfBirth} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, dateOfBirth: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
                       <label className="registry-field"><span>{tr('E-mail scolaire généré automatiquement','Automatically generated school email')}</span><input value={schoolEmailPreview(student)} readOnly className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-gray-300" placeholder="E-mail scolaire généré automatiquement : prenom.nom@ourkcs.org" /></label>
                       <select value={student.grade} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, grade: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                        {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
+                        {SCHOOL_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
                       </select>
                       <label className="registry-field"><span>{tr('Section / sous-classe (facultatif)','Section / class group (optional)')}</span><input value={student.section} maxLength={40} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, section: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Section libre : A, B, Sciences 1… ou vide" /></label>
                     </div>
@@ -3018,7 +3019,7 @@ const AdminSectionView = ({
                         setSelectedStudent(student)
                         setViewingStudent(student)
                       }}>
-                        <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
+                        <p className="font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{student.name}</p>
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{student.status}</p>
                       </button>
                     </td>
@@ -3160,13 +3161,13 @@ const AdminSectionView = ({
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       {tr('Statut','Status')}
                       <select value={studentEditForm.status} onChange={(event) => setStudentEditForm((current) => ({ ...current, status: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                        {['Active', 'Inactive', 'Suspended'].map((status) => <option key={status}>{status}</option>)}
+                        {['Active', 'Inactive', 'Suspended'].map((status) => <option key={status} value={status}>{status}</option>)}
                       </select>
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       {tr('Niveau','Grade')}
                       <select value={studentEditForm.grade} onChange={(event) => setStudentEditForm((current) => ({ ...current, grade: event.target.value, section: '' }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                        {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
+                        {SCHOOL_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
                       </select>
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
@@ -3236,7 +3237,7 @@ const AdminSectionView = ({
             {staffSeed.map((staff) => (
               <button key={staff.id} className="rounded-xl bg-gray-50 p-4 text-left transition-colors hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800" onClick={() => setSelectedStaff(staff)}>
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{staff.name}</p>
+                  <p className="font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{staff.name}</p>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${pillTone(staff.status)}`}>{staff.status}</span>
                 </div>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{staff.role} - {staff.department} - {staff.time}</p>
@@ -3247,7 +3248,7 @@ const AdminSectionView = ({
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="font-bold text-kcs-blue-900 dark:text-white">Selected Staff Member</h2>
           <div className="mt-4 rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-            <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{selectedStaff.name}</p>
+            <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white" data-no-translate>{selectedStaff.name}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400">{selectedStaff.role} - {selectedStaff.department}</p>
             <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">Arrival: {selectedStaff.time}. Status: {selectedStaff.status}.</p>
           </div>
@@ -3284,7 +3285,7 @@ const AdminSectionView = ({
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {subjects.map((subject) => (
           <div key={subject.id} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <p className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{subject.name}</p>
+            <p className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white" data-no-translate>{subject.name}</p>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{subject.className} - {subject.room}</p>
             <p className="mt-3 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">{subject.teacher}</p>
             <button className="mt-4 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800">Edit course</button>
@@ -3364,7 +3365,7 @@ const AdminSectionView = ({
     const totals = financeSummary?.totals
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600 dark:text-kcs-gold-300">EduPay source of truth</p><h2 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Synchronized Finance</h2><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{financeSummary ? `Last synchronized ${new Date(financeSummary.synchronizedAt).toLocaleString()}` : 'Loading the financial source...'}</p></div><button type="button" className={adminButton} onClick={() => void refreshEduPayFinance()} disabled={financeLoading}>{financeLoading ? 'Synchronizing...' : 'Refresh EduPay data'}</button></div>{financeSyncError ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{financeSyncError}</p> : null}</div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600 dark:text-kcs-gold-300">EduPay source of truth</p><h2 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Synchronized Finance</h2><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{financeSummary ? `Last synchronized ${new Date(financeSummary.synchronizedAt).toLocaleString(uiLocale())}` : 'Loading the financial source...'}</p></div><button type="button" className={adminButton} onClick={() => void refreshEduPayFinance()} disabled={financeLoading}>{financeLoading ? 'Synchronizing...' : 'Refresh EduPay data'}</button></div>{financeSyncError ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{financeSyncError}</p> : null}</div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[['Expected revenue', totals?.expectedRevenue ?? 0], ['Collected revenue', totals?.collectedRevenue ?? 0], ['Outstanding debt', totals?.outstandingDebt ?? 0], ['Reductions', totals?.totalReduction ?? 0]].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{currency.format(Number(value))}</p><p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p></div>)}
         </div>
@@ -4079,7 +4080,7 @@ const AdminDashboard = () => {
                 {officialRoster.slice(0, 6).map((student) => (
                   <div key={student.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{student.name}</p>
                       <span className={`rounded-full px-2 py-1 text-xs font-semibold ${pillTone(student.discipline)}`}>{dt(student.discipline)}</span>
                     </div>
                     <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">{formatClassName(student.grade, student.section)} - GPA {student.gpa} - {dt('attendance')} {student.attendance}% - {dt('parent:')} {student.parent}</p>

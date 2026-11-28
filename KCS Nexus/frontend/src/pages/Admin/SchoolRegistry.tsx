@@ -171,15 +171,15 @@ const SchoolRegistryPage = () => {
                   <option value="M">Male</option>
                 </select>
                 <select value={form.section} onChange={(event) => setForm({ ...form, section: event.target.value })} className="input-kcs">
-                  <option>A</option>
-                  <option>B</option>
-                  <option>C</option>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
                 </select>
                 <select value={form.relation} onChange={(event) => setForm({ ...form, relation: event.target.value })} className="input-kcs">
-                  <option>Parent</option>
-                  <option>Mother</option>
-                  <option>Father</option>
-                  <option>Guardian</option>
+                  <option value="Parent">Parent</option>
+                  <option value="Mother">Mother</option>
+                  <option value="Father">Father</option>
+                  <option value="Guardian">Guardian</option>
                 </select>
               </div>
               {registrationNotice ? (

@@ -1,3 +1,6 @@
+import {useUIStore} from '@/store/uiStore'
+import {uiLocale} from '@/utils/uiLocale'
+import {translateInterfaceText} from '@/i18n/interfaceText'
 import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import { useEffect, useMemo, useState } from 'react'
 import { Bell, CheckCheck, Search, Trash2, X } from 'lucide-react'
@@ -20,9 +23,11 @@ type Props = {
 }
 
 const formatDate = (value: string) =>
-  new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  new Intl.DateTimeFormat(uiLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 
 export default function ParentNotificationsPanel({ notices, onChange }: Props) {
+  const language = useUIStore(state => state.language)
+  const tr = (fr:string,en:string) => language === 'fr' ? fr : en
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -46,7 +51,7 @@ export default function ParentNotificationsPanel({ notices, onChange }: Props) {
       (!typeFilter || notice.type === typeFilter) &&
       (readFilter === 'all' || (readFilter === 'read' ? notice.isRead : !notice.isRead)),
     )
-  }, [notices, query, dateFrom, dateTo, readFilter, typeFilter])
+  }, [notices, query, dateFrom, dateTo, readFilter, typeFilter, language])
   const noticeTypes = useMemo(() => [...new Set(notices.map((notice) => notice.type).filter(Boolean))].sort(), [notices])
   const activeNotice = notices.find((notice) => notice.id === activeId) ?? null
   const selectedVisible = filtered.length > 0 && filtered.every((notice) => selectedIds.includes(notice.id))
@@ -122,7 +127,7 @@ export default function ParentNotificationsPanel({ notices, onChange }: Props) {
                 <h2 className="text-xl font-bold text-kcs-blue-950 dark:text-white">Centre de notifications</h2>
               </div>
               <p className="mt-1 text-sm text-gray-500">
-                {notices.filter((notice) => !notice.isRead).length} non lue(s) sur {notices.length}
+                {notices.filter((notice) => !notice.isRead).length} {tr('non lue(s) sur','unread of')} {notices.length}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -142,7 +147,7 @@ export default function ParentNotificationsPanel({ notices, onChange }: Props) {
             <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="self-end rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><option value="">Tous les types</option>{noticeTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select>
           </div>
           {(query || dateFrom || dateTo || readFilter !== 'all' || typeFilter) && <button type="button" onClick={() => { setQuery(''); setDateFrom(''); setDateTo(''); setReadFilter('all'); setTypeFilter('') }} className="mt-3 text-xs font-bold text-kcs-blue-700 dark:text-kcs-blue-200">Réinitialiser les filtres</button>}
-          {feedback && <p className="mt-4 rounded-xl bg-kcs-blue-50 p-3 text-sm text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{feedback}</p>}
+          {feedback && <p className="mt-4 rounded-xl bg-kcs-blue-50 p-3 text-sm text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{translateInterfaceText(feedback,language)}</p>}
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -151,7 +156,7 @@ export default function ParentNotificationsPanel({ notices, onChange }: Props) {
               <input type="checkbox" checked={selectedVisible} onChange={toggleVisible} disabled={filtered.length === 0} className="h-4 w-4 rounded border-gray-300 text-kcs-blue-600" />
               Sélectionner les résultats
             </label>
-            <span className="text-xs font-semibold text-gray-400">{filtered.length} résultat(s)</span>
+            <span className="text-xs font-semibold text-gray-400">{filtered.length} {tr('résultat(s)','result(s)')}</span>
           </div>
           {filtered.length === 0 ? (
             <p className="m-5 rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-kcs-blue-800/30 dark:text-gray-300">Aucune notification ne correspond à cette recherche.</p>
@@ -159,13 +164,13 @@ export default function ParentNotificationsPanel({ notices, onChange }: Props) {
             <div className="divide-y divide-gray-100 dark:divide-kcs-blue-800">
               {filtered.map((notice) => (
                 <article key={notice.id} className={`flex items-start gap-3 p-4 sm:p-5 ${notice.isRead ? '' : 'bg-kcs-blue-50/70 dark:bg-kcs-blue-800/25'}`}>
-                  <input type="checkbox" aria-label={`Sélectionner ${notice.title}`} checked={selectedIds.includes(notice.id)} onChange={() => setSelectedIds((current) => current.includes(notice.id) ? current.filter((id) => id !== notice.id) : [...current, notice.id])} className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-kcs-blue-600" />
+                  <input type="checkbox" aria-label={`${tr('Sélectionner','Select')} ${notice.title}`} checked={selectedIds.includes(notice.id)} onChange={() => setSelectedIds((current) => current.includes(notice.id) ? current.filter((id) => id !== notice.id) : [...current, notice.id])} className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-kcs-blue-600" />
                   <button type="button" onClick={() => void markReadAndOpen(notice)} className="min-w-0 flex-1 text-left">
                     <span className="flex flex-wrap items-center gap-2">
-                      <strong className="text-sm text-kcs-blue-950 dark:text-white">{notice.title}</strong>
+                      <strong className="text-sm text-kcs-blue-950 dark:text-white" data-no-translate>{notice.title}</strong>
                       {!notice.isRead && <span className="rounded-full bg-kcs-gold-500 px-2 py-0.5 text-[10px] font-bold uppercase text-kcs-blue-950">Nouveau</span>}
                     </span>
-                    <span className="mt-1 block line-clamp-2 text-sm text-gray-600 dark:text-gray-300">{notice.message}</span>
+                    <span className="mt-1 block line-clamp-2 text-sm text-gray-600 dark:text-gray-300" data-no-translate>{notice.message}</span>
                     <span className="mt-2 block text-xs font-medium text-gray-400">{notice.type} · {formatDate(notice.createdAt)}</span>
                   </button>
                 </article>
@@ -181,12 +186,12 @@ export default function ParentNotificationsPanel({ notices, onChange }: Props) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <span className="rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-bold uppercase text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">{activeNotice.type}</span>
-                <h2 id="parent-notification-title" className="mt-3 text-2xl font-bold text-kcs-blue-950 dark:text-white">{activeNotice.title}</h2>
+                <h2 id="parent-notification-title" className="mt-3 text-2xl font-bold text-kcs-blue-950 dark:text-white" data-no-translate>{activeNotice.title}</h2>
                 <p className="mt-1 text-sm text-gray-400">{formatDate(activeNotice.createdAt)}</p>
               </div>
               <button type="button" onClick={() => setActiveId(null)} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-kcs-blue-800" aria-label="Fermer"><X size={22} /></button>
             </div>
-            <p className="mt-6 whitespace-pre-wrap text-base leading-7 text-gray-700 dark:text-gray-200">{activeNotice.message}</p>
+            <p className="mt-6 whitespace-pre-wrap text-base leading-7 text-gray-700 dark:text-gray-200" data-no-translate>{activeNotice.message}</p>
             <button type="button" onClick={() => setActiveId(null)} className="mt-7 w-full rounded-xl bg-kcs-blue-700 px-4 py-3 font-semibold text-white hover:bg-kcs-blue-800">Fermer</button>
           </div>
         </div>

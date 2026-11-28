@@ -1,3 +1,4 @@
+import {translateInterfaceText} from '@/i18n/interfaceText'
 const pairs: Array<[string, string]> = [
   ['Les accès ont été enregistrés sans modifier le rôle principal ni les identifiants.','Workspace access saved without changing the primary role or credentials'],
   ['Les informations ont été enregistrées dans Orbit et synchronisées dans Nexus.','Shared entity updated through Orbit and synchronized in Nexus'],
@@ -63,5 +64,5 @@ const pairs: Array<[string, string]> = [
 export function localizeMutationMessage(message: string, language: string) {
   if (message.startsWith('ACADEMIC_PERIOD_CLOSED:')) return language.startsWith('fr') ? 'Cette période est clôturée. Ses notes et ses dossiers académiques sont en lecture seule.' : 'This academic period is closed. Its grades and academic records are read-only.'
   const pair = pairs.find(([fr, en]) => message === fr || message === en);
-  return pair ? pair[language.startsWith("fr") ? 0 : 1] : message;
+  return pair ? pair[language.startsWith("fr") ? 0 : 1] : translateInterfaceText(message, language.startsWith('fr') ? 'fr' : 'en');
 }
