@@ -314,7 +314,7 @@ export default function StudentArchivesCenter() {
               {tr("Toutes les classes", "All grades")}
             </option>
             {SCHOOL_LEVELS.map((item) => (
-              <option key={item}>{item}</option>
+              <option key={item} value={item}>{item}</option>
             ))}
           </select>
           <button

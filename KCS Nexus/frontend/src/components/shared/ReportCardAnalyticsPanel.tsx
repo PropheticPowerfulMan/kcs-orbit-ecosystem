@@ -155,7 +155,7 @@ export default function ReportCardAnalyticsPanel({
               {tr("Tout le périmètre affiché", "Entire displayed scope")}
             </option>
             {classes.map((value) => (
-              <option key={value}>{value}</option>
+              <option key={value} value={value}>{value}</option>
             ))}
           </select>
         </label>
@@ -257,7 +257,7 @@ export default function ReportCardAnalyticsPanel({
                   className="border-t border-indigo-100 bg-white dark:border-indigo-800 dark:bg-kcs-blue-950 dark:text-white"
                 >
                   <td className="p-3 font-bold">{student.rank}</td>
-                  <td>{student.name}</td>
+                  <td data-no-translate>{student.name}</td>
                   <td>{student.className}</td>
                   <td className="font-bold">{student.average!.toFixed(2)}%</td>
                 </tr>

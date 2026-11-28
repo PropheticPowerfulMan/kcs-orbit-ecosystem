@@ -196,6 +196,8 @@ const RouteScrollReset = () => {
 }
 
 const App = () => {
+  // Refresh legacy display-only locale helpers without remounting routes or losing drafts.
+  useUIStore(state => state.language)
   const location = useLocation()
   return (
     <>

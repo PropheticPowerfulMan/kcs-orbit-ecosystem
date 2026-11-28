@@ -1,3 +1,4 @@
+import {uiLocale} from '@/utils/uiLocale'
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock3, Eye, Search, Send, ShieldAlert, Users, X } from 'lucide-react'
 import { disciplineAPI } from '@/services/api'
@@ -32,7 +33,7 @@ const reporterName = (reporter: any) =>
   [reporter?.lastName, reporter?.middleName, reporter?.firstName].filter(Boolean).join(' ')
   || 'Teacher'
 
-const formatDate = (value: string) => new Date(value).toLocaleString()
+const formatDate = (value: string) => new Date(value).toLocaleString(uiLocale())
 
 export default function TeacherDisciplinePanel({ students }: TeacherDisciplinePanelProps) {
   const [allCases, setAllCases] = useState<any[]>([])
@@ -252,7 +253,7 @@ export default function TeacherDisciplinePanel({ students }: TeacherDisciplinePa
             </div>
             <label className="text-sm font-semibold text-kcs-blue-900 dark:text-white">Category
               <select className={fieldClass + ' mt-1'} value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))}>
-                <option>Classroom conduct</option><option>Respect and behavior</option><option>Academic integrity</option><option>Safety concern</option><option>Attendance or punctuality</option><option>Other</option>
+                <option value="Classroom conduct">Classroom conduct</option><option value="Respect and behavior">Respect and behavior</option><option value="Academic integrity">Academic integrity</option><option value="Safety concern">Safety concern</option><option value="Attendance or punctuality">Attendance or punctuality</option><option value="Other">Other</option>
               </select>
             </label>
             <label className="text-sm font-semibold text-kcs-blue-900 dark:text-white">Objective incident description

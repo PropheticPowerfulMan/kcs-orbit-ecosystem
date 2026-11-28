@@ -1,3 +1,4 @@
+import {uiLocale} from '@/utils/uiLocale'
 import { confirmPortalAction } from '@/utils/portalActionDialogs'
 import './adminSuspensions.css'
 import { useEffect, useMemo, useState } from "react";
@@ -633,7 +634,7 @@ function SuspensionWorkspace({
                 </div>
                 <p className="mt-3 flex items-center gap-2 text-sm font-bold dark:text-white">
                   <CalendarDays size={16} />
-                  {start.toLocaleDateString()} – {end.toLocaleDateString()}
+                  {start.toLocaleDateString(uiLocale())} – {end.toLocaleDateString(uiLocale())}
                 </p>
                 <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                   {record.incident}
@@ -865,7 +866,7 @@ function DismissalWorkspace({
                 {canonicalClassLabel(archive.grade, archive.section)}
               </p>
               <p className="mt-2 text-xs font-bold text-rose-700 dark:text-rose-200">
-                {new Date(archive.effectiveDate).toLocaleDateString()}
+                {new Date(archive.effectiveDate).toLocaleDateString(uiLocale())}
               </p>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                 {archive.reason}

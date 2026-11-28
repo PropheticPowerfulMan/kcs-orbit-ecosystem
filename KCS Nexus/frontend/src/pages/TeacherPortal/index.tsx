@@ -1,3 +1,4 @@
+import {uiLocale} from '@/utils/uiLocale'
 import TeacherPerformancePanel,{CourseCredits} from '@/components/teacher/TeacherPerformancePanel'
 import TeacherAssistantPanel,{TeacherAssistantDialog}from '@/components/teacher/TeacherAssistantPanel'
 import{PerformanceBar}from '@/components/shared/AcademicPerformance'
@@ -1499,8 +1500,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       id: `disc-${String(disciplineList.length + 1).padStart(3, '0')}`,
       studentId: disciplineDraft.studentId,
       student: student?.name ?? 'Selected student',
-      date: timestamp.toLocaleDateString(),
-      time: timestamp.toLocaleTimeString(),
+      date: timestamp.toLocaleDateString(uiLocale()),
+      time: timestamp.toLocaleTimeString(uiLocale()),
       createdAt: timestamp.toISOString(),
       level: disciplineDraft.level,
       category: disciplineDraft.category,
@@ -1522,7 +1523,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     try {
       const response = await messagesAPI.send({ recipientId: recipient.id, subject: messageDraft.subject, body: messageDraft.body })
       const message = response.data?.data
-      setInbox((current) => [{ id: message.id, from: `To ${recipient.firstName} ${recipient.lastName}`, subject: message.subject, body: message.body, time: new Date(message.createdAt).toLocaleString(), requiresResponse: false }, ...current])
+      setInbox((current) => [{ id: message.id, from: `To ${recipient.firstName} ${recipient.lastName}`, subject: message.subject, body: message.body, time: new Date(message.createdAt).toLocaleString(uiLocale()), requiresResponse: false }, ...current])
       runAction(`Message sent to ${recipient.firstName} ${recipient.lastName} and stored in KCS Nexus.`)
     } catch (error: any) {
       runAction(error?.response?.data?.message || 'The message was not sent.', true)
@@ -1881,7 +1882,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             <header className="relative flex flex-row items-start justify-between gap-3 border-b border-gray-100 bg-gradient-to-r from-kcs-blue-950 to-kcs-blue-700 px-3 py-2.5 text-white sm:px-7 sm:py-5">
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-300">Official course roster</p>
-                <h3 id="course-enrollment-title" className="mt-1 truncate pr-2 font-display text-lg font-bold sm:text-2xl">{enrollmentDialogCourse.name}</h3>
+                <h3 id="course-enrollment-title" className="mt-1 truncate pr-2 font-display text-lg font-bold sm:text-2xl" data-no-translate>{enrollmentDialogCourse.name}</h3>
                 <p className="mt-1 text-xs text-blue-100 sm:text-sm">
                   {canonicalClassLabel(enrollmentDialogCourse.className || enrollmentDialogCourse.gradeLevels[0])}
                   {' · '}{enrollmentDraftIds.length} enrolled
@@ -1925,8 +1926,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 autoFocus
               />
               <select className={inputClass} value={enrollmentClassFilter} onChange={(event) => setEnrollmentClassFilter(event.target.value)}>
-                <option>All classes</option>
-                {enrollmentClasses.map((className) => <option key={className}>{className}</option>)}
+                <option value="All classes">All classes</option>
+                {enrollmentClasses.map((className) => <option key={className} value={className}>{className}</option>)}
               </select>
               <select className={inputClass} value={enrollmentStatusFilter} onChange={(event) => setEnrollmentStatusFilter(event.target.value as typeof enrollmentStatusFilter)}>
                 <option value="all">All students</option>
@@ -1997,7 +1998,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                               <span className="w-6 flex-shrink-0 text-right text-[10px] font-black text-gray-400">{studentIndex + 1}</span>
                               <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border text-xs font-bold ${selected ? 'border-kcs-blue-700 bg-kcs-blue-700 text-white' : 'border-gray-300 text-transparent dark:border-kcs-blue-600'}`}>✓</span>
                               <span className="min-w-0">
-                                <span className="block truncate text-sm font-bold text-kcs-blue-900 dark:text-white">{student.name}</span>
+                                <span className="block truncate text-sm font-bold text-kcs-blue-900 dark:text-white" data-no-translate>{student.name}</span>
                                 <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{student.studentNumber || 'No student number'} · {className}</span>
                               </span>
                             </button>
@@ -2049,7 +2050,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 return (
                   <div key={`${record.studentId}-${record.date}-${index}`} className="flex items-center justify-between rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
                     <div>
-                      <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{student?.name}</p>
+                      <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{student?.name}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{record.date} - {record.className}</p>
                     </div>
                     <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusTone(record.status)}`}>{record.status}</span>
@@ -2099,7 +2100,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               <div key={assignment.id} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-bold text-kcs-blue-900 dark:text-white">{assignment.title}</h3>
+                    <h3 className="font-bold text-kcs-blue-900 dark:text-white" data-no-translate>{assignment.title}</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400">{assignment.subject} - {student?.name}</p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusTone(assignment.status)}`}>{assignment.status}</span>
@@ -2195,7 +2196,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                     <th className="px-4 py-3">Student</th>
                     {gradebookColumns.map((column) => (
                       <th key={column.id} className="px-3 py-3 text-center">
-                        <span className="block font-bold text-kcs-blue-900 dark:text-white">{column.title}</span>
+                        <span className="block font-bold text-kcs-blue-900 dark:text-white" data-no-translate>{column.title}</span>
                         <span className="block normal-case text-gray-400">({column.type})</span>
                         <span className="block normal-case text-gray-400">{column.date}</span>
                         <button onClick={() => deleteGradebookColumn(column.id)} className="mt-2 text-[11px] font-semibold normal-case text-red-500 hover:text-red-600">
@@ -2215,7 +2216,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                     const finalGrade = getFinalGrade(student.id)
                     return (
                       <tr key={student.id} className="text-gray-700 dark:text-gray-300">
-                        <td className="max-w-[190px] truncate px-4 py-3 font-semibold text-kcs-blue-900 dark:text-white" title={student.name}>{student.name}</td>
+                        <td className="max-w-[190px] truncate px-4 py-3 font-semibold text-kcs-blue-900 dark:text-white" title={student.name} data-no-translate>{student.name}</td>
                         {gradebookColumns.map((column) => {
                           const score = gradebookScores[getGradebookScoreKey(column.id, student.id)] ?? ''
                           return (
@@ -2497,7 +2498,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
             </div>}
           </div>
-          <div className={panelClass}><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Rapports IA et recommandations des élèves', 'AI student reports and recommendations')}</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Seuls les élèves du cours ou du périmètre sélectionné ci-dessus apparaissent ici.', 'Only learners from the course or scope selected above appear here.')}</p></div><span className="w-fit rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">{reportScopedStudents.length} {tr('élève(s)', 'learner(s)')}</span></div>{reportScopedStudents.length ? <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{reportScopedStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p><p className="mt-1 text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} · {tr('Moyenne', 'Average')} {student.average ?? 'N/A'} · {tr('Présence', 'Attendance')} {student.attendance ?? 'N/A'}%</p></button>)}</div> : <p className="mt-4 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">{tr('Aucun élève n’est inscrit dans le périmètre sélectionné.', 'No learner is enrolled in the selected scope.')}</p>}</div>
+          <div className={panelClass}><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Rapports IA et recommandations des élèves', 'AI student reports and recommendations')}</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Seuls les élèves du cours ou du périmètre sélectionné ci-dessus apparaissent ici.', 'Only learners from the course or scope selected above appear here.')}</p></div><span className="w-fit rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">{reportScopedStudents.length} {tr('élève(s)', 'learner(s)')}</span></div>{reportScopedStudents.length ? <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{reportScopedStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{student.name}</p><p className="mt-1 text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} · {tr('Moyenne', 'Average')} {student.average ?? 'N/A'} · {tr('Présence', 'Attendance')} {student.attendance ?? 'N/A'}%</p></button>)}</div> : <p className="mt-4 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">{tr('Aucun élève n’est inscrit dans le périmètre sélectionné.', 'No learner is enrolled in the selected scope.')}</p>}</div>
           <details className="nexus-workspace-card overflow-hidden"><summary className="cursor-pointer px-5 py-4 text-sm font-bold">{tr('Brouillons individuels de suivi et de bulletin','Individual follow-up and report-card drafts')}</summary><div className="border-t border-sky-100 p-4 dark:border-sky-800">
           <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <div className={panelClass} data-teacher-save-region>
@@ -2524,14 +2525,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 </div>
                 <span className="badge-blue text-xs">{card.principalStatus}</span>
               </div>
-              <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{card.teacherComment}</p>
+              <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300" data-no-translate>{card.teacherComment}</p>
               <p className="mt-3 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{card.download}</p>
             </div>
           ))}
           </div>
           </div>
           </div></details>
-          {selectedAiStudent && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">AI learner report</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedAiStudent.name}</h3></div><button onClick={() => setSelectedAiStudent(null)}><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Average', `${selectedAiStudent.average ?? 'N/A'}%`], ['Attendance', `${selectedAiStudent.attendance ?? 'N/A'}%`], ['Risk', selectedAiStudent.risk ?? 'Not classified']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><div className="mt-4 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">AI analysis</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{selectedAiStudent.aiInsight || `${selectedAiStudent.name} requires continued monitoring based on academic performance and attendance trends.`}</p><p className="mt-3 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">Recommendation: reinforce {selectedAiStudent.weaknesses?.join(', ') || 'the lowest-performing competencies'}, maintain family follow-up, and review progress within two weeks.</p></div><button type="button" onClick={()=>exportLearnerFollowup(selectedAiStudent,[user?.lastName,user?.middleName,user?.firstName].filter(Boolean).join(' '),language)} className={`${compactButton} mt-5`}><Download size={16}/> Print / Download official PDF</button></div></div>}
+          {selectedAiStudent && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">AI learner report</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white" data-no-translate>{selectedAiStudent.name}</h3></div><button onClick={() => setSelectedAiStudent(null)}><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Average', `${selectedAiStudent.average ?? 'N/A'}%`], ['Attendance', `${selectedAiStudent.attendance ?? 'N/A'}%`], ['Risk', selectedAiStudent.risk ?? 'Not classified']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><div className="mt-4 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">AI analysis</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{selectedAiStudent.aiInsight || `${selectedAiStudent.name} requires continued monitoring based on academic performance and attendance trends.`}</p><p className="mt-3 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">Recommendation: reinforce {selectedAiStudent.weaknesses?.join(', ') || 'the lowest-performing competencies'}, maintain family follow-up, and review progress within two weeks.</p></div><button type="button" onClick={()=>exportLearnerFollowup(selectedAiStudent,[user?.lastName,user?.middleName,user?.firstName].filter(Boolean).join(' '),language)} className={`${compactButton} mt-5`}><Download size={16}/> Print / Download official PDF</button></div></div>}
         </div>
       )}
 
@@ -2545,7 +2546,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             <div className="mt-4 space-y-3">
               {teacherStudents.slice(0, 8).map((student) => (
                 <button key={student.id} type="button" onClick={() => setSelectedAiStudent(student)} className="flex w-full items-center justify-between rounded-xl bg-gray-50 p-3 text-left dark:bg-kcs-blue-800/30">
-                  <span><strong className="text-kcs-blue-900 dark:text-white">{student.name}</strong><span className="block text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} - {student.attendance ?? 'N/A'}% attendance</span></span>
+                  <span><strong className="text-kcs-blue-900 dark:text-white" data-no-translate>{student.name}</strong><span className="block text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} - {student.attendance ?? 'N/A'}% attendance</span></span>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(student.risk ?? 'low')}`}>{student.risk ?? 'low'} risk</span>
                 </button>
               ))}
@@ -2560,7 +2561,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       )}
 
       {segment === 'resources' && (
-        <div className="space-y-5"><div className={panelClass}><label className="text-sm font-semibold text-kcs-blue-900 dark:text-white" htmlFor="resource-search">Search learning resources</label><input id="resource-search" value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} className={`${inputClass} mt-3 w-full`} placeholder="Title, subject, type or status..." /></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{lmsResources.filter((resource) => `${resource.title} ${resource.subject} ${resource.type} ${resource.status}`.toLowerCase().includes(resourceQuery.toLowerCase())).map((resource) => <button type="button" key={resource.title} onClick={() => setSelectedResource(resource)} className={`${panelClass} text-left transition hover:border-kcs-blue-300 hover:shadow-lg`}><div className="flex justify-between gap-3"><LibraryBig className="text-kcs-blue-600 dark:text-kcs-blue-300"/><span className="badge-blue capitalize">{resource.type}</span></div><h3 className="mt-4 font-bold text-kcs-blue-900 dark:text-white">{resource.title}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{resource.subject} · {resource.status}</p><p className="mt-4 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">View resource →</p></button>)}</div>{selectedResource && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-lg rounded-3xl bg-kcs-blue-50 p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">{selectedResource.type}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedResource.title}</h3></div><button type="button" onClick={() => setSelectedResource(null)} aria-label="Close"><X/></button></div><p className="mt-5 text-sm text-gray-600 dark:text-gray-300">Subject: {selectedResource.subject}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Visibility: {selectedResource.audience.join(', ')}</p><button type="button" onClick={() => { setActionMessage(`${selectedResource.title} opened successfully.`); setSelectedResource(null) }} className={`${compactButton} mt-5 w-full`}><BookOpen size={16}/> Open resource</button></div></div>}</div>
+        <div className="space-y-5"><div className={panelClass}><label className="text-sm font-semibold text-kcs-blue-900 dark:text-white" htmlFor="resource-search">Search learning resources</label><input id="resource-search" value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} className={`${inputClass} mt-3 w-full`} placeholder="Title, subject, type or status..." /></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{lmsResources.filter((resource) => `${resource.title} ${resource.subject} ${resource.type} ${resource.status}`.toLowerCase().includes(resourceQuery.toLowerCase())).map((resource) => <button type="button" key={resource.title} onClick={() => setSelectedResource(resource)} className={`${panelClass} text-left transition hover:border-kcs-blue-300 hover:shadow-lg`}><div className="flex justify-between gap-3"><LibraryBig className="text-kcs-blue-600 dark:text-kcs-blue-300"/><span className="badge-blue capitalize">{resource.type}</span></div><h3 className="mt-4 font-bold text-kcs-blue-900 dark:text-white" data-no-translate>{resource.title}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{resource.subject} · {resource.status}</p><p className="mt-4 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">View resource →</p></button>)}</div>{selectedResource && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-lg rounded-3xl bg-kcs-blue-50 p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">{selectedResource.type}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white" data-no-translate>{selectedResource.title}</h3></div><button type="button" onClick={() => setSelectedResource(null)} aria-label="Close"><X/></button></div><p className="mt-5 text-sm text-gray-600 dark:text-gray-300">Subject: {selectedResource.subject}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Visibility: {selectedResource.audience.join(', ')}</p><button type="button" onClick={() => { setActionMessage(`${selectedResource.title} opened successfully.`); setSelectedResource(null) }} className={`${compactButton} mt-5 w-full`}><BookOpen size={16}/> Open resource</button></div></div>}</div>
       )}
 
       {segment === 'settings' && <AccountSettingsPanel roleLabel="Teacher account" />}
@@ -2655,7 +2656,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           </div>
         </div>
       )}
-      {pendingDeleteCourse && <div className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="course-delete-title"><section className="w-full max-w-lg rounded-3xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900/60 dark:bg-kcs-blue-950"><p className="text-xs font-black uppercase tracking-[.16em] text-red-600">{tr("Suppression du cours", "Course deletion")}</p><h2 id="course-delete-title" className="mt-2 text-xl font-black text-kcs-blue-950 dark:text-white">{tr("Voulez-vous réellement supprimer ce cours ?", "Do you really want to delete this course?")}</h2><p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{tr("Cours concerné :", "Course:")} <strong>{pendingDeleteCourse.name}</strong>. {tr("Ses liens officiels seront supprimés.", "Its official links will be removed.")}</p><label className="mt-5 flex items-start gap-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700 dark:bg-kcs-blue-900 dark:text-slate-200"><input type="checkbox" className="mt-1 h-4 w-4" checked={rememberCourseDeleteChoice} onChange={(event) => setRememberCourseDeleteChoice(event.target.checked)}/><span>{tr("Ne plus me demander sur cet appareil", "Do not ask me again on this device")}</span></label><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setPendingDeleteCourse(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-kcs-blue-700 dark:text-white">{tr("Annuler", "Cancel")}</button><button type="button" onClick={confirmCourseDelete} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-black text-white hover:bg-red-700">{tr("Supprimer le cours", "Delete course")}</button></div></section></div>}
+      {pendingDeleteCourse && <div className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="course-delete-title"><section className="w-full max-w-lg rounded-3xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900/60 dark:bg-kcs-blue-950"><p className="text-xs font-black uppercase tracking-[.16em] text-red-600">{tr("Suppression du cours", "Course deletion")}</p><h2 id="course-delete-title" className="mt-2 text-xl font-black text-kcs-blue-950 dark:text-white">{tr("Voulez-vous réellement supprimer ce cours ?", "Do you really want to delete this course?")}</h2><p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{tr("Cours concerné :", "Course:")} <strong data-no-translate>{pendingDeleteCourse.name}</strong>. {tr("Ses liens officiels seront supprimés.", "Its official links will be removed.")}</p><label className="mt-5 flex items-start gap-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700 dark:bg-kcs-blue-900 dark:text-slate-200"><input type="checkbox" className="mt-1 h-4 w-4" checked={rememberCourseDeleteChoice} onChange={(event) => setRememberCourseDeleteChoice(event.target.checked)}/><span>{tr("Ne plus me demander sur cet appareil", "Do not ask me again on this device")}</span></label><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setPendingDeleteCourse(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-kcs-blue-700 dark:text-white">{tr("Annuler", "Cancel")}</button><button type="button" onClick={confirmCourseDelete} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-black text-white hover:bg-red-700">{tr("Supprimer le cours", "Delete course")}</button></div></section></div>}
     </section>
   )
 }
@@ -2699,14 +2700,14 @@ const TeacherDashboardHome = () => {
   const pendingActions = assignedAssignments.reduce((sum: number, assignment: any) => sum + (assignment.submissions ?? []).filter((submission: any) => submission.status === 'PENDING').length, 0)
   const atRiskStudents = assignedStudents.filter((student: any) => (student.attendanceRate != null && student.attendanceRate < 80) || (student.gpa != null && student.gpa < 2))
   const todayClasses = (overview?.timetable ?? []).slice(0, 6).map((item: any) => ({ time: item.startTime + '–' + item.endTime, course: item.courseName, room: item.room, students: item.studentCount }))
-  const gradingQueue = assignedAssignments.filter((assignment: any) => (assignment.submissions ?? []).some((submission: any) => submission.status === 'PENDING')).slice(0, 5).map((assignment: any) => ({ id: assignment.id, title: assignment.title, className: assignment.courseName, due: new Date(assignment.dueDate).toLocaleDateString(), pending: (assignment.submissions ?? []).filter((submission: any) => submission.status === 'PENDING').length }))
+  const gradingQueue = assignedAssignments.filter((assignment: any) => (assignment.submissions ?? []).some((submission: any) => submission.status === 'PENDING')).slice(0, 5).map((assignment: any) => ({ id: assignment.id, title: assignment.title, className: assignment.courseName, due: new Date(assignment.dueDate).toLocaleDateString(uiLocale()), pending: (assignment.submissions ?? []).filter((submission: any) => submission.status === 'PENDING').length }))
   const studentAlerts = atRiskStudents.slice(0, 5).map((student: any) => ({ student: ((student.user?.firstName ?? '') + ' ' + (student.user?.lastName ?? '')).trim(), severity: student.attendanceRate < 70 || student.gpa < 1.5 ? 'high' : 'medium', note: 'Attendance: ' + (student.attendanceRate ?? '—') + '% · GPA: ' + (student.gpa ?? '—') }))
   const gradebookCategories = assignedCourses.slice(0, 4).map((course: any) => {
     const courseGrades = assignedGrades.filter((grade: any) => grade.courseId === course.id)
     const average = courseGrades.length ? Math.round(courseGrades.reduce((sum: number, grade: any) => sum + Number(grade.percentage || 0), 0) / courseGrades.length) : 0
     return { name: course.name, weight: course.credits ?? 1, average, count:courseGrades.length, visibility: courseGrades.length ? courseGrades.length + ' grades' : 'No grades' }
   })
-  const messages = dashboardMessages.map((message: any) => ({ id: message.id, from: ((message.sender?.firstName ?? '') + ' ' + (message.sender?.lastName ?? '')).trim() || 'KCS Nexus', subject: message.subject, time: new Date(message.createdAt).toLocaleString() }))
+  const messages = dashboardMessages.map((message: any) => ({ id: message.id, from: ((message.sender?.firstName ?? '') + ' ' + (message.sender?.lastName ?? '')).trim() || 'KCS Nexus', subject: message.subject, time: new Date(message.createdAt).toLocaleString(uiLocale()) }))
   const metricCards = [
     { label: isHomeroomTeam ? 'Homeroom Students' : 'Course Students', value: String(assignedStudents.length), sub: isHomeroomTeam ? (homeroomScope.label || (dashboardLanguage==='fr'?'Classe principale':'Homeroom')) + ' · ' + taughtStudents.length + ' taught across all courses' : assignedCourses.length + ' assigned course(s)', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
     { label: 'Pending Actions', value: String(pendingActions), sub: pendingActions ? 'Submissions to review' : 'No pending action', icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
@@ -2867,7 +2868,7 @@ const TeacherDashboardHome = () => {
               <div key={task.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{task.title}</p>
+                    <p className="font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{task.title}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{task.className} - due {task.due}</p>
                   </div>
                   <span className="badge-gold text-xs">{task.pending}</span>
@@ -3095,7 +3096,7 @@ const TeacherPortal = () => {
                   const student = ecosystemStudents.find((item) => item.id === record.studentId)
                   return (
                     <div key={`${record.studentId}-${record.date}`} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
-                      <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{student?.name}</p>
+                      <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{student?.name}</p>
                       <p className="text-xs capitalize text-gray-500 dark:text-gray-400">{record.status} • visible to parents and admin</p>
                     </div>
                   )
@@ -3155,7 +3156,7 @@ const TeacherPortal = () => {
                 {lmsResources.map((resource) => (
                   <div key={resource.title} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{resource.title}</p>
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{resource.title}</p>
                       <span className="rounded-full bg-kcs-gold-100 px-2 py-1 text-xs font-semibold capitalize text-kcs-blue-800 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-300">{resource.type}</span>
                     </div>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{resource.subject} • {resource.status}</p>
@@ -3173,7 +3174,7 @@ const TeacherPortal = () => {
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{card.student}</p>
                       <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{card.principalStatus}</span>
                     </div>
-                    <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{card.teacherComment}</p>
+                    <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300" data-no-translate>{card.teacherComment}</p>
                   </div>
                 ))}
                 {aiRecommendations.filter((item) => item.owner === 'Teacher').map((item) => (
@@ -3253,7 +3254,7 @@ const TeacherPortal = () => {
                   <div key={task.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-semibold text-kcs-blue-900 dark:text-white">{task.title}</p>
+                        <p className="font-semibold text-kcs-blue-900 dark:text-white" data-no-translate>{task.title}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">{task.className}</p>
                       </div>
                       <span className="badge-gold text-xs">{task.pending} pending</span>
