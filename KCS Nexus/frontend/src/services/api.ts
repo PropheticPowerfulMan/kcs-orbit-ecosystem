@@ -628,7 +628,7 @@ export const academicCalendarAPI = {
 
 export const shiningStudentsAPI = {
   list: (params?: { from?: string; to?: string }) => api.get('/shining-students', { params }),
-  generate: (data: { startDate: string; endDate: string; excludedDates: string[] }) => api.post('/shining-students/generate', data),
+  generate: (data: { startDate: string; endDate: string; excludedDates: string[] }) => api.post('/shining-students/generate', data, {headers:{'Accept-Language':useUIStore.getState().language}}),
   saveTopic: (id: string, data: { topic: string; topicNotes?: string | null }) => api.patch(`/shining-students/${id}/topic`, data),
   updateStatus: (id: string, status: 'SCHEDULED' | 'TOPIC_SUBMITTED' | 'PRESENTED' | 'EXCUSED') => api.patch(`/shining-students/${id}/status`, { status }),
   remove: (id: string) => api.delete(`/shining-students/${id}`),

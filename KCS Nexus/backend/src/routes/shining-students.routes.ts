@@ -1,3 +1,5 @@
+import {familyEmailRecipients} from '../services/familyEmailRecipients.js'
+import {shiningAssignmentMessage} from '../utils/shiningAssignmentMessage.js'
 import {Prisma}from'@prisma/client'
 import {shiningSupervision}from'../services/shiningSupervision.service.js'
 import {databaseActorId} from '../utils/databaseActor.js'
@@ -110,7 +112,7 @@ shiningStudentsRouter.post('/generate', requireAdmin(), asyncHandler(async (req:
   const rules=new Map(await Promise.all(calendars.map(async c=>[c.name,(await nonSchoolSettings(c.name)).ranges] as const)))
   const excluded = new Set(payload.excludedDates)
   const students = await prisma.studentProfile.findMany({
-    where: { status: { equals: 'active', mode: 'insensitive' } },
+    where: { status: { equals: 'active', mode: 'insensitive' },archive:null,user:{accountBlockedAt:null} },
     include: scheduleInclude.student.include,
     orderBy: [{ grade: 'asc' }, { user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
   })
@@ -152,24 +154,22 @@ shiningStudentsRouter.post('/generate', requireAdmin(), asyncHandler(async (req:
     include: scheduleInclude,
     orderBy: [{ date: 'asc' }, { division: 'asc' }],
   })
-  await Promise.all(created.map(async (item) => {
-    const dateLabel = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'full', timeZone: 'UTC' }).format(item.date)
-    const title = 'Shining Student — votre passage est programmé'
-    const message = `Vous avez été sélectionné(e) pour présenter devant l’école le ${dateLabel}. Choisissez librement votre sujet dans KCS Nexus.`
-    const recipients = [item.student.user, ...item.student.parentLinks.map((link) => link.parent)]
-    await prisma.notification.createMany({
-      data: recipients.map((recipient) => ({ userId: recipient.id, title, message, type: 'INFO' as const, link: '/shining-students' })),
-    })
-    await Promise.allSettled(recipients.filter((recipient) => recipient.email).map((recipient) =>
-      sendSchoolMail({
-        to: recipient.email,
-        subject: title,
-        text: message,
-        html: `<h2>Shining Student</h2><p>Bonjour ${recipient.firstName},</p><p>${message}</p><p>Connectez-vous à KCS Nexus pour confirmer le sujet choisi.</p>`,
-      })
-    ))
-    await prisma.shiningStudentSchedule.update({ where: { id: item.id }, data: { notifiedAt: new Date() } })
-  }))
+  const language=req.get('Accept-Language')?.toLowerCase().startsWith('en')?'en':'fr'
+  const parents=[...new Map(created.flatMap(item=>item.student.parentLinks.map(link=>[link.parent.id,link.parent]as const))).values()]
+  const familyTargets=await familyEmailRecipients(parents,undefined,true)
+  for(const item of created){
+    const learnerName=[item.student.user.lastName,item.student.user.middleName,item.student.user.firstName].filter(Boolean).join(' '),name=(u:{firstName:string;middleName?:string|null;lastName:string})=>[u.lastName,u.middleName,u.firstName].filter(Boolean).join(' ')
+    const targets=new Map<string,{recipientId:string;name:string;audience:'PARENT'|'LEARNER'}>()
+    for(const link of item.student.parentLinks)for(const target of familyTargets.get(link.parent.id)||[])targets.set(target.email.toLowerCase(),{recipientId:link.parent.id,name:target.name||name(link.parent),audience:'PARENT'})
+    const studentEmail=item.student.user.email?.trim().toLowerCase();if(studentEmail&&!targets.has(studentEmail))targets.set(studentEmail,{recipientId:item.student.user.id,name:name(item.student.user),audience:'LEARNER'})
+    const recipients=[{user:item.student.user,audience:'LEARNER' as const},...item.student.parentLinks.map(link=>({user:link.parent,audience:'PARENT' as const}))]
+    const now=new Date()
+    await prisma.$transaction(async tx=>{
+      const claim=await tx.shiningStudentSchedule.updateMany({where:{id:item.id,notifiedAt:null},data:{notifiedAt:now}});if(!claim.count)return
+      await tx.notification.createMany({data:recipients.map(recipient=>{const message=shiningAssignmentMessage({audience:recipient.audience,language,recipientName:name(recipient.user),learnerName,grade:item.student.grade,date:item.date,topic:item.topic});return{userId:recipient.user.id,title:message.title,message:message.body,type:'INFO' as const,link:'/shining-students'}})})
+      if(targets.size)await tx.correspondenceLog.createMany({data:[...targets].map(([email,target])=>{const message=shiningAssignmentMessage({audience:target.audience,language,recipientName:target.name,learnerName,grade:item.student.grade,date:item.date,topic:item.topic});return{channel:'EMAIL' as const,status:'QUEUED' as const,subject:message.title,body:message.body,senderId:actorId,recipientName:target.name,recipientEmail:email,studentId:item.student.id,metadata:{mailQueueVersion:1,recipientId:target.recipientId,shiningScheduleId:item.id,shiningAudience:target.audience,language,attempts:0,nextAttemptAt:now.toISOString(),priority:'NORMAL'}}})})
+    },{timeout:15000})
+  }
   const administrativeRecipients = await prisma.user.findMany({
     where: {
       OR: [

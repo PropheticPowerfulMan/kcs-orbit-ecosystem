@@ -652,7 +652,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
         {(
     <motion.aside
       animate={{ width: sidebarCollapsed ? 80 : 272 }}
-      initial={{ width: 0, opacity: 0 }}
+      initial={false}
       exit={{ width: 0, opacity: 0 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
       id="nexus-desktop-sidebar"
