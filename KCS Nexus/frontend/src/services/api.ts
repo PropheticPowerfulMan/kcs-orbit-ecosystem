@@ -107,6 +107,7 @@ api.interceptors.request.use(
       const workspace = /^\/admin(?:\/|$)/.test(path) ? 'admin' : /^\/portal\/staff(?:\/|$)/.test(path) ? 'staff' : /^\/portal\/teacher(?:\/|$)/.test(path) ? 'teacher' : ''
       if (workspace) config.headers.set('X-Nexus-Workspace', workspace)
     }
+    if((config.url||'').startsWith('/classroom-passes')&&!config.headers.has('X-Nexus-Pass-Supervision')){const path=window.location.pathname;if(/^\/portal\/discipline(?:\/|$)/.test(path))config.headers.set('X-Nexus-Pass-Supervision','discipline');else if(/^\/portal\/senior(?:\/|$)/.test(path))config.headers.set('X-Nexus-Pass-Supervision','senior')}
     if (/^\/(?:lesson-plan|academy)\/launch$/.test(config.url||'') && !config.headers.has('X-Nexus-Academic-Workspace')) {
       const path=window.location.pathname,user=useAuthStore.getState().user
       const scope=/^\/admin(?:\/|$)/.test(path)?(user?.id==='configured-superadmin'?'superadmin':'principal'):/^\/portal\/senior(?:\/|$)/.test(path)?'senior':user?.role==='student'?'student':'teacher'
