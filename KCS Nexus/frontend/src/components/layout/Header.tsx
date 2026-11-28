@@ -1,3 +1,4 @@
+import './publicMobileNavigation.css'
 import {portalHome} from '@/utils/accountScope'
 import { useState, useEffect, useRef } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
@@ -45,6 +46,17 @@ const Header = () => {
     document.addEventListener('pointerdown', closeOnOutsideClick)
     return () => document.removeEventListener('pointerdown', closeOnOutsideClick)
   }, [mobileOpen])
+
+  useEffect(() => {
+    if(!mobileOpen)return
+    const previous=document.activeElement as HTMLElement|null,oldOverflow=document.body.style.overflow
+    document.body.style.overflow='hidden'
+    const frame=requestAnimationFrame(()=>mobileMenuRef.current?.querySelector<HTMLElement>('button,a[href]')?.focus())
+    const close=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();setMobileOpen(false)}if(event.key==='Tab'){const items=Array.from(mobileMenuRef.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input,select')||[]).filter(el=>el.getClientRects().length);if(!items.length)return;const first=items[0],last=items[items.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}}}
+    const desktop=window.matchMedia('(min-width:1280px)'),resize=()=>{if(desktop.matches)setMobileOpen(false)}
+    window.addEventListener('keydown',close);desktop.addEventListener('change',resize)
+    return()=>{cancelAnimationFrame(frame);document.body.style.overflow=oldOverflow;window.removeEventListener('keydown',close);desktop.removeEventListener('change',resize);if(previous?.isConnected)previous.focus()}
+  },[mobileOpen])
 
   const currentLanguage = (i18n.resolvedLanguage || i18n.language || language).startsWith('fr') ? 'fr' : 'en'
   const nextLanguage = currentLanguage === 'en' ? 'fr' : 'en'
@@ -235,11 +247,13 @@ const Header = () => {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="xl:hidden overflow-hidden"
+            className="xl:hidden public-mobile-disclosure"
           >
-            <div className="container-custom py-3">
-              <div ref={mobileMenuRef} id="kcs-public-mobile-menu" className="public-mobile-menu github-glass dark:github-glass-dark max-h-[calc(100dvh-96px)] space-y-1 overflow-y-auto rounded-[30px] p-2.5 shadow-2xl shadow-kcs-blue-950/15 sm:rounded-[34px] sm:p-3">
-              <div className="mb-2 grid grid-cols-2 gap-2 border-b border-gray-100 pb-3 dark:border-kcs-blue-800">
+            <button type="button" className="public-mobile-scrim" aria-label={currentLanguage==='fr'?'Fermer la navigation':'Close navigation'} onClick={()=>setMobileOpen(false)} tabIndex={-1}/>
+            <div className="container-custom py-3 public-mobile-placement">
+              <div ref={mobileMenuRef} role="dialog" aria-modal="true" aria-label={currentLanguage==='fr'?'Navigation du site KCS':'KCS website navigation'} id="kcs-public-mobile-menu" className="public-mobile-menu github-glass dark:github-glass-dark max-h-[calc(100dvh-96px)] space-y-1 overflow-y-auto rounded-[30px] p-2.5 shadow-2xl shadow-kcs-blue-950/15 sm:rounded-[34px] sm:p-3">
+              <div className="public-mobile-menu-heading"><div><small>KINSHASA CHRISTIAN SCHOOL</small><h2>{currentLanguage==='fr'?'Découvrez KCS':'Explore KCS'}</h2></div><button type="button" onClick={()=>setMobileOpen(false)} aria-label={t('common.close')}><X size={20}/></button></div>
+              <div className="public-menu-preferences mb-2 grid grid-cols-2 gap-2 border-b border-gray-100 pb-3 dark:border-kcs-blue-800">
                 <button
                   type="button"
                   onClick={toggleLanguage}
@@ -260,13 +274,13 @@ const Header = () => {
                   {theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}
                 </button>
               </div>
-              {navItems.map(({ to, label, icon: Icon }) => (
+              <nav className="public-mobile-link-grid" aria-label={currentLanguage==='fr'?'Pages du site':'Website pages'}>{navItems.map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}
                   to={to}
                   onClick={() => setMobileOpen(false)}
                   className={({ isActive }) =>
-                    `flex min-h-12 items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                    `public-mobile-link flex min-h-12 items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
                       isActive
                         ? 'bg-kcs-blue-700 text-white shadow-kcs'
                         : 'text-kcs-blue-900 dark:text-gray-200 hover:bg-kcs-blue-50 dark:hover:bg-white/10'
@@ -276,11 +290,11 @@ const Header = () => {
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-kcs-blue-700 shadow-sm dark:bg-kcs-blue-950 dark:text-kcs-blue-200">
                     <Icon size={17} />
                   </span>
-                  {label}
+                  <span className="public-mobile-link-label">{label}</span>
                 </NavLink>
-              ))}
+              ))}</nav>
 
-              <div className="mt-3 flex gap-2 border-t border-gray-100 pt-3 dark:border-kcs-blue-800">
+              <div className="public-mobile-menu-footer mt-3 flex gap-2 border-t border-gray-100 pt-3 dark:border-kcs-blue-800">
                 {isAuthenticated ? (
                   <Link to={dashboardPath} onClick={() => setMobileOpen(false)} className="flex-1 rounded-2xl bg-kcs-blue-700 px-4 py-3 text-center text-sm font-bold text-white shadow-kcs">
                     {t('nav.dashboard')}

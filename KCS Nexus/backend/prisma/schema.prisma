@@ -2637,6 +2637,7 @@ model ClassroomPassSession {
 model ValueWordAssignment {
  id String @id @default(uuid())
  academicYear String
+ audienceKey String @default("GENERAL")
  schoolDate String
  startsAt DateTime
  endsAt DateTime
@@ -2657,7 +2658,8 @@ model ValueWordAssignment {
  createdAt DateTime @default(now())
  updatedAt DateTime @updatedAt
  deliveries ValueWordDelivery[]
- @@unique([academicYear,schoolDate])
+ @@unique([academicYear,schoolDate,audienceKey],map:"ValueWordAssignment_year_day_audience_key")
+ @@index([audienceKey,startsAt])
  @@index([startsAt,status])
  @@index([speakerReference,schoolDate])
 }
@@ -2683,6 +2685,8 @@ model ValueWordSettings {
  startTime String @default("08:00")
  endTime String @default("08:30")
  location String @default("KCS · General assembly")
+ lowerLocation String @default("KCS · K3–Grade 8 building")
+ upperLocation String @default("KCS · Grade 9–12 building")
  staffWeekday Int @default(5)
  excludedIds String[] @default([])
  revision Int @default(1)
