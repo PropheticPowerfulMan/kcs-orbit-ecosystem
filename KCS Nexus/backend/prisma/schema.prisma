@@ -370,6 +370,7 @@ model User {
   electiveCyclesCreated          ElectiveCycle[]          @relation("ElectiveCycleCreator")
   electiveOfferingsTaught        ElectiveOffering[]       @relation("ElectiveOfferingTeacher")
   electiveOfferingsProposed      ElectiveOffering[]       @relation("ElectiveOfferingProposer")
+  classroomPassesSupervised ClassroomPassSession[] @relation("ClassroomPassTeacher")
   shiningStudentSchedulesCreated ShiningStudentSchedule[] @relation("ShiningStudentScheduleCreator")
   eventReminderDeliveries        EventReminderDelivery[]
   juryProject_owner JuryProject[] @relation("JuryProject_owner")
@@ -473,6 +474,7 @@ model StudentProfile {
   disciplineCases         DisciplineCase[]
   electiveChoices         ElectiveChoice[]
   electiveAllocations     ElectiveAllocation[]
+  classroomPasses ClassroomPassSession[]
   shiningStudentSchedules ShiningStudentSchedule[]
   archive                 StudentArchive?
   coursePresences StudentCoursePresence[]
@@ -2598,4 +2600,33 @@ model AssignmentDraft {
  updatedAt DateTime @updatedAt
  createdAt DateTime @default(now())
  @@index([ownerId,courseId,updatedAt])
+}
+
+// Immutable identity snapshots preserve the school history after an account is archived.
+model ClassroomPassSession {
+ id String @id @default(uuid())
+ teacherReference String
+ studentReference String
+ teacherId String?
+ teacher User? @relation("ClassroomPassTeacher",fields:[teacherId],references:[id],onDelete:SetNull)
+ studentId String?
+ student StudentProfile? @relation(fields:[studentId],references:[id],onDelete:SetNull)
+ badgeType String
+ academicYear String
+ period String
+ teacherName String
+ studentName String
+ className String
+ courseReference String?
+ courseName String?
+ issueNote String @default("")
+ issuedAt DateTime @default(now())
+ expectedReturnAt DateTime
+ returnedAt DateTime?
+ returnedByReference String?
+ returnNote String?
+ revision Int @default(1)
+ @@index([teacherReference,issuedAt])
+ @@index([studentReference,issuedAt])
+ @@index([academicYear,period])
 }

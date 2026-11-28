@@ -1,0 +1,13 @@
+import {useEffect,useState}from'react'
+import * as Dialog from'@radix-ui/react-dialog'
+import {X,Printer,Loader2}from'lucide-react'
+import {academicRecordsAPI}from'@/services/api'
+import {displayOfficialReportCardDocument}from'@/utils/officialReportCardPrint'
+import {useUIStore}from'@/store/uiStore'
+import './principalEnhancements.css'
+export default function PrincipalReportDocumentDialog({report,onClose}:{report:any;onClose:()=>void}){
+ const language=useUIStore(s=>s.language),tr=(a:string,b:string)=>language==='fr'?a:b,[html,setHtml]=useState(''),[error,setError]=useState(''),[attempt,setAttempt]=useState(0)
+ useEffect(()=>{let active=true;setHtml('');setError('');academicRecordsAPI.reportCardPrintDocument(report.id,language).then(r=>{if(active){const html=r.data.data.html;if(typeof html!=='string'||!html.startsWith('<!doctype html>'))throw Error('Invalid document');setHtml(html)}}).catch(()=>{if(active)setError(tr('Le bulletin officiel ne peut pas être chargé actuellement.','The official report card could not be loaded.'))});return()=>{active=false}},[report.id,language,attempt])
+ const open=()=>{const w=window.open('','_blank','width=1100,height=900');if(w)void displayOfficialReportCardDocument(report.id,w,language,setError).catch(()=>{w.close();setError(tr('Préparation impossible.','Unable to prepare the document.'))})}
+ return <Dialog.Root open onOpenChange={v=>{if(!v)onClose()}}><Dialog.Portal><Dialog.Overlay className="principal-document-overlay"/><Dialog.Content className="principal-document-dialog"><header><div><Dialog.Title>{[report.student.user.lastName,report.student.user.middleName,report.student.user.firstName].filter(Boolean).join(' ')}</Dialog.Title><Dialog.Description>{report.student.grade} · {report.term} · {tr('Consultation uniquement','Read only')}</Dialog.Description></div><Dialog.Close asChild><button aria-label={tr('Fermer le bulletin','Close report card')}><X size={20}/></button></Dialog.Close></header>{error?<div className="p-5"><p role="alert">{error}</p><button className="btn-primary mt-3" onClick={()=>setAttempt(n=>n+1)}>{tr('Réessayer','Retry')}</button></div>:html?<iframe title={tr('Aperçu du bulletin officiel','Official report card preview')} sandbox="" referrerPolicy="no-referrer" srcDoc={html}/>:<p role="status" className="p-8 text-center"><Loader2 className="mr-2 inline animate-spin"/>{tr('Préparation du bulletin…','Preparing report card…')}</p>}<footer><button className="btn-primary" disabled={!html} onClick={open}><Printer size={16}/>{tr('Imprimer / Télécharger le PDF officiel','Print / Download official PDF')}</button><Dialog.Close asChild><button className="btn-secondary">{tr('Fermer','Close')}</button></Dialog.Close></footer></Dialog.Content></Dialog.Portal></Dialog.Root>
+}

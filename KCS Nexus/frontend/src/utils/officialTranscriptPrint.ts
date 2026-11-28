@@ -42,7 +42,7 @@ export async function printOfficialTranscript(transcript:OfficialTranscript,onBl
    const html=response.data.data.html as string
    if(typeof html!=='string'||!/^<!doctype html>/i.test(html))throw new Error('Invalid transcript document')
    if(win.closed)return
-   await showOfficialDocument(win, presentation === 'senior' ? seniorAcademicPresentation(html) : html, { filename: `KCS-transcript-${transcript.student.studentNumber}`, language: fr?'fr':'en', onError: onBlocked })
+   await showOfficialDocument(win, presentation === 'senior' ? seniorAcademicPresentation(html) : html, { filename: response.data.data.filename || `TR - ${transcript.student.name}`, language: fr?'fr':'en', onError: onBlocked })
   }catch{
    if(!win.closed)status(text.failed,true)
    onBlocked(text.failed)

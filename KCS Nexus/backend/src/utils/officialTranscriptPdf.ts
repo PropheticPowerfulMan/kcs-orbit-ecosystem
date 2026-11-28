@@ -1,3 +1,4 @@
+import {transcriptFilename} from './transcriptFilename.js'
 import {summarizeTranscriptCourses} from './transcriptRecords.js'
 import {readFile} from 'node:fs/promises'
 import {join} from 'node:path'
@@ -20,7 +21,7 @@ export async function officialTranscriptDocument(transcript:OfficialTranscript &
  const qrCode=await QRCode.toDataURL(verifyUrl,{errorCorrectionLevel:'H',width:800,margin:4})
  const watermark='data:image/jpeg;base64,'+(await readFile(join(process.cwd(),'assets','kcs-watermark.jpg'))).toString('base64');const logo=watermark
  const photo=/^data:image\/(?:png|jpeg|jpg|webp);base64,/.test(transcript.student.photoUrl||'')?transcript.student.photoUrl!:''
- const html=await renderHtml();return{html,preview,documentId,fingerprint,verificationUrl:verifyUrl,sourceVersion:transcript.sourceVersion,activeAcademicYear:transcript.activeAcademicYear}
+ const html=await renderHtml();return{html,filename:transcriptFilename({grade:transcript.student.grade,academicYears:transcript.rows.length?transcript.rows.map(row=>row.cycle.academicYear):[transcript.activeAcademicYear||''],studentName:transcript.student.name}),preview,documentId,fingerprint,verificationUrl:verifyUrl,sourceVersion:transcript.sourceVersion,activeAcademicYear:transcript.activeAcademicYear}
  async function renderHtml(){
   const years=[...new Set(transcript.rows.map(row=>row.cycle.academicYear))].sort()
   const annual=years.map(year=>({year,...summarizeTranscriptCourses(transcript.rows.filter(row=>row.cycle.academicYear===year))}))

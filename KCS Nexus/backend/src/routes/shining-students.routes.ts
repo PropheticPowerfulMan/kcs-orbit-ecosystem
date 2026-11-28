@@ -1,3 +1,5 @@
+import {Prisma}from'@prisma/client'
+import {shiningSupervision}from'../services/shiningSupervision.service.js'
 import {databaseActorId} from '../utils/databaseActor.js'
 import {academicCalendars} from '../services/reportAttendance.service.js'
 import {nonSchoolSettings} from '../services/attendanceCalendarSettings.service.js'
@@ -69,7 +71,28 @@ shiningStudentsRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, re
     include: scheduleInclude,
     orderBy: [{ date: 'asc' }, { division: 'asc' }],
   })
-  return success(res, schedules)
+  const enriched=await shiningSupervision(schedules,req.user!.sub,req.user!.role)
+  return success(res, req.user!.role==='teacher'?enriched.filter(row=>row.teacherVisible):enriched)
+}))
+
+shiningStudentsRouter.get('/supervisors',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ if(!['admin','teacher','student'].includes(req.user!.role))throw new ApiError(403,'Teacher or learner access required')
+ return success(res,await prisma.user.findMany({where:{accountBlockedAt:null,teacherProfile:{isNot:null}},select:{id:true,firstName:true,middleName:true,lastName:true},orderBy:[{lastName:'asc'},{firstName:'asc'}]}))
+}))
+shiningStudentsRouter.patch('/:id/supervisor',asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=z.object({teacherUserId:z.string().min(1).nullable(),revision:z.string().min(1)}).parse(req.body),id=String(req.params.id),actorId=await databaseActorId(req.user!.sub)
+ const updated=await prisma.$transaction(async tx=>{
+  await tx.$queryRaw(Prisma.sql`SELECT id FROM "ShiningStudentSchedule" WHERE id=${id} FOR UPDATE`)
+  const schedule=await tx.shiningStudentSchedule.findUnique({where:{id},include:scheduleInclude});if(!schedule)throw new ApiError(404,'Presentation not found / Présentation introuvable')
+  const current=(await shiningSupervision([schedule],req.user!.sub,req.user!.role,tx))[0]
+  if(!current.canAssignSupervisor)throw new ApiError(403,'Only the learner, main teacher or administration can choose the supervisor / Choix réservé à l’élève, au main teacher ou à l’administration')
+  if(current.supervision.revision!==payload.revision)throw new ApiError(409,'Supervisor changed; refresh before retrying / Superviseur modifié, actualisez avant de réessayer')
+  if(payload.teacherUserId&&!await tx.teacherProfile.findUnique({where:{userId:payload.teacherUserId},select:{user:{select:{accountBlockedAt:true}}}}).then(t=>t&&!t.user.accountBlockedAt))throw new ApiError(400,'Choose an active KCS teacher / Choisissez un enseignant KCS actif')
+  await tx.auditLog.create({data:{createdAt:new Date(Math.max(Date.now(),current.supervision.updatedAt?Date.parse(current.supervision.updatedAt)+1:0)),actorId,action:'SHINING_SUPERVISOR_ASSIGNED',targetType:'ShiningStudentSchedule',targetId:id,metadata:{teacherUserId:payload.teacherUserId,previousTeacherUserId:current.supervision.supervisor?.id||null}}})
+  if(payload.teacherUserId&&payload.teacherUserId!==current.supervision.supervisor?.id)await tx.notification.create({data:{userId:payload.teacherUserId,title:'Shining Student · Supervision',message:'Une présentation vous est confiée. / A learner presentation has been assigned to you.',type:'INFO',link:'/shining-students'}})
+  return(await shiningSupervision([schedule],req.user!.sub,req.user!.role,tx))[0]
+ })
+ return success(res,updated,'Supervision saved / Supervision enregistrée')
 }))
 
 shiningStudentsRouter.post('/generate', requireAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -190,9 +213,10 @@ shiningStudentsRouter.post('/generate', requireAdmin(), asyncHandler(async (req:
 shiningStudentsRouter.patch('/:id/topic', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = z.object({ topic: z.string().trim().min(3).max(180), topicNotes: z.string().trim().max(1200).nullable().optional() }).parse(req.body)
   const scheduleId = String(req.params.id)
-  const schedule = await prisma.shiningStudentSchedule.findUnique({ where: { id: scheduleId }, include: { student: { select: { userId: true } } } })
+  const schedule = await prisma.shiningStudentSchedule.findUnique({ where: { id: scheduleId }, include: scheduleInclude })
   if (!schedule) throw new ApiError(404, 'Shining Student assignment not found.')
-  if (req.user!.role !== 'admin' && schedule.student.userId !== req.user!.sub) throw new ApiError(403, 'Only the selected student or an administrator can submit this topic.')
+  const supervised=(await shiningSupervision([schedule],req.user!.sub,req.user!.role))[0]
+  if (!supervised.canEditTopic) throw new ApiError(403, 'Only the learner, assigned supervisor or administration may edit this topic / Modification réservée à l’élève, au superviseur désigné ou à l’administration')
   if (schedule.date < new Date()) throw new ApiError(409, 'The presentation date has passed.')
   const updated = await prisma.shiningStudentSchedule.update({
     where: { id: schedule.id },
